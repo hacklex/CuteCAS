@@ -7,7 +7,7 @@ For now, just a sandbox where I play with F* and try implementing abstract algeb
 
 # What's done already?
 
-* abstract equivalence relation (symmetric, reflexive, transitive function of type `t -> bool`);
+* abstract equivalence relation (symmetric, reflexive, transitive function of type `t -> t -> bool`);
 * binary operations (with lemmas on commutativity, associativity, neutral elements, absorbers, inverses);
 * grouplike structures (magma -> semigroup -> monoid -> group) with separately defined commutative versions;
 * ringlike structures (ring -> domain -> euclidean domain) with distributivity lemmas and unit/normal decomposition for euclidean domains;

@@ -2,283 +2,401 @@ module RationalNumbers
 
 open AlgebraTypes
 
+#push-options "--ifuel 0 --fuel 0 --z3rlimit 1"
+
 let is_valid_denominator_of (#a:Type) (d: euclidean_domain #a) (x: a) = 
-  is_unit_normal d.multiplication.op d.eq d.unit_part_of x /\
-  ~(is_zero_of d x)
+  is_unit_normal d.multiplication.op d.eq d.unit_part_of x /\ ~(is_zero_of d x)
 
 type valid_denominator_of (#a:Type) (d: euclidean_domain #a) = (t: a{is_valid_denominator_of d t})
 
+private type commutative_ring_mul (#a:Type) (r: commutative_ring #a) = (op:binary_op a{
+  is_commutative op r.eq /\ 
+  is_associative op r.eq /\ 
+  is_neutral_of r.multiplication.neutral op r.eq /\
+  is_absorber_of r.addition.neutral op r.eq /\
+  equivalence_wrt_condition op r.eq
+})
+
+private type commutative_ring_add (#a:Type) (r: commutative_ring #a) = (op:binary_op a{
+  is_commutative op r.eq /\ 
+  is_associative op r.eq /\ 
+  is_neutral_of r.addition.neutral op r.eq /\
+  is_absorber_of r.addition.neutral r.multiplication.op r.eq /\
+  equivalence_wrt_condition op r.eq
+})
+
+/// This one is made private because we only work with commutative multiplication here
+private let mul_of (#a:Type) (r: commutative_ring #a) : commutative_ring_mul r = r.multiplication.op
+
+/// And this one is made private just for the sake of symmetry with mul_of
+private let add_of (#a:Type) (r: commutative_ring #a) : commutative_ring_add r = r.addition.op
+
+/// We construct fractions in such a way that denominators are always unit normal.
+/// To better understand the notion of x=u(x)n(x), take a look at the book
+/// by Geddes, Czapor & Labahn, Algorithms for Computer Algebra
 let denominator_is_unit_normal (#a: Type) (#d: euclidean_domain #a) (x: valid_denominator_of d)
   : Lemma (is_unit_normal d.multiplication.op d.eq d.unit_part_of x) = ()
 
+/// Fraction denominators are nonzero by definition
+/// Zero is always the absorber of domain's multiplication
+/// Or, equivalently, the domain addition's neutral element
 let denominator_is_nonzero (#a:Type) (d: euclidean_domain #a) (x:a{is_valid_denominator_of d x})
   : Lemma (~(is_absorber_of x d.multiplication.op d.eq)) = ()
 
-
+/// We construct the fractions without much sophistication
 type fraction (#a:Type) (d: euclidean_domain #a) = 
  | Fraction : (num: a) -> (den: valid_denominator_of d) -> fraction d
 
-let den_is_valid (#a:Type) (#d: euclidean_domain #a) (x: fraction d) : Lemma (is_valid_denominator_of d x.den) = ()
+/// We define the comparison function in a way that takes the least effort to prove the properties for.
+/// If we were to define as (x - y) `eq` zero, we'd need to also manually prove is_reflexive and is_symmetric.
+/// Do not want.
+private let fractions_equal (#a: Type) (#d: euclidean_domain #a) (x: fraction d) (y: fraction d) = 
+   ((x.num `mul_of d` y.den) `d.eq` (x.den `mul_of d` y.num)) 
 
-let fractions_equal (#a: Type) (#d: euclidean_domain #a) (x: fraction d) (y: fraction d) = 
-   let mul = d.multiplication.op in
-   let add = d.addition.op in 
-   let inv = d.addition.inv in
-   ((x.num `mul` y.den) `d.eq` (x.den `mul` y.num)) 
+/// This even pleases the eye. Especially when the lengths match.
+private let equality_is_reflexive (#a:Type) (d: euclidean_domain #a) : Lemma (is_reflexive (fractions_equal #a #d)) = ()
+private let equality_is_symmetric (#a:Type) (d: euclidean_domain #a) : Lemma (is_symmetric (fractions_equal #a #d)) = ()
 
-let equality_is_reflexive (#a:Type) (d: euclidean_domain #a) : Lemma (is_reflexive (fractions_equal #a #d)) = ()
-let equality_is_symmetric (#a:Type) (d: euclidean_domain #a) : Lemma (is_symmetric (fractions_equal #a #d)) = ()
-
-let mul_cancelation_law (#a:Type) (#d: integral_domain #a) (x y: a) (z: non_absorber_of d.multiplication.op d.eq) 
-  : Lemma (((x `d.multiplication.op` z) `d.eq` (y `d.multiplication.op` z)) <==> (x `d.eq` y))
-  = ()
+/// Below are some leftovers from the times when the prover refused to verify even the obvious things
+/// partly due to some arcane reasons (at rlimit 50+), and partly due to just going out of resources.
+/// Well, currently the lemmas are written with certain amount of rigor, and mostly require minimal rlimit.
+/// Still, I keep these just in case :)
 
 let domain_law (#a:Type) (d: integral_domain #a) (x y: a)
-  : Lemma (is_absorber_of (x `d.multiplication.op` y) d.multiplication.op d.eq ==> (is_absorber_of x d.multiplication.op d.eq) \/ (is_absorber_of y d.multiplication.op d.eq)) 
+  : Lemma (is_absorber_of (x `d.multiplication.op` y) d.multiplication.op d.eq 
+       ==> (is_absorber_of x d.multiplication.op d.eq) \/ (is_absorber_of y d.multiplication.op d.eq)) 
   = assert (has_no_absorber_divisors d.multiplication.op d.eq)
 
 let domain_law_other_zero (#a:Type) (d: integral_domain #a) (x y: a)
   : Lemma (is_absorber_of (x `d.multiplication.op` y) d.multiplication.op d.eq /\ ~(is_absorber_of y d.multiplication.op d.eq) ==> is_absorber_of x d.multiplication.op d.eq) = ()
 
+#push-options "--ifuel 1 --fuel 0 --z3rlimit 1"
+/// I experimentally established that we need ifuel=1 for the following 3 lemmas to be proven automatically.
+/// Well, if you see how to make this tick with 0/0/1, please do tell me :)
+
+let mul_cancelation_law (#a:Type) (#d: integral_domain #a) (x y: a) (z: non_absorber_of d.multiplication.op d.eq) 
+  : Lemma (((x `d.multiplication.op` z) `d.eq` (y `d.multiplication.op` z)) <==> (x `d.eq` y)) = () 
 
 let domain_law_fork (#a:Type) (d: integral_domain #a) (x y z:a) 
   : Lemma ( ((x `d.multiplication.op` y) `d.eq` (x `d.multiplication.op` z)) <==>
-            (is_absorber_of x d.multiplication.op d.eq \/ (y `d.eq` z)))
-  = ()
+            (is_absorber_of x d.multiplication.op d.eq \/ (y `d.eq` z))) = ()
 
-let prod_of_nonzeros_is_nonzero (#a: Type) (#d: integral_domain #a) (x y: non_absorber_of d.multiplication.op d.eq) 
-  : Lemma (~(is_absorber_of (x `d.multiplication.op` y) d.multiplication.op d.eq)) = ()
-
-
+/// This one is still actually used in several places.
+/// Basically it's a shorthand to the AlgebraTypes library lemma.
+/// Note how this one is proved automatically, but proving the post-condition
+/// where the callers called this is a pain.
 let product_of_denominators_is_denominator (#a:Type) (#d: euclidean_domain #a) (x y: fraction d)
   : Lemma (is_valid_denominator_of d (d.multiplication.op x.den y.den)) = 
-   let mul = d.multiplication.op in
-   let eq = d.eq in
-   assert (~(is_absorber_of (x.den `mul` y.den) mul eq));
-   product_of_unit_normals_is_normal d.unit_part_of x.den y.den;
-   assert (is_unit_normal mul eq d.unit_part_of (x.den `mul` y.den));
-  ()
+   product_of_unit_normals_is_normal d.unit_part_of x.den y.den
+   
+#pop-options
 
+/// One of the most used lemmas when proving stuff involving custom equality relation.
+/// This one ensures that if x `eq` y and y `eq` z, then x `eq z.
+/// Keep in mind that if you have proved x `eq` (a `add` b), and then y `eq` (a `add` b),
+/// you still need to call trans_lemma to obtain x `eq` y.
+/// The proofs can probably be made cleaner with patterns, but I'm yet to learn how.
+/// Also, I'm getting told that using patterns decreases prover's performance, so
+/// I'm not sure I should.
+let trans_lemma (#a:Type) (op: binary_op a) (eq: equivalence_wrt op) (x:a) (y:a{x `eq` y \/ y `eq` x}) (z:a{y `eq` z \/ z `eq` y})
+  : Lemma (x `eq` z /\ z `eq` x) = ()
 
-let eq_respect_lemma (#a:Type) (op: binary_op a) (eq: equivalence_wrt op) (x y z w: a) 
-  : Lemma (requires x `eq` w /\ (x `op` y) `eq` z) (ensures (w `op` y) `eq` z) = equivalence_wrt_operation_lemma_twoway #a #op eq x w y 
-
-let eq_respect_lemma_r (#a:Type) (op: binary_op a) (eq: equivalence_wrt op) (x y z w: a) 
-  : Lemma (requires x `eq` w /\ (y `op` x) `eq` z) (ensures (y `op` w) `eq` z) = equivalence_wrt_operation_lemma_twoway #a #op eq x w y 
-
-let trans_lemma (#a:Type) (op: binary_op a) (eq: equivalence_wrt op) (x:a) (y:a{x `eq` y}) (z:a{y `eq` z})
-  : Lemma (x `eq` z) = ()
-
+/// Regular associativity lemma, straightforward and with minimal possible requirements.
 let assoc_lemma3 (#a:Type) (eq: equivalence_relation a) (op: binary_op a{is_associative op eq}) (x y z: a) 
-  : Lemma (((x `op` y) `op` z) `eq` (x `op` (y `op` z))) = ()
+  : Lemma (((x `op` y) `op` z) `eq` (x `op` (y `op` z)) /\ (x `op` (y `op` z)) `eq` ((x `op` y) `op` z)) = ()
 
-let assoc_lemma (#a:Type) (eq: equivalence_relation a) (op: binary_op a{is_associative op eq /\ equivalence_wrt_condition op eq }) (x y z w: a) 
+/// Associativity for all possible parentheses configurations between 4 terms.
+/// This one's a bit monstrous, but it comes in handy later. 
+let assoc_lemma4 (#a:Type) (eq: equivalence_relation a) (op: binary_op a{is_associative op eq /\ equivalence_wrt_condition op eq }) (x y z w: a) 
   : Lemma (
      (((x `op` y) `op` z) `op` w) `eq` (x `op` (y `op` (z `op` w))) /\
      (((x `op` y) `op` z) `op` w) `eq` ((x `op` y) `op` (z `op` w)) /\
-     (((x `op` y) `op` z) `op` w) `eq` (((x `op` (y `op` z)) `op` w))
-    ) = 
-      assoc_lemma3 eq op x y z;
-      assert (((x `op` y) `op` z) `eq` (x `op` (y `op` z)));
-      equivalence_wrt_operation_lemma_twoway #a #op eq ((x `op` y) `op` z) (x `op` (y `op` z)) w;
-      assert ((((x `op` y) `op` z) `op` w) `eq` (((x `op` (y `op` z)) `op` w)));
-    ()
-
-let symm_lemma (#a: Type) (eq: equivalence_relation a) (x:a) (y:(t:a{t `eq` x})) : Lemma (x `eq` y /\ y `eq` x) = ()
-
-let comm_lemma (#a:Type) (eq: equivalence_relation a) (op: binary_op a{is_commutative op eq}) (x y: a)
-  : Lemma ( (x `op` y) `eq` (y `op` x)) = ()
-
-let assoc_forall_lemma (#a:Type) (eq: equivalence_relation a) (op: binary_op a{is_associative op eq})
-  : Lemma (is_associative op eq) = ()
-
-let pure_nonzero (#a:Type) (d: euclidean_domain #a) (x: non_absorber_of d.multiplication.op d.eq) : (t:a{~(t `d.eq` d.addition.neutral)}) = nonzero_is_not_equal_to_add_neutral_p d x; x
-
-let dom_zero_absorbing_lemma (#a:Type) (dom: euclidean_domain #a) (z: a{dom.eq z dom.addition.neutral}) (p:a)
-  : Lemma ((z `dom.multiplication.op` p) `dom.eq` z /\ (p `dom.multiplication.op` z) `dom.eq` z) = 
-    assert(is_absorber_of dom.addition.neutral dom.multiplication.op dom.eq); 
-    absorber_eq_is_also_absorber dom.multiplication.op dom.eq dom.addition.neutral z;
-    assert (is_absorber_of z dom.multiplication.op dom.eq);       
-    ()
-let dom_zero_absorbing_lemma_neut (#a:Type) (dom: euclidean_domain #a) (z: a{dom.eq z dom.addition.neutral}) (p:a)
-  : Lemma ((z `dom.multiplication.op` p) `dom.eq` dom.addition.neutral /\ (p `dom.multiplication.op` z) `dom.eq` dom.addition.neutral) = 
-    dom_zero_absorbing_lemma dom z p;
-    trans_lemma dom.multiplication.op dom.eq (z `dom.multiplication.op` p) z dom.addition.neutral;
-    trans_lemma dom.multiplication.op dom.eq (p `dom.multiplication.op` z) z dom.addition.neutral;
-    ()
- 
-#push-options "--ifuel 4 --fuel 4 --z3rlimit 15"
-let auxiliary_eq_lemma (#p: Type) (dom: euclidean_domain #p) 
-  (a:p) (b: valid_denominator_of dom)
-  (c:p) (d: (t:valid_denominator_of dom{(dom.multiplication.op a t) `dom.eq` (dom.multiplication.op b c)  }))
-  (e:p) (f: (t:valid_denominator_of dom{(dom.multiplication.op c t) `dom.eq` (dom.multiplication.op d e)  })) 
-  : Lemma (requires 
-    (((c `dom.multiplication.op` d) `dom.multiplication.op` (b `dom.multiplication.op` e))  `dom.eq`  
-     ((c `dom.multiplication.op` d) `dom.multiplication.op` (a `dom.multiplication.op` f))))
-          (ensures (b `dom.multiplication.op` e) `dom.eq` (a `dom.multiplication.op` f)) = 
-    
-    let mul = dom.multiplication.op in
-    let zero = dom.addition.neutral in
-    let eq = dom.eq in 
+     (((x `op` y) `op` z) `op` w) `eq` ((x `op` (y `op` z)) `op` w) /\
      
-    domain_law_fork dom (c `mul` d) (b `mul` e) (a `mul` f);
-    zero_is_equal_to_add_neutral_p dom (c `mul` d) ;
-    assert ((b `mul` e) `eq` (a `mul` f) || ((c `mul` d) `eq` zero));
-    if (not((c `mul` d) `eq` zero)) then () else (
-      assert (is_absorber_of (c `mul` d) mul eq <==> ((c `mul` d) `eq` zero));
-      assert (is_valid_denominator_of dom d);
-      denominator_is_nonzero dom d;
-      assert (~(is_absorber_of d mul eq));   
-      nonzero_is_not_equal_to_add_neutral_p dom d;
-      assert (~(d `eq` zero));
-      assert ((c `mul` d) `eq` zero);
-      domain_law_other_zero dom c d;      
-      assert (is_absorber_of c mul eq); 
-      zero_is_equal_to_add_neutral_p dom c;
-      assert (c `eq` zero);
-      dom_zero_absorbing_lemma_neut dom c b;
-      assert ((c `mul` b) `eq` zero);
-      assert ((b `mul` c) `eq` (c `mul` b));
-      trans_lemma mul eq (b `mul` c) (c `mul` b) zero;      
-      assert ((a `mul` d) `eq` (b `mul` c));
-      assert ((b `mul` c) `eq` zero);
-      trans_lemma mul eq (a `mul` d) (b `mul` c) zero;      
-      assert ((a `mul` d) `eq` zero);
-      dom_prod_zero_lemma dom a d;
-      assert (a `eq` zero \/ d `eq` zero);
-      denominator_is_nonzero dom d;
-      assert (~( d `eq` zero));
-      assert (a `eq` zero);
-      assert ((c `mul` f) `eq` (d `mul` e));
-      dom_zero_absorbing_lemma_neut dom c f;
-      assert ((c `mul` f) `eq` zero);
-      symm_lemma eq (d `mul` e) (c `mul` f);
-      assert ((d `mul` e) `eq` (c `mul` f));
-      trans_lemma mul eq (d `mul` e) (c `mul` f) zero;
-      assert ((d `mul` e) `eq` zero);
-      dom_prod_zero_lemma dom d e;
-      assert (e `eq` zero);
-      dom_zero_absorbing_lemma_neut dom e b;
-      assert ((b `mul` e) `eq` zero);
-      dom_zero_absorbing_lemma_neut dom a f;
-      assert ((a `mul` f) `eq` zero);
-      two_zeros_are_equal dom (b `mul` e) (a `mul` f); 
-      ()
-    )
-
+     (x `op` (y `op` (z `op` w))) `eq` (((x `op` y) `op` z) `op` w) /\
+     ((x `op` y) `op` (z `op` w)) `eq` (((x `op` y) `op` z) `op` w) /\     
+     ((x `op` (y `op` z)) `op` w) `eq` (((x `op` y) `op` z) `op` w) 
+    ) = //I didn't remove the assertions entirely, as they show the intent behind the invoked lemmas
+      assoc_lemma3 eq op x y z;
+      //assert (((x `op` y) `op` z) `eq` (x `op` (y `op` z)));
+      equivalence_wrt_operation_lemma_twoway #a #op eq ((x `op` y) `op` z) (x `op` (y `op` z)) w
+      //assert ((((x `op` y) `op` z) `op` w) `eq` (((x `op` (y `op` z)) `op` w)));
     
-#push-options "--ifuel 4 --fuel 4 --z3rlimit 25"
-let transitivity_lemma (#p:Type) (d: euclidean_domain #p) 
-  (x: fraction d) 
-  (y: (t:fraction d{fractions_equal x t}))
-  (z: (t:fraction d{fractions_equal y t})) : Lemma (fractions_equal x z) =   
-    let mul = d.multiplication.op in
-    let dom = d in
-    let zero = d.addition.neutral in
-    let eq = d.eq in
-    let a = x.num in
-    let b = x.den in
-    let c = y.num in
-    let d = y.den in
-    let e = z.num in
-    let f = z.den in 
-    let nz_means_ne_z (t: p) 
-      : squash (~(is_absorber_of t mul eq) <==> ~(t `eq` zero)) 
-      = nonzero_is_not_equal_to_add_neutral_p dom t in
-    assert ((c `mul` f) `eq` (d `mul` e));
-    assert (fractions_equal x y);
-    assert (fractions_equal y z); 
-    equivalence_wrt_operation_lemma #p #mul eq (c `mul` f) (d `mul` e) (a `mul` d);
+/// I strive to remove the usages of this one, but it persists.
+/// This one is used when F* fails to understand that (a `eq` b) <==> (b `eq` a)
+/// This screams for a pattern, but I'm not sure how to do it right, and whether
+/// the performance drop will be big or not
+let symm_lemma (#a: Type) (eq: equivalence_relation a) (x:a) (y:(t:a{t `eq` x \/ x `eq` t})) : Lemma (x `eq` y /\ y `eq` x) = ()
+/// This one is used to assert commutativity (works with both add and mul.
+let comm_lemma (#a:Type) (eq: equivalence_relation a) (op: binary_op a{is_commutative op eq}) (x y: a)
+  : Lemma ( (x `op` y) `eq` (y `op` x) /\ (y `op` x) `eq` (x `op` y)) = ()
+
+/// These four are necessary in some spots where F* forgets these properties of + and *,
+/// totally ignoring the type refinements written for the domain type in AlgebraTypes...
+private let dom_mul_assoc (#a:Type) (d: domain #a) : Lemma (is_associative d.multiplication.op d.eq) = ()
+private let dom_mul_comm (#a:Type) (d: domain #a) : Lemma (is_commutative d.multiplication.op d.eq) = ()
+private let dom_add_assoc (#a:Type) (d: domain #a) : Lemma (is_associative d.addition.op d.eq) = ()
+private let dom_add_comm (#a:Type) (d: domain #a) : Lemma (is_commutative d.addition.op d.eq) = ()
+
+/// This is used to prove (ad cf) = (cd af) for a commutative and associative operation
+/// The parameter is called mul, but it can be used with addition as well.
+/// I removed the assertions, so tracing the train of thought behind the proof
+/// might be a bit difficult...
+private let auxiliary_flip_lemma (#p: Type)
+  (eq: equivalence_relation p) 
+  (mul: binary_op p { is_associative mul eq /\ is_commutative mul eq /\ equivalence_wrt_condition mul eq })
+  (a d c f: p) 
+  : Lemma (((a `mul` d) `mul` (c `mul` f)) `eq` ((c `mul` d) `mul` (a `mul` f))) =
+  let eq : equivalence_wrt mul = eq in
+  assoc_lemma4 eq mul a d c f;
+  comm_lemma eq mul d c; // dc = cd 
+  equivalence_wrt_operation_lemma eq (d `mul` c) (c `mul` d) a; // a dc = a cd
+  symm_lemma eq (a `mul` (c `mul` d)) (a `mul` (d `mul` c)); 
+  equivalence_wrt_operation_lemma eq (a `mul` (d `mul` c)) (a `mul` (c `mul` d)) f; //(a dc)f = ((cd)a)f
+  comm_lemma eq mul a (mul c d);
+  equivalence_wrt_operation_lemma eq  (a `mul` (c `mul` d)) ((c `mul` d) `mul` a) f;   
+  assoc_lemma4 eq mul c d a f
+
+/// This is used to prove (ab cd)=(ba dc).
+private let auxiliary_add_flip_lemma (#p: Type)
+  (eq: equivalence_relation p) 
+  (mul: binary_op p { is_associative mul eq /\ is_commutative mul eq /\ equivalence_wrt_condition mul eq })
+  (add: (q:binary_op p { is_associative q eq /\ is_commutative q eq /\ equivalence_wrt_condition q eq }))
+  (a b c d: p) : Lemma (((a `mul` b) `add` (c `mul` d)) `eq` ((b `mul` a) `add` (d `mul` c))) 
+  = let eq : equivalence_wrt mul = eq in // a trick to refine the type enough to invoke the library lemma
+    equivalence_wrt_operation_lemma eq (mul a b) (mul b a) (mul c d);
+    equivalence_wrt_operation_lemma eq (mul c d) (mul d c) (mul b a);
+    trans_lemma add eq ((a `mul` b) `add` (c `mul` d)) ((b `mul` a) `add` (c `mul` d)) ((b `mul` a) `add` (d `mul` c))
+
+/// The first big lemma is the proof of fraction equality transitivity.
+/// Basically, we're proving that ad=bc && cf=de ==> af=be.
+/// I left the assertions intact because the proof is otherwise even harder to understand.
+private let fractions_equality_transitivity_lemma (#p: Type) (dom: euclidean_domain #p) 
+  (x: fraction dom) 
+  (y: (t:fraction dom{fractions_equal x t}))
+  (z: (t:fraction dom{fractions_equal y t})) : Lemma (fractions_equal x z) =   
+    // FStar somehow loves to forget the refinements back from the type (domain #p)
+    let mul : (t:binary_op p{is_commutative t dom.eq /\ is_associative t dom.eq}) 
+            = dom_mul_assoc dom; dom_mul_comm dom; dom.multiplication.op in
+    let eq : equivalence_wrt mul = dom.eq in // so we provide our types explicitly to invoke the required lemmas 
+    let (a,b,c,d,e,f) = (x.num, x.den, y.num, y.den, z.num, z.den) in // one composite let is faster than six :)
+    assert ((a `mul` d) `eq` (b `mul` c));
+    equivalence_wrt_operation_lemma eq (c `mul` f) (d `mul` e) (a `mul` d);
     assert (((a `mul` d) `mul` (c `mul` f)) `eq` ((a `mul` d) `mul` (d `mul` e)));
-    equivalence_wrt_operation_lemma #p #mul eq (a `mul` d) (b `mul` c) (d `mul` e);    
-    assert (((a `mul` d) `mul` (d `mul` e)) `eq` ((b `mul` c) `mul` (d `mul` e)));
-    trans_lemma mul eq ((a `mul` d) `mul` (c `mul` f)) ((a `mul` d) `mul` (d `mul` e)) ((b `mul` c) `mul` (d `mul` e));    
-    assert (((a `mul` d) `mul` (c `mul` f)) `eq` ((b `mul` c) `mul` (d `mul` e)));
-    //adcf == bcde
-    assert_spinoff (is_associative mul eq);
-    assoc_lemma eq mul a d c f;
-    //(a(dc))f = ((bc)(de))
-    assert ( ((a `mul` (d `mul` c)) `mul` f) `eq` ((b `mul` c) `mul` (d `mul` e)));
-    comm_lemma eq mul d c;
-    // dc=cd
-    assert ((d `mul` c) `eq` (c `mul` d));
-    equivalence_wrt_operation_lemma #p #mul eq (d `mul` c) (c `mul` d) a;
-    // a(dc) = a(cd)
-    assert ((a `mul` (d `mul` c)) `eq` (a `mul` (c `mul` d)));
-    equivalence_wrt_operation_lemma #p #mul eq (a `mul` (d `mul` c)) (a `mul` (c `mul` d)) f;
-    // (a(dc))f = (a(cd))f
-    assert ( ((a `mul` (d `mul` c)) `mul` f) `eq` ((a `mul` (c `mul` d)) `mul` f));   
-    comm_lemma eq mul a (c `mul` d);
-    assert ( (a `mul` (c `mul` d)) `eq` ((c `mul` d) `mul` a));
-    equivalence_wrt_operation_lemma #p #mul eq (a `mul` (c `mul` d)) ((c `mul` d) `mul` a) f;
-    
-    assert ( ((a `mul` (c `mul` d)) `mul` f) `eq` (((c `mul` d) `mul` a) `mul` f) );    
-    assert ( ((a `mul` (d `mul` c)) `mul` f) `eq` ((a `mul` (c `mul` d)) `mul` f));      
-    trans_lemma mul eq ((a `mul` (d `mul` c)) `mul` f) ((a `mul` (c `mul` d)) `mul` f) (((c `mul` d) `mul` a) `mul` f);
-    
-    assert ( ((a `mul` (d `mul` c)) `mul` f) `eq` (((c `mul` d) `mul` a) `mul` f) ); 
-    symm_lemma eq (((c `mul` d) `mul` a) `mul` f) ((a `mul` (d `mul` c)) `mul` f); 
-    assert ( (((c `mul` d) `mul` a) `mul` f) `eq` ((a `mul` (d `mul` c)) `mul` f) );    
-    assert ( ((a `mul` (d `mul` c)) `mul` f) `eq` ((b `mul` c) `mul` (d `mul` e)));
-    trans_lemma mul eq (((c `mul` d) `mul` a) `mul` f) ((a `mul` (d `mul` c)) `mul` f) ((b `mul` c) `mul` (d `mul` e));
-
-    assert ( (((c `mul` d) `mul` a) `mul` f) `eq`  ((b `mul` c) `mul` (d `mul` e)));  //cd a f = bc de    
- 
-    assoc_lemma3 eq mul (c `mul` d) a f; 
-    assert ((((c `mul` d) `mul` a) `mul` f) `eq` ( (c `mul` d) `mul` (a `mul` f)));
- 
-    symm_lemma eq ((b `mul` c) `mul` (d `mul` e)) (((c `mul` d) `mul` a) `mul` f);  
-    trans_lemma mul eq  ((b `mul` c) `mul` (d `mul` e))  (((c `mul` d) `mul` a) `mul` f) ((c `mul` d) `mul` (a `mul` f)) ;
-    
-   
-    assert (  ((b `mul` c) `mul` (d `mul` e)) `eq` ((c `mul` d) `mul` (a `mul` f))  ); //bc de = cd af
-   
-    assoc_lemma eq mul b c d e;
-    assert ( ((b `mul` c) `mul` (d `mul` e)) `eq` ( ( ( b `mul` c) `mul` d) `mul` e));    
-    assert ( ( ( ( b `mul` c) `mul` d) `mul` e)  `eq` ( (b `mul` (c `mul` d)) `mul` e ));  
-    trans_lemma mul eq ((b `mul` c) `mul` (d `mul` e))  (((b `mul` c) `mul` d) `mul` e) ((b `mul` (c `mul` d)) `mul` e);
-    assert ( ((b `mul` c) `mul` (d `mul` e))  `eq` ((b `mul` (c `mul` d)) `mul` e) );    
-    assert (  (b `mul` (c `mul` d)) `eq` ( (c `mul` d) `mul` b) );
-    equivalence_wrt_operation_lemma #p #mul eq (b `mul` (c `mul` d)) ( (c `mul` d) `mul` b) e;  
-    assert ( ( (b `mul` (c `mul` d)) `mul` e ) `eq`  (  ( (c `mul` d) `mul` b)  `mul` e ));
-    trans_lemma mul eq ((b `mul` c) `mul` (d `mul` e)) ((b `mul` (c `mul` d)) `mul` e)  (  ( (c `mul` d) `mul` b)  `mul` e );    
-    assert ( ((b `mul` c) `mul` (d `mul` e))  `eq` (((c `mul` d) `mul` b) `mul` e) );   
-    assoc_lemma3 eq mul (c `mul` d) b e;
-    assert ( (  ( (c `mul` d) `mul` b)  `mul` e ) `eq`  ((c `mul` d) `mul` (b `mul` e))   );
-    trans_lemma mul eq  ((b `mul` c) `mul` (d `mul` e)) (((c `mul` d) `mul` b) `mul` e)  ((c `mul` d) `mul` (b `mul` e));  
-    assert ( ((b `mul` c) `mul` (d `mul` e)) `eq` ((c `mul` d) `mul` (b `mul` e)) ) ;
-    symm_lemma eq  ((c `mul` d) `mul` (b `mul` e))  ((b `mul` c) `mul` (d `mul` e)) ;
-    assert (  ((c `mul` d) `mul` (b `mul` e)) `eq` ((b `mul` c) `mul` (d `mul` e)) );
-    assert (  ((b `mul` c) `mul` (d `mul` e)) `eq` ((c `mul` d) `mul` (a `mul` f))  );
-    trans_lemma mul eq  ((c `mul` d) `mul` (b `mul` e)) ((b `mul` c) `mul` (d `mul` e)) ((c `mul` d) `mul` (a `mul` f));  
-
-    assert (  ((c `mul` d) `mul` (b `mul` e))  `eq`  ((c `mul` d) `mul` (a `mul` f)) );
-
-    auxiliary_eq_lemma dom a b c d e f;
-    assert_spinoff ( (a `mul` f) `eq` (b `mul` e));     
-    assert_spinoff (fractions_equal x z);    
+    equivalence_wrt_operation_lemma eq (mul a d) (mul b c) (mul d e);
+    trans_lemma mul eq ((a `mul` d) `mul` (c `mul` f)) ((a `mul` d) `mul` (d `mul` e)) ((b `mul` c) `mul` (d `mul` e));
+    assert (((a `mul` d) `mul` (c `mul` f)) `eq` ((b `mul` c) `mul` (d `mul` e)));  
+    assoc_lemma4 eq mul b c d e;     
+    assert ((((b `mul` c) `mul` d) `mul` e ) `eq` ((b `mul` c) `mul` (d `mul` e))); 
+    assert ((((b `mul` c) `mul` d) `mul` e ) `eq` ((b `mul` (c `mul` d)) `mul` e)); 
+    comm_lemma eq mul b (mul c d);
+    equivalence_wrt_operation_lemma eq (b `mul` (c `mul` d)) ((c `mul` d) `mul` b) e;
+    assert (((b `mul` (c `mul` d)) `mul` e ) `eq` (((c `mul` d) `mul` b) `mul` e));    
+    trans_lemma mul eq (((b `mul` c) `mul` d) `mul` e ) ((b `mul` (c `mul` d)) `mul` e) (((c `mul` d) `mul` b) `mul` e);
+    trans_lemma mul eq ((b `mul` c) `mul` (d `mul` e)) (((b `mul` c) `mul` d) `mul` e) (((c `mul` d) `mul` b) `mul` e); 
+    assoc_lemma4 eq mul c d b e;     
+    trans_lemma mul eq ((b `mul` c) `mul` (d `mul` e)) (((c `mul` d) `mul` b) `mul` e) ((c `mul` d) `mul` (b `mul` e)); 
+    trans_lemma mul eq ((a `mul` d) `mul` (c `mul` f)) ((b `mul` c) `mul` (d `mul` e)) ((c `mul` d) `mul` (b `mul` e)); 
+    assert (((a `mul` d) `mul` (c `mul` f)) `eq` ((c `mul` d) `mul` (b `mul` e)));   
+    auxiliary_flip_lemma eq mul a d c f;
+    assert (((a `mul` d) `mul` (c `mul` f)) `eq` ((c `mul` d) `mul` (b `mul` e))); 
+    symm_lemma eq ((c `mul` d) `mul` (b `mul` e)) ((a `mul` d) `mul` (c `mul` f));
+    assert (((c `mul` d) `mul` (b `mul` e)) `eq` ((a `mul` d) `mul` (c `mul` f)));         
+    assert (((a `mul` d) `mul` (c `mul` f)) `eq` ((c `mul` d) `mul` (a `mul` f)));
+    trans_lemma mul eq ((c `mul` d) `mul` (b `mul` e)) ((a `mul` d) `mul` (c `mul` f)) ((c `mul` d) `mul` (a `mul` f)); 
+    assert (((c `mul` d) `mul` (b `mul` e)) `eq` ((c `mul` d) `mul` (a `mul` f)));
     ()
 
-#pop-options
-#pop-options
-
-let aux_eq_parametrized (#a:Type) (d: euclidean_domain #a) (x y z: fraction d) 
+/// We convert the above lemma into an implication to invoke Classical.forall_intro_3 and get the
+/// forall version of transitivity lemma for free
+private let fractions_equality_transitivity_implication_lemma (#a:Type) (d: euclidean_domain #a) (x y z: fraction d) 
   : Lemma (fractions_equal x y /\ fractions_equal y z ==> fractions_equal x z) = 
   if (fractions_equal x y && fractions_equal y z) 
-  then transitivity_lemma d x y z
-  else ()
+  then fractions_equality_transitivity_lemma d x y z
 
-let equality_is_transitive (#a:Type) (d: euclidean_domain #a) : Lemma (is_transitive (fractions_equal #a #d)) 
-  = Classical.forall_intro_3 (aux_eq_parametrized d)
+/// This one is used to construct the equivalence_relation out of fractions_equal
+/// Otherwise we can't construct the ring, never mind the field.
+private let equality_is_transitive (#a:Type) (d: euclidean_domain #a) : Lemma (is_transitive (fractions_equal #a #d)) 
+  = Classical.forall_intro_3 (fractions_equality_transitivity_implication_lemma d)
   
+/// Once all the necessary lemmas are proven, we've got the equivalence_relation for fractions
+private let equiv (#a:Type) (d: euclidean_domain #a) : equivalence_relation (fraction d) = 
+  equality_is_transitive d; fractions_equal
 
-let equiv (#a:Type) (d: euclidean_domain #a) : equivalence_relation (fraction d) = 
-  equality_is_transitive d;
-  fractions_equal
+#push-options "--ifuel 1 --fuel 0 --z3rlimit 1"
+/// This one is used in algebraic operation properties proofs
+/// (see commutativity, associativity proofs below)
+/// If the numerators and the denominators of the two fractions are equal
+/// wrt. the underlying domain's equality, then the fractions are equal.
+///
+/// Note that this is not the only case, as without reduced fractions,
+/// we can still have fractions like 1/2 and 2/4 which are syntactically not equal,
+/// but the (ad=bc) equality will still hold.
+///
+/// PS. No idea why, but this one also wants ifuel 1
+private let equal_early_escape_lemma (#a:Type) (#d: euclidean_domain #a) (x y: fraction d) 
+  : Lemma 
+    (requires ((y.num `d.eq` x.num) \/ (x.num `d.eq` y.num)) /\ 
+              ((y.den `d.eq` x.den) \/ (x.den `d.eq` y.den)))
+    (ensures equiv d x y) = 
+  let eq : equivalence_wrt d.multiplication.op = d.eq in // mul_of d is needed for lemmas below
+  equivalence_wrt_operation_lemma eq y.den x.den y.num; // we need exactly equivalence wrt. mul,
+  equivalence_wrt_operation_lemma eq x.num y.num y.den  // in order to prove this lemma
+#pop-options
+ 
+/// We declare the type of fractions_add heavily refined so that our
+/// future lemmas will not have it too rough proving stuff
+private let fractions_add (#a: Type) (d: euclidean_domain #a) (x y: fraction d)
+  : (t: fraction d
+     {
+       t.num `d.eq` ((x.num `d.multiplication.op` y.den) `d.addition.op` (x.den `d.multiplication.op` y.num)) /\
+       t.den `d.eq` (x.den `d.multiplication.op` y.den) 
+     }) = 
+   product_of_denominators_is_denominator x y;
+   let res = Fraction ((x.num `d.multiplication.op` y.den) `d.addition.op` (x.den `d.multiplication.op` y.num))
+            (x.den `d.multiplication.op` y.den) in   
+   let rn = res.num in
+   let rd = res.den in 
+   assert_spinoff (rn `d.eq` ((x.num `d.multiplication.op` y.den) `d.addition.op` (x.den `d.multiplication.op` y.num))); 
+   assert_spinoff (rd `d.eq` (x.den `d.multiplication.op` y.den));   
+   res // Don't know why this does not work without spinoff.
+ 
+/// These two lemmas may look obvious, but proofs below fail without calling it.
+private let fractions_add_num_lemma (#a:Type) (d:euclidean_domain #a) (x y: fraction d)
+  : Lemma ((fractions_add d x y).num `d.eq` ((x.num `d.multiplication.op` y.den) `d.addition.op` (x.den `d.multiplication.op` y.num))) = ()
+private let fractions_add_den_lemma (#a:Type) (d:euclidean_domain #a) (x y: fraction d)
+  : Lemma ((fractions_add d x y).den `d.eq` (x.den `d.multiplication.op` y.den)) = ()
+ 
+private let numerator_commutativity_lemma (#a:Type) (d: euclidean_domain #a) (x y z w: a) 
+  : Lemma ( ( (x `d.multiplication.op` w) `d.addition.op` (y `d.multiplication.op` z)) `d.eq`
+            ( (w `d.multiplication.op` x) `d.addition.op` (z `d.multiplication.op` y))) = 
+   dom_add_assoc d;
+   auxiliary_add_flip_lemma d.eq d.multiplication.op d.addition.op x w y z
 
-let fractions_add (#a: Type) (#d: euclidean_domain #a) (x: fraction d) (y: fraction d) = 
+private let denominator_commutativity_lemma (#a:Type) (d: euclidean_domain #a) (x y: a) 
+  : Lemma ((x `d.multiplication.op` y) `d.eq` (y `d.multiplication.op` x)) = ()
+
+#push-options "--ifuel 2 --fuel 0 --z3rlimit 2"
+private let fractions_add_is_commutative (#a:Type) (#d: euclidean_domain #a) (x y: fraction d) 
+  : Lemma (equiv d (fractions_add d x y) (fractions_add d y x)) 
+  = 
+   let dom = d in
+   let eq : equivalence_wrt d.addition.op = d.eq in   
+   // Here comes the massive riddle.
+   // If we remove the type annotation and leave just "let add = add_of d in", the proof will fail.
+   // If we specify the type (commutative_ring_add d), the proof will fail.
+   // If we add the refinement (add == d.addition.op), the proof will still fail.
+   // If we make all the assertions manually instead of adding the type annotation, guess what.
+   // ...
+   // I don't know, why. 
+   // PS. Getting the same error message whenever something goes wrong does not help, either.
+   let add 
+   : (q:binary_op a 
+   { 
+     is_associative q eq /\ 
+     is_commutative q eq /\ 
+     equivalence_wrt_condition q eq /\
+     q == d.addition.op      
+   })  
+   = add_of d in
+   let mul 
+   : (m:binary_op a 
+   { 
+     is_associative m eq /\ 
+     is_commutative m eq /\ 
+     equivalence_wrt_condition m eq /\
+     m == d.multiplication.op      
+   }) 
+   = mul_of d in 
+   
+   let x_plus_y = fractions_add d x y in
+   let y_plus_x = fractions_add d y x in
+   // Here goes another riddle. You can comment or remove any single one
+   // of the two asserts below, and the proof will succeed.
+   // But if you remove BOTH, the proof will fail.
+   assert (x_plus_y.num `eq` ((x.num `mul` y.den) `add` (x.den `mul` y.num)));
+   assert (x_plus_y.den `eq` ((x.den) `mul` (y.den)));
+   numerator_commutativity_lemma dom x.num x.den y.num y.den;
+   denominator_commutativity_lemma dom x.den y.den;
+   equal_early_escape_lemma x_plus_y y_plus_x;
+  ()
+
+private let distributivity_lemma_right (#a:Type) (eq: equivalence_relation a) (mul: binary_op a) (add: binary_op a{is_fully_distributive mul add eq}) (x y z: a)
+  : Lemma (((x `add` y) `mul` z) `eq` ((x `mul` z) `add` (y `mul` z))) = ()
+private let distributivity_lemma_left (#a:Type) (eq: equivalence_relation a) (mul: binary_op a) (add: binary_op a{is_fully_distributive mul add eq}) (x y z: a)
+  : Lemma ((x `mul` (y `add` z)) `eq` ((x `mul` y) `add` (x `mul` z))) = ()
+
+#push-options "--ifuel 2 --fuel 0 --z3rlimit 3 --query_stats"
+private let fractions_add_is_associative (#a:Type) (d: euclidean_domain #a) (x y z: fraction d) 
+  : Lemma ((fractions_add d (fractions_add d x y) z) `equiv d` (fractions_add d x (fractions_add d y z))) = 
+   //we calculate the sum of three fractions in 2 different orders,
+   //and prove the results (sum_1 and sum_2) to be equal wrt. domain equality relation
+   let eq = d.eq in 
+   let add = d.addition.op in
    let mul = d.multiplication.op in
-   let add = d.addition.op in 
-   product_of_denominators_is_denominator #a #d x y;
-   let frac : fraction d = Fraction ((x.num `mul` y.den) `add` (x.den `mul` y.num)) (x.den `mul` y.den) in
-   frac
+   dom_mul_assoc d; //we explicitly ensure (AGAIN!) associativity of domain multiplication
+   dom_add_assoc d; //...and addition. Remove this and lemma calls below will fail.
+   let sum_1 = fractions_add d (fractions_add d x y) z in
+   fractions_add_num_lemma d (fractions_add d x y) z; // we ensure the numerator value explicitly. Remove this and the lemma will fail :)
+   distributivity_lemma_right eq mul add (x.num `mul` y.den) (x.den `mul` y.num) z.den; // (ad+bc)f   
+   equivalence_wrt_operation_lemma #a #add eq (((x.num `mul` y.den) `add` (x.den `mul` y.num)) `mul` z.den) 
+                                              (((x.num `mul` y.den) `mul` z.den) `add` ((x.den `mul` y.num) `mul` z.den)) 
+                                              ((x.den `mul` y.den) `mul` z.num); //substitute (ad+bc)f + (bd)e ==> (ad)f+(bc)f+(bd)e
+   //just to keep track of what sum_1.num is currently known to be equal to
+   //assert (sum_1.num `eq` ((((x.num `mul` y.den) `mul` z.den) `add` ((x.den `mul` y.num) `mul` z.den)) `add` ((x.den `mul` y.den) `mul` z.num)) );
+     
+   let sum_2 = fractions_add d x (fractions_add d y z) in
+   fractions_add_den_lemma d x (fractions_add d y z);
+   assert (sum_1.den `eq` ((x.den `mul` y.den) `mul` z.den));
+   assert (sum_2.den `eq` (x.den `mul` (y.den `mul` z.den)));
+  // assert (sum_1.den `eq` sum_2.den);
+  // symm_lemma eq sum_2.den sum_1.den;
+  // assert (sum_2.den `eq` sum_1.den);
+   
+   fractions_add_num_lemma d x (fractions_add d y z);
+   distributivity_lemma_left eq mul add x.den (y.num `mul` z.den) (y.den `mul` z.num); // b(cf+de) = b(cf)+b(de)
+   equivalence_wrt_operation_lemma #a #add eq (x.den `mul` ((y.num `mul` z.den) `add` (y.den `mul` z.num))) // b*(cf+de)
+                                              ((x.den `mul` (y.num `mul` z.den)) `add` (x.den `mul` (y.den `mul` z.num))) 
+                                              (x.num `mul` (y.den `mul` z.den));   
+   assert (sum_2.num `eq` ((x.num `mul` (y.den `mul` z.den)) `add` ((x.den `mul` (y.num `mul` z.den)) `add`(x.den `mul` (y.den `mul` z.num))) ) );
+   (* Yet another arcane part of the proof. If we replace the following 6 declarations with one composite,
+      the proof will mysteriously fail! Uncomment if you want to see the world burning:
+   let (part_1, part_1_r, part_2, part_2_r, part_3, part_3_r) = 
+     ((x.num `mul` (y.den `mul` z.den)), ((x.num `mul` y.den) `mul` z.den),
+     (x.den `mul` (y.num `mul` z.den)), ((x.den `mul` y.num) `mul` z.den),
+     (x.den `mul` (y.den `mul` z.num)), ((x.den `mul` y.den) `mul` z.num)) in *)
+   let part_1 = (x.num `mul` (y.den `mul` z.den)) in   // a(df)
+   let part_1_r = ((x.num `mul` y.den) `mul` z.den) in // (ad)f
+   let part_2 = (x.den `mul` (y.num `mul` z.den)) in   // b(cf)
+   let part_2_r = ((x.den `mul` y.num) `mul` z.den) in // (bc)f
+   let part_3 = (x.den `mul` (y.den `mul` z.num)) in   // b(de)
+   let part_3_r = ((x.den `mul` y.den) `mul` z.num) in // (bd)e
+   assoc_lemma3 eq mul x.num y.den z.den; //shuffle the parentheses in all three.
+   assoc_lemma3 eq mul x.den y.num z.den; //grouped the calls for better readability.
+   assoc_lemma3 eq mul x.den y.den z.num; 
+   // now we operate on the scale of summands of the numerator, since the above lemmas established the parts equalities already
+   assert (sum_1.num `eq` (part_1_r `add` part_2_r `add` part_3_r));
+   assert (part_1 `eq` part_1_r /\ part_2 `eq` part_2_r /\ part_3 `eq` part_3_r);
+   assert (sum_2.num `eq` (part_1 `add` (part_2 `add` part_3)));
+   equivalence_wrt_operation_lemma #a #add eq part_1 part_1_r (part_2 `add` part_3);
+   assert ((part_1 `add` (part_2 `add` part_3)) `eq` (part_1_r `add` (part_2 `add` part_3)));
+   trans_lemma add eq sum_2.num (part_1 `add` (part_2 `add` part_3)) (part_1_r `add` (part_2 `add` part_3));
+   assert (sum_2.num `eq` (part_1_r `add` (part_2 `add` part_3)));
+   equivalence_wrt_operation_lemma #a #add eq part_2 part_2_r part_3;
+   assert ((part_2 `add` part_3) `eq` (part_2_r `add` part_3)); 
+   equivalence_wrt_operation_lemma #a #add eq part_3 part_3_r part_2_r;
+   assert ((part_2_r `add` part_3) `eq` (part_2_r `add` part_3_r)); 
+   trans_lemma add eq (part_2 `add` part_3) (part_2_r `add` part_3) (part_2_r `add` part_3_r);
+   equivalence_wrt_operation_lemma #a #add eq (part_2 `add` part_3) (part_2_r `add` part_3_r) part_1_r;
+   trans_lemma add eq sum_2.num (part_1_r `add` (part_2 `add` part_3)) (part_1_r `add` (part_2_r `add` part_3_r));
+   assert (sum_2.num `eq` (part_1_r `add` (part_2_r `add` part_3_r)));
+   assoc_lemma3 eq add part_1_r part_2_r part_3_r;  
+   assert ((part_1_r `add` (part_2_r `add` part_3_r)) `eq` ((part_1_r `add` part_2_r) `add` part_3_r));
+   trans_lemma add eq sum_2.num (part_1_r `add` (part_2_r `add` part_3_r)) ((part_1_r `add` part_2_r) `add` part_3_r);
+   assert (sum_2.num `eq` (part_1_r `add` part_2_r `add` part_3_r));
+   trans_lemma add eq sum_1.num (part_1_r `add` part_2_r `add` part_3_r) sum_2.num;
+   // assert (sum_1.num `eq` sum_2.num);
+   // assert (sum_1.den `eq` sum_2.den);
+   equal_early_escape_lemma sum_1 sum_2;
+   assert (equiv d sum_1 sum_2); // production variant will only contain the lemma invocations of course :)
+   ()  

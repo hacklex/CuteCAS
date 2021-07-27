@@ -23,6 +23,9 @@ let equivalence_wrt_condition (#a: Type) (op: binary_op a) (eq: equivalence_rela
   
 type equivalence_wrt (#a: Type) (op: binary_op a) = eq:equivalence_relation a{equivalence_wrt_condition op eq}
 
+let equivalence_is_symmetric (#a:Type) (eq: equivalence_relation a) (x:a) (y:a{x `eq` y})
+  : Lemma (x `eq` y == y `eq` x) = ()
+
 /// Here, we define basic axioms of algebraic structures in form of propositions
 /// about operations and elements. 
 ///
@@ -31,6 +34,15 @@ type equivalence_wrt (#a: Type) (op: binary_op a) = eq:equivalence_relation a{eq
 let is_associative (#a:Type) (op:binary_op a) (eq: equivalence_relation a) = forall (x y z:a). ((x `op` y) `op` z) `eq` (x `op` (y `op` z))
 let is_commutative (#a:Type) (op:binary_op a) (eq: equivalence_relation a) = forall (x y:a). (x `op` y) `eq` (y `op` x)
 
+let associative_operation_lemma (#a:Type) (eq: equivalence_relation a) (op:binary_op a{is_associative op eq}) (x y z:a) : Lemma (((x `op` y) `op` z) `eq` (x `op` (y `op` z)))
+  = ()
+
+let commutative_substitution_lemma (#a:Type) (#eq: equivalence_relation a) (op: binary_op a{is_commutative op eq}) 
+  (x y z: a) : Lemma (x `eq` (y `op` z) == x `eq` (z `op` y)) = ()
+
+let associative_lemma_for_substitution (#a:Type) (eq: equivalence_relation a)
+  (op: binary_op a{is_associative op eq}) (x y z w: a)
+  : Lemma ( ((x `op` y) `op` z) `eq` w == (x `op` (y `op` z)) `eq` w) = ()
 
 let is_idempotent (#a:Type) (r: unary_op a) (eq: equivalence_relation a)  = forall (x:a). (r x) `eq` (r (r x))
 
@@ -149,6 +161,12 @@ type commutative_monoid (#a:Type)    = g: monoid #a{is_commutative g.op g.eq}
 type group (#a:Type)                 = g: monoid #a{is_inverse_operation_for g.inv g.op g.eq}
 type commutative_group (#a:Type)     = g: group #a{is_commutative g.op g.eq}
 
+
+/// If you see something trivial, then it is either here to reduce the rlimit for some bigger lemma,
+/// or a leftover from time where something didn't verify and I made more and more explicit lemmas,
+/// or it should be deleted. I periodically cleanup this file and remove unused lemmas.
+/// Nothing big gets removed anyway.
+
 let neutral_is_unique (#a:Type) (g: semigroup #a) (u: neutral_element_of g.op g.eq) (v: neutral_element_of g.op g.eq) : Lemma (g.eq u v) = ()
 
 let neutral_equivalent_is_neutral (#a:Type) (op: binary_op a) (eq: equivalence_wrt op ) (x: neutral_element_of op eq) (y: a{y `eq` x}) : Lemma (is_neutral_of y op eq) = 
@@ -170,18 +188,33 @@ let neutral_equivalent_is_neutral (#a:Type) (op: binary_op a) (eq: equivalence_w
   FStar.Classical.forall_intro aux_right;
   assert (is_neutral_of y op eq);
   ()
-
+/// FStar does not automatically apply lemmas on equivalence being symmetric reflexive and transitive.
+/// So, I at least make my lemmas such that I care about `eq` operand order as little as possible
 let equivalence_wrt_operation_lemma (#a: Type) (#op: binary_op a) (eq: equivalence_wrt op) (e1 e2 z: a)
-  : Lemma (requires e1 `eq` e2) (ensures ((e1 `op` z) `eq` (e2 `op` z)) /\ ((z `op` e1) `eq` (z `op` e2))) = ()
+  : Lemma 
+  (requires e1 `eq` e2 \/ e2 `eq` e1) 
+  (ensures 
+    (e1 `op` z) `eq` (e2 `op` z) /\    
+    (e2 `op` z) `eq` (e1 `op` z) /\    
+    (z `op` e1) `eq` (z `op` e2) /\
+    (z `op` e2) `eq` (z `op` e1)) = ()
 let equivalence_wrt_operation_lemma_inverse (#a: Type) (#op: binary_op a) (eq: equivalence_wrt op) (e1 e2 z: a)
-  : Lemma (requires ((e1 `op` z) `eq` (e2 `op` z)) /\ ((z `op` e1) `eq` (z `op` e2))) (ensures e1 `eq` e2) = ()
+  : Lemma 
+  (requires 
+    ((e1 `op` z) `eq` (e2 `op` z) \/ (e2 `op` z) `eq` (e1 `op` z)) /\ 
+    ((z `op` e1) `eq` (z `op` e2) \/ (z `op` e2) `eq` (z `op` e1))) 
+  (ensures e1 `eq` e2 /\ e2 `eq` e1) = ()
 let equivalence_wrt_operation_lemma_twoway (#a: Type) (#op: binary_op a) (eq: equivalence_wrt op) (e1 e2 z: a)
-  : Lemma (((e1 `op` z) `eq` (e2 `op` z)) /\ ((z `op` e1) `eq` (z `op` e2)) <==> e1 `eq` e2) = ()
+  : Lemma ((e1 `op` z) `eq` (e2 `op` z) /\    
+           (e2 `op` z) `eq` (e1 `op` z) /\    
+           (z `op` e1) `eq` (z `op` e2) /\
+           (z `op` e2) `eq` (z `op` e1)
+           <==> 
+            e1 `eq` e2 /\ e2 `eq` e1) = ()
 
-
+/// When I try to keep the rlimit at minimum, lemmas like this one sometimes help
 let neutral_inverse_is_neutral (#a:Type) (g: group #a) : Lemma (g.neutral `g.eq` (g.inv g.neutral)) =  
-  assert ((g.neutral `g.op` (g.inv g.neutral)) `g.eq` g.neutral);  
-  ()
+  assert ((g.neutral `g.op` (g.inv g.neutral)) `g.eq` g.neutral)
 
 /// In our pursuit of sanity, we only consider ring-like structures that are at least rigs,
 /// with addition forming a commutative group, and multiplication forming a semigroup that
@@ -346,6 +379,16 @@ let dom_prod_zero_lemma (#a:Type) (dom: domain #a) (p q: a)
 
 type commutative_ring (#a: Type) = r:ring #a { is_commutative r.multiplication.op r.eq }
 
+/// I'm not 100% sure, but somehow I think that PERHAPS unit/normal part functions
+/// are safe to expect to be defined over any integral domain. Still, for safety sake,
+/// I restricted all that to euclidean domains.
+///
+/// When I lift that restriction, the fraction library will of course move from
+/// using euclidean domains to using arbitrary integral domains.
+///
+/// The special case of euclidean domains, which allows for reduced fractions, will be handled
+/// differently, and all arithmetics will also account for the gcd/eea availability.
+/// 
 type integral_domain (#a: Type) = r:domain #a { is_commutative r.multiplication.op r.eq }
 
 type euclidean_domain (#a:Type) = r:integral_domain #a 

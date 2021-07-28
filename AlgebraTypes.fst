@@ -212,6 +212,15 @@ let equivalence_wrt_operation_lemma_twoway (#a: Type) (#op: binary_op a) (eq: eq
            <==> 
             e1 `eq` e2 /\ e2 `eq` e1) = ()
 
+let eq_wrt_emulated (#a:Type) (#op: binary_op a) (eq: equivalence_relation a{equivalence_wrt_condition op eq}) (e1 e2 z: a)
+  : Lemma 
+  (requires e1 `eq` e2 \/ e2 `eq` e1) 
+  (ensures 
+    (e1 `op` z) `eq` (e2 `op` z) /\    
+    (e2 `op` z) `eq` (e1 `op` z) /\    
+    (z `op` e1) `eq` (z `op` e2) /\
+    (z `op` e2) `eq` (z `op` e1)) = equivalence_wrt_operation_lemma #a #op eq e1 e2 z
+
 /// When I try to keep the rlimit at minimum, lemmas like this one sometimes help
 let neutral_inverse_is_neutral (#a:Type) (g: group #a) : Lemma (g.neutral `g.eq` (g.inv g.neutral)) =  
   assert ((g.neutral `g.op` (g.inv g.neutral)) `g.eq` g.neutral)
@@ -339,8 +348,9 @@ noeq type ring (#a: Type) = {
   euclidean_norm: nat_function_defined_on_non_absorbers multiplication.op eq 
 }
 
+let neut_add_lemma (#a: Type) (r: ring #a) : Lemma (is_neutral_of r.addition.neutral r.addition.op r.eq) = () 
 let neut_lemma (#a: Type) (r: ring #a) : Lemma (is_neutral_of r.multiplication.neutral r.multiplication.op r.eq) = ()
-
+let add_eq_of (#a:Type) (r: ring #a) : equivalence_wrt r.addition.op = r.eq
 
 #push-options "--ifuel 2 --fuel 2 --z3rlimit 10"
 let mul_neutral_lemma (#a: Type) (r: ring #a) (x: a{is_neutral_of x r.multiplication.op r.eq})

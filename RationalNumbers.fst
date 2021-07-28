@@ -400,3 +400,46 @@ private let fractions_add_is_associative (#a:Type) (d: euclidean_domain #a) (x y
    equal_early_escape_lemma sum_1 sum_2;
    assert (equiv d sum_1 sum_2); // production variant will only contain the lemma invocations of course :)
    ()  
+
+private let fractions_addition_is_associative_lemma (#a:Type) (d: euclidean_domain #a) 
+  : Lemma (is_associative (fractions_add d) (equiv d)) = Classical.forall_intro_3 (fractions_add_is_associative d)
+
+let def_eq_means_eq (#a:Type) (eq: equivalence_relation a) (x:a) (y:a{y==x}) : Lemma (x `eq` y) = ()
+
+private let fraction_neg (#a:Type) (d: euclidean_domain #a) (x: fraction d) : 
+  (t: fraction d{ t.num `d.eq` (d.addition.inv x.num) /\ t.den `d.eq` x.den }) 
+  = let frac = Fraction (d.addition.inv x.num) (x.den) in
+    def_eq_means_eq d.eq frac.num (d.addition.inv x.num);
+    def_eq_means_eq d.eq frac.den x.den;
+    frac
+
+private let eq_of (#a:Type) (d: ring #a) : (eq:equivalence_wrt d.multiplication.op{equivalence_wrt_condition d.addition.op eq}) = d.eq
+
+
+
+#push-options "--ifuel 4 --fuel 4 --z3rlimit 13"
+private let is_fraction_additive_neutral (#a:Type) (d: euclidean_domain #a) (x: fraction d{is_neutral_of x.num d.addition.op d.eq}) (y: fraction d) : Lemma ((x `fractions_add d` y) `equiv d` y) 
+  = 
+  let mul = d.multiplication.op in
+  let add = d.addition.op in  
+  let eq = eq_of d in
+  let sum = fractions_add d x y in
+  fractions_add_num_lemma d x y;
+  assert (equivalence_wrt_condition add eq);
+  assert (equivalence_wrt_condition mul eq);
+  assert(is_absorber_of d.addition.neutral mul eq); 
+  neut_add_lemma d;
+  assert(is_neutral_of d.addition.neutral d.addition.op d.eq);
+  neutral_is_unique d.addition x.num d.addition.neutral;
+  neutral_equivalent_is_neutral add eq d.addition.neutral x.num;
+  absorber_eq_is_also_absorber mul eq d.addition.neutral x.num;
+  assert(is_absorber_of x.num mul eq);
+  assert((x.num `mul` y.den) `eq` x.num);
+  symm_lemma eq x.num (x.num `mul` y.den);
+  eq_wrt_emulated #a #add eq x.num (x.num `mul` y.den) (x.den `mul` y.num); 
+  equivalence_wrt_operation_lemma #a #add eq x.num (x.num `mul` y.den) (x.den `mul` y.num); 
+  admit();
+  assert (((x.num `mul` y.den) `add` (x.den `mul` y.num)) `eq` (x.num `add` (x.den `mul` y.num)));
+  assert_spinoff(sum.num `eq` ((x.num `mul` y.den) `add` (x.den `mul` y.num)));
+  trans_lemma  add eq sum.num ((x.num `mul` y.den) `add` (x.den `mul` y.num)) (x.num `add` (x.den `mul` y.num)); 
+  ()

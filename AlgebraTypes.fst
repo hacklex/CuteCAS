@@ -161,6 +161,7 @@ type commutative_monoid (#a:Type)    = g: monoid #a{is_commutative g.op g.eq}
 type group (#a:Type)                 = g: monoid #a{is_inverse_operation_for g.inv g.op g.eq}
 type commutative_group (#a:Type)     = g: group #a{is_commutative g.op g.eq}
 
+let is_absorber_of_magma (#a:Type) (z: a) (m: magma #a) = is_absorber_of z m.op m.eq
 
 /// If you see something trivial, then it is either here to reduce the rlimit for some bigger lemma,
 /// or a leftover from time where something didn't verify and I made more and more explicit lemmas,
@@ -235,10 +236,9 @@ let neutral_inverse_is_neutral (#a:Type) (g: group #a) : Lemma (g.neutral `g.eq`
 
 let nat_function_defined_on_non_absorbers (#a:Type) (op: binary_op a) (eq: equivalence_relation a) = f: (a -> (option nat)){ forall (x:a). (f x)=None ==> is_absorber_of x op eq }
 
-#push-options "--ifuel 1 --fuel 0 --z3rlimit 1"
-let nat_function_value (#a:Type) (op: binary_op a) (eq: equivalence_relation a) (f: nat_function_defined_on_non_absorbers op eq) (x: non_absorber_of op eq) : nat =   
-  Some?.v (f x)
-#pop-options
+let nat_function_value_exists (#a:Type) (op: binary_op a) (eq: equivalence_relation a) (f: nat_function_defined_on_non_absorbers op eq) (x: non_absorber_of op eq) : Lemma (exists (value: nat). (allow_inversion (option nat); value = (Some?.v (f x)))) = allow_inversion (option nat);()
+
+let nat_function_value (#a:Type) (op: binary_op a) (eq: equivalence_relation a) (f: nat_function_defined_on_non_absorbers op eq) (x: non_absorber_of op eq) : nat = allow_inversion (option nat); Some?.v (f x)
 
 let has_no_absorber_divisors (#a:Type) (op: binary_op a) (eq: equivalence_relation a) = forall (x y: a). is_absorber_of (op x y) op eq <==> (is_absorber_of x op eq) \/ (is_absorber_of y op eq)
 
@@ -320,31 +320,36 @@ let unit_part_func_of_product_is_product_of_unit_parts (#a: Type) (#mul: binary_
   un_op_distr_lemma_p mul eq unit_part_func x y;
   ()
 
-#push-options "--ifuel 0 --fuel 0 --z3rlimit 2"
 let product_of_unit_normals_is_normal (#a: Type) (#mul: binary_op a) (#eq: equivalence_wrt mul)
   (unit_part_func: unit_part_function mul eq)
-  (x y: (t:unit_normals_of mul eq unit_part_func{~(is_absorber_of t mul eq) }))
-  : Lemma (is_unit_normal mul eq unit_part_func (x `mul` y)) =
-  // assert (is_neutral_of (unit_part_func x) mul eq);
-  // assert (is_neutral_of (unit_part_func y) mul eq);
-  // assert (~(is_absorber_of x mul eq));
-  // assert (~(is_absorber_of y mul eq));
-  un_op_distr_lemma_p mul eq unit_part_func x y;
-  assert (unit_part_func (mul x y) `eq` (mul (unit_part_func x) (unit_part_func y)));
+  (x y: unit_normals_of mul eq unit_part_func)
+  : Lemma 
+    (requires ~(is_absorber_of x mul eq) /\ ~(is_absorber_of y mul eq))
+    (ensures is_unit_normal mul eq unit_part_func (x `mul` y)) =
+  un_op_distr_lemma_p mul eq unit_part_func x y;  
   neutral_equivalent_is_neutral mul eq (unit_part_func x) (unit_part_func (mul x y)) ;
-  // assert (is_neutral_of (unit_part_func (mul x y)) mul eq);
-  assert_spinoff (is_unit_normal mul eq unit_part_func (x `mul` y))
-#pop-options
+  assert ((unit_part_func (x `mul` y)) `eq` ((unit_part_func x) `mul` (unit_part_func y)));
+  assert_spinoff (is_unit_normal mul eq unit_part_func (x `mul` y)) 
 
 type test_unit_part_func (#a: Type) (mul: binary_op a) (eq: equivalence_wrt mul) = unit_part_function mul eq
 
-#push-options "--ifuel 0 --fuel 0 --z3rlimit 5"
+#push-options "--ifuel 0 --fuel 0 --z3rlimit 3"
 noeq type ring (#a: Type) = {
   addition: commutative_group #a;
+
+(*
+  multiplication: (t: monoid #a {
+                                  is_fully_distributive t.op addition.op t.eq /\
+                                  (forall (z:a). is_neutral_of z addition.op addition.eq <==> is_absorber_of_magma z t)  
+                                });
+  eq: (t:equivalence_relation a{ equivalence_wrt_condition addition.op t /\ equivalence_wrt_condition multiplication.op t /\ t==addition.eq /\ t==multiplication.eq });  
+*)
+ 
   multiplication: (t: monoid #a {is_fully_distributive t.op addition.op t.eq /\ is_absorber_of addition.neutral t.op t.eq });
   eq: (t:equivalence_relation a{ equivalence_wrt_condition addition.op t /\ equivalence_wrt_condition multiplication.op t /\ t===addition.eq /\ t===multiplication.eq });
+
   unit_part_of: a -> units_of multiplication.op eq;
-  normal_part_of: a -> unit_normals_of multiplication.op eq unit_part_of; // normal_part_function #a #multiplication.op #eq unit_part_of;
+  normal_part_of: a -> unit_normals_of multiplication.op eq unit_part_of;
   euclidean_norm: nat_function_defined_on_non_absorbers multiplication.op eq 
 }
 
@@ -352,40 +357,38 @@ let neut_add_lemma (#a: Type) (r: ring #a) : Lemma (is_neutral_of r.addition.neu
 let neut_lemma (#a: Type) (r: ring #a) : Lemma (is_neutral_of r.multiplication.neutral r.multiplication.op r.eq) = ()
 let add_eq_of (#a:Type) (r: ring #a) : equivalence_wrt r.addition.op = r.eq
 
-#push-options "--ifuel 2 --fuel 2 --z3rlimit 10"
 let mul_neutral_lemma (#a: Type) (r: ring #a) (x: a{is_neutral_of x r.multiplication.op r.eq})
-  : Lemma (r.eq x r.multiplication.neutral)
-  = 
-    neut_lemma r;
-    assert (is_neutral_of r.multiplication.neutral r.multiplication.op r.eq);
-    neutral_equivalent_is_neutral r.multiplication.op r.eq r.multiplication.neutral x;
-    ()
-    
+  : Lemma (r.eq x r.multiplication.neutral) = ()
 
 let is_zero_of (#a: Type) (r: ring #a) (x: a) = is_absorber_of x r.multiplication.op r.eq
 
 let two_zeros_are_equal (#a:Type) (r: ring #a) (x y: (t:a{r.eq t r.addition.neutral})) 
   : Lemma (x `r.eq` y) = ()
 
-let zero_is_equal_to_add_neutral (#a:Type) (r: ring #a) 
-  : Lemma (forall (x:a). is_zero_of r x <==> r.eq x r.addition.neutral) = ()
+let zero_is_equal_to_add_neutral_p (#a:Type) (r: ring #a) (z: a)
+  : Lemma (is_absorber_of z r.multiplication.op r.eq <==> r.eq z r.addition.neutral) 
+  =  () // let eq : equivalence_wrt r.addition.op = r.eq in neutral_is_unique r.addition r.addition.neutral z
+
+
+let zero_is_equal_to_add_neutral (#a:Type) (r: ring #a) : Lemma (forall (x:a). is_zero_of r x <==> r.eq x r.addition.neutral) 
+  = FStar.Classical.forall_intro (zero_is_equal_to_add_neutral_p r)
 
 let nonzero_is_equal_to_add_neutral (#a:Type) (r: ring #a) 
-  : Lemma (forall (x:a). ~(is_zero_of r x) <==> ~(r.eq x r.addition.neutral)) = ()
-  
-let zero_is_equal_to_add_neutral_p (#a:Type) (r: ring #a) (z: a)
-  : Lemma (is_absorber_of z r.multiplication.op r.eq <==> r.eq z r.addition.neutral) = zero_is_equal_to_add_neutral r
-
+  : Lemma (forall (x:a). ~(is_zero_of r x) <==> ~(r.eq x r.addition.neutral)) = zero_is_equal_to_add_neutral r
+ 
 let nonzero_is_not_equal_to_add_neutral_p (#a:Type) (r: ring #a) (z: a)
   : Lemma (~(is_absorber_of z r.multiplication.op r.eq) <==> ~(r.eq z r.addition.neutral)) = zero_is_equal_to_add_neutral r
 
 type domain (#a: Type) = r:ring #a { has_no_absorber_divisors r.multiplication.op r.eq }
 
-
 let dom_prod_zero_lemma (#a:Type) (dom: domain #a) (p q: a) 
   : Lemma (requires (p `dom.multiplication.op` q) `dom.eq` dom.addition.neutral)
-          (ensures (p `dom.eq` dom.addition.neutral \/ q `dom.eq` dom.addition.neutral)) =           
+          (ensures (p `dom.eq` dom.addition.neutral \/ q `dom.eq` dom.addition.neutral)) =     
+          let pq = p `dom.multiplication.op` q in
+          neutral_equivalent_is_neutral dom.addition.op dom.eq  dom.addition.neutral pq;
+          neutral_is_unique dom.addition dom.addition.neutral pq;
           ()
+
 
 type commutative_ring (#a: Type) = r:ring #a { is_commutative r.multiplication.op r.eq }
 
@@ -407,4 +410,4 @@ type euclidean_domain (#a:Type) = r:integral_domain #a
   is_unit_part_function r.unit_part_of /\
   is_normal_part_function r.unit_part_of r.normal_part_of  
 }
-
+ 

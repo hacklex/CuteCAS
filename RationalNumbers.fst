@@ -417,16 +417,18 @@ private let eq_of (#a:Type) (d: ring #a) : (eq:equivalence_wrt d.multiplication.
 
 
 
-#push-options "--ifuel 4 --fuel 4 --z3rlimit 13"
+#push-options "--ifuel 0 --fuel 0 --z3rlimit 10 --query_stats"
 private let is_fraction_additive_neutral (#a:Type) (d: euclidean_domain #a) (x: fraction d{is_neutral_of x.num d.addition.op d.eq}) (y: fraction d) : Lemma ((x `fractions_add d` y) `equiv d` y) 
   = 
   let mul = d.multiplication.op in
   let add = d.addition.op in  
-  let eq = eq_of d in
+  let eq = d.eq in
   let sum = fractions_add d x y in
   fractions_add_num_lemma d x y;
   assert (equivalence_wrt_condition add eq);
   assert (equivalence_wrt_condition mul eq);
+  let eq_add : equivalence_wrt add = eq in
+  let eq_mul : equivalence_wrt mul = eq in
   assert(is_absorber_of d.addition.neutral mul eq); 
   neut_add_lemma d;
   assert(is_neutral_of d.addition.neutral d.addition.op d.eq);

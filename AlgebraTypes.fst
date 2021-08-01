@@ -18,8 +18,7 @@ let is_transitive (#a:Type) (r: binary_relation a) = forall (x y z:a). x `r` y /
 type equivalence_relation (a: Type) = r:binary_relation a{is_reflexive r /\ is_symmetric r /\ is_transitive r}
 
 let equivalence_wrt_condition (#a: Type) (op: binary_op a) (eq: equivalence_relation a) = 
-  (forall (x y z:a). (x `eq` y) <==> ((x `op` z) `eq` (y `op` z))) /\
-  (forall (x y z:a). (x `eq` y) <==> ((z `op` x) `eq` (z `op` y)))
+  (forall (x y z:a). (x `eq` y) ==> ((x `op` z) `eq` (y `op` z))  /\ (z `op` x) `eq` (z `op` y))
   
 type equivalence_wrt (#a: Type) (op: binary_op a) = eq:equivalence_relation a{equivalence_wrt_condition op eq}
 

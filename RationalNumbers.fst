@@ -70,16 +70,90 @@ let domain_law (#a:Type) (d: integral_domain #a) (x y: a)
 let domain_law_other_zero (#a:Type) (d: integral_domain #a) (x y: a)
   : Lemma (is_absorber_of (x `d.multiplication.op` y) d.multiplication.op d.eq /\ ~(is_absorber_of y d.multiplication.op d.eq) ==> is_absorber_of x d.multiplication.op d.eq) = ()
 
-#push-options "--ifuel 1 --fuel 0 --z3rlimit 1"
+#push-options "--ifuel 1 --fuel 0 --z3rlimit 2"
 /// I experimentally established that we need ifuel=1 for the following 3 lemmas to be proven automatically.
 /// Well, if you see how to make this tick with 0/0/1, please do tell me :)
 
-let mul_cancelation_law (#a:Type) (#d: integral_domain #a) (x y: a) (z: non_absorber_of d.multiplication.op d.eq) 
-  : Lemma (((x `d.multiplication.op` z) `d.eq` (y `d.multiplication.op` z)) <==> (x `d.eq` y)) = () 
+(*
+let ltr (#a:Type) (d: domain #a) (p q r:a) : Lemma (requires (p `d.multiplication.op` q) `d.eq` (p `d.multiplication.op` r)) (ensures ((p `d.multiplication.op` q) `d.addition.op` (d.addition.inv (p `d.multiplication.op` r))) `d.eq` d.addition.neutral) = 
+  let mul = d.multiplication.op in
+  let eq = d.eq in
+  let add = d.addition.op in
+  let neg = d.addition.inv in
+  let zero = d.addition.neutral in
+  equal_elements_means_equal_inverses d (p `mul` q) (p `mul` r);
+  inverses_produce_neutral eq add neg (p `mul` q) (neg (p `mul` r));
+  ()
+*)
 
+private let symm_lemma_follow (#a:Type) (eq: equivalence_relation a) (x:a) (y:a{y `eq` x}) : Lemma (x `eq` y) = ()
+
+private let logical_elim p q : Lemma (requires (p \/ q)) (ensures ~p ==> q) = ()
+
+
+
+
+(*
+#push-options "--ifuel 2 --fuel 0 --z3rlimit 15"
+let ring_element_equality_condition (#a:Type) (r: ring #a) (x y: a) : Lemma (x `r.eq` y <==> r.addition.op x (r.addition.inv y) `r.eq` r.addition.neutral) = 
+  if (x `r.eq` y) then (  
+    equal_elements_means_equal_inverses r x y;
+    assert (x `r.addition.op` r.addition.inv x `r.eq` r.addition.neutral);
+    equivalence_wrt_operation_lemma #a #r.addition.op r.eq (r.addition.inv x) (r.addition.inv y) x;
+    assert (x `r.addition.op` (r.addition.inv y) `r.eq` r.addition.neutral)
+  ) else (
+    if ((r.addition.op x (r.addition.inv y)) `r.eq` r.addition.neutral) then 
+    (
+      neutral_equivalent_is_neutral r.addition.op r.eq r.addition.neutral (r.addition.op x (r.addition.inv y));
+      assert (is_neutral_of (r.addition.op x (r.addition.inv y)) r.addition.op r.eq);
+      producing_neutral_means_inverses r.eq r.addition.op r.addition.inv x (r.addition.inv y);
+      assert (r.addition.inv x `r.eq` r.addition.inv y);
+      equal_elements_means_equal_inverses r x y;
+      ()
+    ) else (
+      ()
+    )
+  )
+   
+#push-options "--ifuel 4 --fuel 0 --z3rlimit 15"
 let domain_law_fork (#a:Type) (d: integral_domain #a) (x y z:a) 
   : Lemma ( ((x `d.multiplication.op` y) `d.eq` (x `d.multiplication.op` z)) <==>
-            (is_absorber_of x d.multiplication.op d.eq \/ (y `d.eq` z))) = ()
+            (is_absorber_of x d.multiplication.op d.eq \/ (y `d.eq` z))) = 
+  let mul = d.multiplication.op in
+  let eq = d.eq in
+  let add = d.addition.op in
+  let neg = d.addition.inv in
+  let zero = d.addition.neutral in
+  let ltr (p q r:a) : Lemma (requires (p `mul` q) `eq` (p `mul` r)) (ensures is_absorber_of p mul eq \/ (q `eq` r)) = 
+    equal_elements_means_equal_inverses d (p `mul` q) (p `mul` r);
+    inverses_produce_neutral eq add neg (p `mul` q) (neg (p `mul` r));
+    assert (is_neutral_of ((p `mul` q) `add` (neg (p `mul` r))) add eq);
+    ring_x_times_minus_y_is_minus_xy d p r;
+    symm_lemma eq (mul p (neg r)) (neg (mul p r));
+    assert (neg (mul p r) `eq` mul p (neg r));
+    equivalence_wrt_operation_lemma #a #add eq (neg (mul p r)) (mul p (neg r)) (mul p q);
+    assert (((mul p q) `add` (neg (mul p r))) `eq` ((mul p q) `add` (mul p (neg r))));
+    assert (is_fully_distributive mul add eq);
+    left_distributivity_lemma mul add eq p q (neg r);
+    assert (eq (mul p (add q (neg r)))  (((mul p q) `add` (mul p (neg r)))));
+    symm_lemma eq (mul p q `add` mul p (neg r)) (mul p (add q (neg r)));
+    assert (eq ((mul p q) `add` (neg (mul p r))) (add (mul p q) (mul p (neg r))));
+    trans_lemma eq (add (mul p q) (neg (mul p r))) (add (mul p q) (mul p (neg r))) (mul p (add q (neg r)));
+    assert (is_neutral_of (mul p q `add` neg (mul p r)) add eq);
+    assert (eq (mul p q `add` neg (mul p r)) (mul p (add q (neg r))));
+    neutral_equivalent_is_neutral add eq ((p `mul` q) `add` (neg (mul p r))) (mul p (add q (neg r)));
+    neutral_is_unique add eq (mul p (add q (neg r))) zero;
+    domain_characterizing_lemma d p (add q (neg r));
+    producing_neutral_means_inverses eq add neg q (neg r);
+    
+    admit();
+    () in
+  admit();
+  ()
+            
+let mul_cancelation_law (#a:Type) (#d: integral_domain #a) (x y: a) (z: non_absorber_of d.multiplication.op d.eq) 
+  : Lemma (((x `d.multiplication.op` z) `d.eq` (y `d.multiplication.op` z)) <==> (x `d.eq` y)) = () 
+ *)
 
 /// This one is still actually used in several places.
 /// Basically it's a shorthand to the AlgebraTypes library lemma.
@@ -119,7 +193,7 @@ let assoc_lemma4 (#a:Type) (eq: equivalence_relation a) (op: binary_op a{is_asso
     ) = //I didn't remove the assertions entirely, as they show the intent behind the invoked lemmas
       assoc_lemma3 eq op x y z;
       //assert (((x `op` y) `op` z) `eq` (x `op` (y `op` z)));
-      equivalence_wrt_operation_lemma_twoway #a #op eq ((x `op` y) `op` z) (x `op` (y `op` z)) w
+      equivalence_wrt_operation_lemma   #a #op eq ((x `op` y) `op` z) (x `op` (y `op` z)) w
       //assert ((((x `op` y) `op` z) `op` w) `eq` (((x `op` (y `op` z)) `op` w)));
     
 /// I strive to remove the usages of this one, but it persists.
@@ -134,7 +208,7 @@ let comm_lemma (#a:Type) (eq: equivalence_relation a) (op: binary_op a{is_commut
 /// These four are necessary in some spots where F* forgets these properties of + and *,
 /// totally ignoring the type refinements written for the domain type in AlgebraTypes...
 private let dom_mul_assoc (#a:Type) (d: domain #a) : Lemma (is_associative d.multiplication.op d.eq) = ()
-private let dom_mul_comm (#a:Type) (d: domain #a) : Lemma (is_commutative d.multiplication.op d.eq) = ()
+private let dom_mul_comm (#a:Type) (d: commutative_ring #a) : Lemma (is_commutative d.multiplication.op d.eq) = ()
 private let dom_add_assoc (#a:Type) (d: domain #a) : Lemma (is_associative d.addition.op d.eq) = ()
 private let dom_add_comm (#a:Type) (d: domain #a) : Lemma (is_commutative d.addition.op d.eq) = ()
 
@@ -168,44 +242,77 @@ private let auxiliary_add_flip_lemma (#p: Type)
     equivalence_wrt_operation_lemma eq (mul c d) (mul d c) (mul b a);
     trans_lemma add eq ((a `mul` b) `add` (c `mul` d)) ((b `mul` a) `add` (c `mul` d)) ((b `mul` a) `add` (d `mul` c))
 
+#push-options "--ifuel 1 --fuel 0 --z3rlimit 3"
+private let final_step (#p:Type) (dom: euclidean_domain #p) (a c e: p) (b d f: valid_denominator_of dom)
+  : Lemma (requires (((c `dom.multiplication.op` d) `dom.multiplication.op` (b `dom.multiplication.op` e)) `dom.eq` ((c `dom.multiplication.op` d) `dom.multiplication.op` (a `dom.multiplication.op` f))) /\
+                    ((dom.multiplication.op a d) `dom.eq` (dom.multiplication.op b c)) /\
+                    ((dom.multiplication.op c f) `dom.eq` (dom.multiplication.op d e)) 
+          )
+          (ensures dom.multiplication.op a f `dom.eq` dom.multiplication.op b e) =    
+  domain_law_from_pq_eq_pr_full dom (c `dom.multiplication.op` d) (b `dom.multiplication.op` e) (a `dom.multiplication.op` f);             
+  if (c `dom.multiplication.op` d `dom.eq` dom.addition.neutral) then (
+    absorber_equal_is_absorber dom.multiplication.op dom.eq dom.addition.neutral (dom.multiplication.op c d);
+    domain_law_other_zero dom c d;
+    absorber_lemma dom.multiplication.op dom.eq c b; //bc=0
+    absorber_equal_is_absorber dom.multiplication.op dom.eq (dom.multiplication.op b c) (dom.multiplication.op a d); //ad=bc=0
+    domain_law_other_zero dom a d; //ad=0 ==> a=0
+    absorber_lemma dom.multiplication.op dom.eq c f; //c=0 ==> cf=0
+    absorber_lemma dom.multiplication.op dom.eq a f; //a=0 ==> af=0
+    symm_lemma dom.eq (dom.multiplication.op d e) (dom.multiplication.op c f); //de=cf
+    absorber_equal_is_absorber dom.multiplication.op dom.eq (dom.multiplication.op c f) (dom.multiplication.op d e); //0=de=cf
+    domain_law_other_zero dom d e; //de=0 => e=0
+    absorber_lemma dom.multiplication.op dom.eq e b; //e=0 ==> eb=0
+    absorber_is_unique dom.multiplication.op dom.eq (dom.multiplication.op a f) (dom.multiplication.op b e) //eb=0 & af=0 ==> af=be
+  ) else symm_lemma dom.eq (dom.multiplication.op a f) (dom.multiplication.op b e)
+
 /// The first big lemma is the proof of fraction equality transitivity.
 /// Basically, we're proving that ad=bc && cf=de ==> af=be.
 /// I left the assertions intact because the proof is otherwise even harder to understand.
+/// 
+#push-options "--ifuel 2 --fuel 0 --z3rlimit 1"
 private let fractions_equality_transitivity_lemma (#p: Type) (dom: euclidean_domain #p) 
   (x: fraction dom) 
   (y: (t:fraction dom{fractions_equal x t}))
   (z: (t:fraction dom{fractions_equal y t})) : Lemma (fractions_equal x z) =   
     // FStar somehow loves to forget the refinements back from the type (domain #p)
-    let mul : (t:binary_op p{is_commutative t dom.eq /\ is_associative t dom.eq}) 
-            = dom_mul_assoc dom; dom_mul_comm dom; dom.multiplication.op in
+
+    //let mul : (t:binary_op p{is_commutative t dom.eq /\ is_associative t dom.eq}) 
+     //       = dom_mul_assoc dom; dom_mul_comm dom; dom.multiplication.op in
+    let mul = dom.multiplication.op in        
+    dom_mul_comm dom;
     let eq : equivalence_wrt mul = dom.eq in // so we provide our types explicitly to invoke the required lemmas 
     let (a,b,c,d,e,f) = (x.num, x.den, y.num, y.den, z.num, z.den) in // one composite let is faster than six :)
-    assert ((a `mul` d) `eq` (b `mul` c));
+    let abso_lemma (known_absorber: absorber_of mul eq) (unk: p) : Lemma (is_absorber_of (mul known_absorber unk) mul eq) = absorber_lemma mul eq known_absorber unk in 
+  //  assert (is_absorber_of dom.addition.neutral mul eq);
+  //  assert ((a `mul` d) `eq` (b `mul` c));
     equivalence_wrt_operation_lemma eq (c `mul` f) (d `mul` e) (a `mul` d);
-    assert (((a `mul` d) `mul` (c `mul` f)) `eq` ((a `mul` d) `mul` (d `mul` e)));
+  //  assert (((a `mul` d) `mul` (c `mul` f)) `eq` ((a `mul` d) `mul` (d `mul` e)));
     equivalence_wrt_operation_lemma eq (mul a d) (mul b c) (mul d e);
     trans_lemma mul eq ((a `mul` d) `mul` (c `mul` f)) ((a `mul` d) `mul` (d `mul` e)) ((b `mul` c) `mul` (d `mul` e));
-    assert (((a `mul` d) `mul` (c `mul` f)) `eq` ((b `mul` c) `mul` (d `mul` e)));  
+  //  assert (((a `mul` d) `mul` (c `mul` f)) `eq` ((b `mul` c) `mul` (d `mul` e)));  
     assoc_lemma4 eq mul b c d e;     
-    assert ((((b `mul` c) `mul` d) `mul` e ) `eq` ((b `mul` c) `mul` (d `mul` e))); 
-    assert ((((b `mul` c) `mul` d) `mul` e ) `eq` ((b `mul` (c `mul` d)) `mul` e)); 
+  //  assert ((((b `mul` c) `mul` d) `mul` e ) `eq` ((b `mul` c) `mul` (d `mul` e))); 
+  //  assert ((((b `mul` c) `mul` d) `mul` e ) `eq` ((b `mul` (c `mul` d)) `mul` e)); 
+
     comm_lemma eq mul b (mul c d);
     equivalence_wrt_operation_lemma eq (b `mul` (c `mul` d)) ((c `mul` d) `mul` b) e;
-    assert (((b `mul` (c `mul` d)) `mul` e ) `eq` (((c `mul` d) `mul` b) `mul` e));    
+  //  assert (((b `mul` (c `mul` d)) `mul` e ) `eq` (((c `mul` d) `mul` b) `mul` e));    
     trans_lemma mul eq (((b `mul` c) `mul` d) `mul` e ) ((b `mul` (c `mul` d)) `mul` e) (((c `mul` d) `mul` b) `mul` e);
     trans_lemma mul eq ((b `mul` c) `mul` (d `mul` e)) (((b `mul` c) `mul` d) `mul` e) (((c `mul` d) `mul` b) `mul` e); 
-    assoc_lemma4 eq mul c d b e;     
+    assoc_lemma4 eq mul c d b e;   
     trans_lemma mul eq ((b `mul` c) `mul` (d `mul` e)) (((c `mul` d) `mul` b) `mul` e) ((c `mul` d) `mul` (b `mul` e)); 
     trans_lemma mul eq ((a `mul` d) `mul` (c `mul` f)) ((b `mul` c) `mul` (d `mul` e)) ((c `mul` d) `mul` (b `mul` e)); 
-    assert (((a `mul` d) `mul` (c `mul` f)) `eq` ((c `mul` d) `mul` (b `mul` e)));   
+  //  assert (((a `mul` d) `mul` (c `mul` f)) `eq` ((c `mul` d) `mul` (b `mul` e)));   
     auxiliary_flip_lemma eq mul a d c f;
-    assert (((a `mul` d) `mul` (c `mul` f)) `eq` ((c `mul` d) `mul` (b `mul` e))); 
+  //  assert (((a `mul` d) `mul` (c `mul` f)) `eq` ((c `mul` d) `mul` (b `mul` e))); 
     symm_lemma eq ((c `mul` d) `mul` (b `mul` e)) ((a `mul` d) `mul` (c `mul` f));
-    assert (((c `mul` d) `mul` (b `mul` e)) `eq` ((a `mul` d) `mul` (c `mul` f)));         
-    assert (((a `mul` d) `mul` (c `mul` f)) `eq` ((c `mul` d) `mul` (a `mul` f)));
+  //  assert (((c `mul` d) `mul` (b `mul` e)) `eq` ((a `mul` d) `mul` (c `mul` f)));         
+  //  assert (((a `mul` d) `mul` (c `mul` f)) `eq` ((c `mul` d) `mul` (a `mul` f)));
     trans_lemma mul eq ((c `mul` d) `mul` (b `mul` e)) ((a `mul` d) `mul` (c `mul` f)) ((c `mul` d) `mul` (a `mul` f)); 
-    assert (((c `mul` d) `mul` (b `mul` e)) `eq` ((c `mul` d) `mul` (a `mul` f)));
-    ()
+  //  assert (((c `mul` d) `mul` (b `mul` e)) `eq` ((c `mul` d) `mul` (a `mul` f)));
+    final_step dom a c e b d f;   
+ ()
+
 
 /// We convert the above lemma into an implication to invoke Classical.forall_intro_3 and get the
 /// forall version of transitivity lemma for free
@@ -243,7 +350,9 @@ private let equal_early_escape_lemma (#a:Type) (#d: euclidean_domain #a) (x y: f
   equivalence_wrt_operation_lemma eq y.den x.den y.num; // we need exactly equivalence wrt. mul,
   equivalence_wrt_operation_lemma eq x.num y.num y.den  // in order to prove this lemma
 #pop-options
- 
+
+private let sys_eq_means_eq (#a:Type) (eq: equivalence_relation a) (x y: a) : Lemma (x == y ==> x `eq` y) = ()
+
 /// We declare the type of fractions_add heavily refined so that our
 /// future lemmas will not have it too rough proving stuff
 private let fractions_add (#a: Type) (d: euclidean_domain #a) (x y: fraction d)
@@ -254,12 +363,14 @@ private let fractions_add (#a: Type) (d: euclidean_domain #a) (x y: fraction d)
      }) = 
    product_of_denominators_is_denominator x y;
    let res = Fraction ((x.num `d.multiplication.op` y.den) `d.addition.op` (x.den `d.multiplication.op` y.num))
-            (x.den `d.multiplication.op` y.den) in   
+            (x.den `d.multiplication.op` y.den) in              
    let rn = res.num in
-   let rd = res.den in 
-   assert_spinoff (rn `d.eq` ((x.num `d.multiplication.op` y.den) `d.addition.op` (x.den `d.multiplication.op` y.num))); 
-   assert_spinoff (rd `d.eq` (x.den `d.multiplication.op` y.den));   
-   res // Don't know why this does not work without spinoff.
+   let rd = res.den in  
+   sys_eq_means_eq d.eq rn ((x.num `d.multiplication.op` y.den) `d.addition.op` (x.den `d.multiplication.op` y.num));
+   sys_eq_means_eq d.eq rd (x.den `d.multiplication.op` y.den);
+ //  assert (rn `d.eq` ((x.num `d.multiplication.op` y.den) `d.addition.op` (x.den `d.multiplication.op` y.num))); 
+ //  assert (rd `d.eq` (x.den `d.multiplication.op` y.den));   
+   res // == does not mean `d.eq`, surprisingly so. Proved automatically above tho...
  
 /// These two lemmas may look obvious, but proofs below fail without calling it.
 private let fractions_add_num_lemma (#a:Type) (d:euclidean_domain #a) (x y: fraction d)
@@ -271,6 +382,7 @@ private let numerator_commutativity_lemma (#a:Type) (d: euclidean_domain #a) (x 
   : Lemma ( ( (x `d.multiplication.op` w) `d.addition.op` (y `d.multiplication.op` z)) `d.eq`
             ( (w `d.multiplication.op` x) `d.addition.op` (z `d.multiplication.op` y))) = 
    dom_add_assoc d;
+   dom_mul_assoc d;
    auxiliary_add_flip_lemma d.eq d.multiplication.op d.addition.op x w y z
 
 private let denominator_commutativity_lemma (#a:Type) (d: euclidean_domain #a) (x y: a) 
@@ -432,9 +544,9 @@ private let is_fraction_additive_neutral (#a:Type) (d: euclidean_domain #a) (x: 
   assert(is_absorber_of d.addition.neutral mul eq); 
   neut_add_lemma d;
   assert(is_neutral_of d.addition.neutral d.addition.op d.eq);
-  neutral_is_unique d.addition x.num d.addition.neutral;
+  neutral_is_unique d.addition.op d.eq x.num d.addition.neutral;
   neutral_equivalent_is_neutral add eq d.addition.neutral x.num;
-  absorber_eq_is_also_absorber mul eq d.addition.neutral x.num;
+  absorber_equal_is_absorber mul eq d.addition.neutral x.num;
   assert(is_absorber_of x.num mul eq);
   assert((x.num `mul` y.den) `eq` x.num);
   symm_lemma eq x.num (x.num `mul` y.den);

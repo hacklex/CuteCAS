@@ -28,8 +28,14 @@ let equivalence_is_symmetric (#a:Type) (eq: equivalence_relation a) (x:a) (y:a{x
 private let eq_rel (a:Type) (eq: equivalence_relation a) : (t:equivalence_relation a {t == eq}) = eq
 
 let trans_lemma (#a:Type) (eq: equivalence_relation a) (x y z:a)
-  : Lemma (requires x `eq` y && y `eq` z)  (ensures x `eq` z /\ z `eq` x) = ()
- 
+  : Lemma (requires ((x `eq` y) \/ (y `eq` x)) /\ ((y `eq` z) \/ (z `eq` y)))  (ensures x `eq` z && z `eq` x) = ()
+
+
+private let trans_lemma_4 (#a:Type) (eq: equivalence_relation a) (x:a)
+                                                                 (y:a{eq x y \/ eq y x})
+                                                                 (z:a{eq y z \/ eq z y})
+                                                                 (w:a{eq z w \/ eq w z}) : Lemma (x `eq` w /\ w `eq` x) = ()
+
 let symm_lemma (#a:Type) (eq:equivalence_relation a) (x:a) (y:a) : Lemma (x `eq` y == y `eq` x) = ()
 
 /// FStar does not automatically apply lemmas on equivalence being symmetric reflexive and transitive.
@@ -140,8 +146,8 @@ let nonabsorber_equal_is_nonabsorber (#a:Type) (op: binary_op a) (eq: equivalenc
 let is_inverse_operation_for (#a: Type) (inv: unary_op a) (op: binary_op a) (eq: equivalence_relation a) 
   = (forall (x:a). is_neutral_of (op x (inv x)) op eq /\ is_neutral_of (op (inv x) x) op eq)
 
-let inverse_operation_lemma (#a:Type) (op: binary_op a) (eq: equivalence_wrt op) (inv: unary_op a{is_inverse_operation_for inv op eq}) (x: a) : Lemma (is_neutral_of (x `op` (inv x)) op eq) = ()
-
+let inverse_operation_lemma (#a:Type) (op: binary_op a) (eq: equivalence_wrt op) (inv: unary_op a{is_inverse_operation_for inv op eq}) (x: a) 
+  : Lemma (is_neutral_of (x `op` (inv x)) op eq /\ is_neutral_of ((inv x) `op` x) op eq) = ()
 
 /// The inverse operation type is also a refinement for arbitrary unary operation 
 type inverse_op_for (#a: Type) (op: binary_op a) (eq: equivalence_relation a) 
@@ -236,7 +242,8 @@ let is_fully_distributive (#a:Type) (op_mul:binary_op a) (op_add:binary_op a) (e
   forall (x y z:a). ((x `op_mul` (y `op_add` z)) `eq` ((x `op_mul` y) `op_add` (x `op_mul` z))) /\ (((x `op_add` y) `op_mul` z) `eq` ((x `op_mul` z) `op_add` (y `op_mul` z)))
 
 let fully_distributive_is_both_left_and_right  (#a:Type) (op_mul:binary_op a) (op_add:binary_op a) (eq: equivalence_relation a) 
-  : Lemma (is_fully_distributive op_mul op_add eq <==> is_left_distributive op_mul op_add eq /\ is_right_distributive op_mul op_add eq) = ()
+  : Lemma (is_fully_distributive op_mul op_add eq <==> is_left_distributive op_mul op_add eq /\ is_right_distributive op_mul op_add eq)  
+  = ()
 
 let left_distributivity_lemma (#a:Type) (op_mul:binary_op a) (op_add:binary_op a) (eq: equivalence_relation a) (x y z: a)
   : Lemma (requires is_left_distributive op_mul op_add eq) (ensures (x `op_mul` (y `op_add` z)) `eq` ((x `op_mul` y) `op_add` (x `op_mul` z))) = ()
@@ -298,9 +305,7 @@ noeq type magma (#a: Type) =
   inv: (t:unary_op a{ respects_equivalence t eq });
   neutral: a
 }
-
-//let magma_equality_is_symmetric (#a:Type) (m: magma #a) (x y:a) : Lemma (x `m.eq` y == y `m.eq` x) [SMTPat(x `m.eq` y)] = symm_lemma m.eq x y
-
+ 
 type semigroup (#a:Type)             = g: magma #a{is_associative g.op g.eq}
 type commutative_magma (#a:Type)     = g: magma #a{is_commutative g.op g.eq}
 type commutative_semigroup (#a:Type) = g: semigroup #a{is_commutative g.op g.eq}
@@ -310,6 +315,7 @@ type group (#a:Type)                 = g: monoid #a{is_inverse_operation_for g.i
 type commutative_group (#a:Type)     = g: group #a{is_commutative g.op g.eq}
 
 let magma_eq_wrt_condition (#a:Type) (m: magma #a) : Lemma(equivalence_wrt_condition m.op m.eq) = ()
+
 
 let absorber_never_equals_non_absorber (#a: Type) (op: binary_op a) (eq: equivalence_wrt op) 
   (x: absorber_of op eq) (y: non_absorber_of op eq) : Lemma (~(x `eq` y)) = 
@@ -332,7 +338,29 @@ let neutral_inverse_is_neutral (#a:Type) (g: group #a) : Lemma (g.neutral `g.eq`
 
 let group_op_lemma (#a:Type) (g: group #a) (x y z:a) 
   : Lemma (requires (x `g.op` z) `g.eq` (y `g.op` z)) (ensures (x `g.eq` y)) = group_operation_lemma g.eq g.op g.inv x y z
- 
+
+
+#push-options "--ifuel 1 --fuel 0 --z3rlimit 16"
+let group_element_equality_means_zero_difference (#a:Type) (g: group #a) (x y: a) : Lemma (x `g.eq` y <==> (x `g.op` g.inv y) `g.eq` g.neutral) = 
+  inverse_operation_lemma g.op g.eq g.inv y; //isneutral(y + -y), x + -y
+  neutral_is_unique g.op g.eq  (g.op y (g.inv y)) g.neutral; 
+  assert ((g.op y (g.inv y)) `g.eq` g.neutral);
+  if (x `g.eq` y) then (
+    equivalence_wrt_operation_lemma g.eq x y (g.inv y);
+    assert ((x `g.op` g.inv y) `g.eq` (y `g.op` g.inv y));
+    trans_lemma g.eq (x `g.op` g.inv y) (y `g.op` g.inv y) g.neutral;
+    ()    
+  ) else (
+    if ((x `g.op` g.inv y) `g.eq` g.neutral) then ( 
+      trans_lemma g.eq (x `g.op` g.inv y) g.neutral (y `g.op` g.inv y);
+      group_op_lemma  g x y (g.inv y);
+      ()
+    ) 
+    else ( 
+      ()
+    )
+  )
+
 let flip_lemma p1 p2 (q:unit -> Lemma (requires p1) (ensures p2))
   : Lemma (requires ~p2) (ensures ~p1)
   = FStar.Classical.move_requires q ()
@@ -371,8 +399,10 @@ let group_has_no_absorbers (#a:Type) (g: group #a) (z:a) (y:non_absorber_of g.op
 /// because there is no inheritance in F*. Unfortunately so, to say the least.
 
 let nat_function_defined_on_non_absorbers (#a:Type) (op: binary_op a) (eq: equivalence_relation a) = f: (a -> (option nat)){ forall (x:a). (f x)=None ==> is_absorber_of x op eq }
-
+ 
+(*
 let nat_function_value_exists (#a:Type) (op: binary_op a) (eq: equivalence_relation a) (f: nat_function_defined_on_non_absorbers op eq) (x: non_absorber_of op eq) : Lemma (exists (value: nat). (allow_inversion (option nat); value = (Some?.v (f x)))) = allow_inversion (option nat);()
+*)
 
 let nat_function_value (#a:Type) (op: binary_op a) (eq: equivalence_relation a) (f: nat_function_defined_on_non_absorbers op eq) (x: non_absorber_of op eq) : nat = allow_inversion (option nat); Some?.v (f x)
 
@@ -492,22 +522,32 @@ noeq type ring (#a: Type) = {
 }
 #pop-options
 
-
-#push-options "--ifuel 0 --fuel 0 --z3rlimit 3"
-let ring_addition_neutral_is_unique (#a:Type) (r:ring #a) (n: a{is_neutral_of n r.addition.op r.eq}) 
-  : Lemma (r.eq n r.addition.neutral && r.eq r.addition.neutral n)[SMTPat(is_neutral_of n r.addition.op r.eq)] = ()
-#pop-options
-
+ 
 let neg_of (#a:Type) (r: ring #a) (p:a) : (t:a{ t `r.eq` (r.addition.neutral `r.addition.op` (r.addition.inv p) )}) = r.addition.inv p
 
 let minus_of (#a:Type) (r: ring #a) (x:a) (y:a) : (t:a{ t `r.eq` (x `r.addition.op` (r.addition.inv y) )}) = x `r.addition.op` (neg_of r y)
 
-let minus_minus_x_is_x (#a:Type) (r: ring #a) (x: a) : Lemma (neg_of r (neg_of r x) `r.eq` x /\ x `r.eq` (neg_of r (neg_of r x))) = 
-//  assert (r.addition.op x (neg_of r x) `r.eq` r.addition.neutral);
-//  assert (r.addition.op (neg_of r (neg_of r x)) (neg_of r x) `r.eq` r.addition.neutral);
-//  trans_lemma r.eq (r.addition.op x (neg_of r x)) r.addition.neutral (r.addition.op (neg_of r (neg_of r x)) (neg_of r x));
-//  assert ((r.addition.op x (neg_of r x)) `r.eq` (r.addition.op (neg_of r (neg_of r x)) (neg_of r x))); 
-  group_op_lemma r.addition x (neg_of r (neg_of r x)) (neg_of r x);  
+#push-options "--ifuel 3 --fuel 0 --z3rlimit 2"
+let minus_minus_x_is_x (#a:Type) (r: ring #a) (x: a) : Lemma (neg_of r (neg_of r x) `r.eq` x /\ x `r.eq` (neg_of r (neg_of r x))) =   
+  let neut_means_zero (p:a) : Lemma (requires is_neutral_of p r.addition.op r.eq) 
+                                    (ensures p `r.eq` r.addition.neutral) 
+                                    [SMTPat(is_neutral_of p r.addition.op r.eq)]
+                                    = neutral_is_unique r.addition.op r.eq r.addition.neutral p in
+  inverse_operation_lemma r.addition.op r.eq r.addition.inv x;
+  inverse_operation_lemma r.addition.op r.eq r.addition.inv (r.addition.inv x); 
+
+  assert (r.addition.op x (r.addition.inv x) `r.eq` r.addition.neutral);
+  assert (r.addition.op (r.addition.inv (r.addition.inv x)) (r.addition.inv x) `r.eq` r.addition.neutral);
+
+  trans_lemma r.eq (r.addition.op x (r.addition.inv x)) 
+                    r.addition.neutral 
+                   (r.addition.op (r.addition.inv (r.addition.inv x)) (r.addition.inv x));
+ 
+  group_operation_lemma r.eq r.addition.op r.addition.inv 
+            x 
+            (r.addition.inv (r.addition.inv x)) 
+            (r.addition.inv x);  
+  symm_lemma r.eq (r.addition.inv (r.addition.inv x)) x; 
   ()
  
 #push-options "--ifuel 2 --fuel 0 --z3rlimit 4"
@@ -549,13 +589,36 @@ let ring_additive_inv_x_is_x_times_minus_one (#a:Type) (r: ring #a) (x: a)
 #pop-options
 
 let equal_elements_means_equal_inverses (#a:Type) (r: ring #a) (x y:a) 
-  : Lemma (r.eq x y == (r.addition.inv x `r.eq` r.addition.inv y) /\ r.eq x y == (r.addition.inv y `r.eq` r.addition.inv x)) = 
+  : Lemma (
+               (r.eq x y == (r.addition.inv x `r.eq` r.addition.inv y)) 
+               /\  
+               (r.eq x y == (r.addition.inv y `r.eq` r.addition.inv x))
+          ) =   
+  let boolean_assertion x y : Lemma (requires x && y) (ensures  x == y) = () in
+  let neut_means_zero (p:a) : Lemma (requires is_neutral_of p r.addition.op r.eq) 
+                                    (ensures p `r.eq` r.addition.neutral) 
+                                    [SMTPat(is_neutral_of p r.addition.op r.eq)]
+                                    = neutral_is_unique r.addition.op r.eq r.addition.neutral p in
   let one = r.multiplication.neutral in
   let add = r.addition.op in
   let mul = r.multiplication.op in
   let eq = r.eq in
-  let neg = r.addition.inv in
-  if (x `eq` y) then (()) else (
+  let neg = r.addition.inv in 
+  let zero = r.addition.neutral in 
+  if (x `eq` y) then (
+    inverse_operation_lemma add eq neg y; // y + -y = 0
+    inverse_operation_lemma add eq neg x; // x + -x = 0
+    equivalence_wrt_operation_lemma #a #add eq x y (neg y);
+    assert (x `add` neg y `eq` zero);
+    neutral_equivalent_is_neutral add eq zero (x `add` neg y);
+    producing_neutral_means_inverses eq add neg x (neg y);
+    assert_spinoff (neg x `eq` neg y);
+    symm_lemma eq (neg y) (neg x);
+    assert (neg x `eq` neg y);
+    assert (neg x `eq` neg y && (x `eq` y));
+    boolean_assertion (neg x `eq` neg y) (x `eq` y);
+    ()
+  ) else (
     if ( (neg x) `eq` (neg y) ) then (
       equivalence_wrt_operation_lemma #a #r.multiplication.op r.eq (neg x) (neg y) (neg one);      
       assert (r.multiplication.op (neg x) (neg one) `r.eq` r.multiplication.op (neg y) (neg one));      
@@ -749,7 +812,7 @@ type domain (#a: Type) = r:ring #a { has_no_absorber_divisors r.multiplication.o
 
  
 #push-options "--ifuel 1 --fuel 0 --z3rlimit 2"
-private let domain_mul_absorber_lemma (#a:Type) (dom: domain #a) (x y:a) 
+let domain_mul_absorber_lemma (#a:Type) (dom: domain #a) (x y:a) 
   : Lemma (is_absorber_of (dom.multiplication.op x y) dom.multiplication.op dom.eq <==> 
            is_absorber_of x dom.multiplication.op dom.eq \/ is_absorber_of y dom.multiplication.op dom.eq) = 
    domain_multiplication_law_inv dom.eq dom.multiplication.op x y
@@ -789,7 +852,58 @@ let domain_characterizing_lemma (#a:Type) (dom: domain #a) (p q: a)
     ()
   ) else ()
 #pop-options
+
+
+private let aux_lemma (#a:Type) (d: domain #a) (p q r: a) : Lemma (requires p `d.eq` d.addition.neutral \/ (d.addition.op q (d.addition.inv r) `d.eq` d.addition.neutral))
+  (ensures p `d.eq` d.addition.neutral \/ q `d.eq` r) = 
+  if (p `d.eq` d.addition.neutral) then () else (
+   if (d.addition.op q (d.addition.inv r) `d.eq` d.addition.neutral) then (
+     group_element_equality_means_zero_difference d.addition q r;
+
+     ()
+   ) else ()
+  )
   
+#push-options "--ifuel 1 --fuel 0 --z3rlimit 10"
+private let domain_law_from_pq_eq_pr (#a:Type) (d: domain #a) (p q r: a)
+  : Lemma (requires d.multiplication.op p q `d.eq` d.multiplication.op p r) 
+          (ensures p `d.eq` d.addition.neutral \/ (q `d.addition.op` (d.addition.inv r) `d.eq` d.addition.neutral)) = 
+  let mul = d.multiplication.op in
+  let eq = d.eq in
+  let add = d.addition.op in
+  let neg = d.addition.inv in
+  let zero = d.addition.neutral in
+  equal_elements_means_equal_inverses d (p `mul` q) (p `mul` r);
+  inverses_produce_neutral eq add neg (p `mul` q) (neg (p `mul` r));
+  assert (is_neutral_of ((p `mul` q) `add` (neg (p `mul` r))) add eq);
+  neutral_is_unique add eq ((p `mul` q) `add` (neg (p `mul` r))) zero;
+  
+  ring_x_times_minus_y_is_minus_xy d p r;
+  symm_lemma eq (mul p (neg r)) (neg (mul p r));
+  equivalence_wrt_operation_lemma #a #add eq (neg (mul p r)) (mul p (neg r)) (mul p q);
+  assert ((mul p q `add` neg (mul p r)) `eq` (mul p q `add` mul p (neg r)));
+  fully_distributive_is_both_left_and_right mul add eq;
+  left_distributivity_lemma mul add eq p q (neg r);
+  assert (eq zero ((p `mul` q) `add` (neg (p `mul` r))));  
+  trans_lemma_4 eq zero ((p `mul` q) `add` (neg (p `mul` r))) (mul p q `add` mul p (neg r)) (mul p (add q (neg r)));
+  domain_characterizing_lemma d p (add q (neg r));
+ // assert (p `eq` zero \/ (q `add` neg r `eq` zero));
+ // aux_lemma d p q r;
+//  assert (d.eq p d.addition.neutral \/ d.eq q r);  
+//  let sq = squash (p `d.eq` d.addition.neutral \/ (q `d.eq` r)) in
+//  assert (eq p zero \/ eq q r);
+ // admit();
+  () 
+#pop-options
+ 
+#push-options "--ifuel 1 --fuel 0 --z3rlimit 15"
+let domain_law_from_pq_eq_pr_full (#a:Type) (d: domain #a) (p q r: a)
+  : Lemma (requires d.multiplication.op p q `d.eq` d.multiplication.op p r) 
+          (ensures p `d.eq` d.addition.neutral \/ (q `d.eq` r)) = 
+  domain_law_from_pq_eq_pr d p q r;
+  aux_lemma d p q r
+#pop-options
+
 type commutative_ring (#a: Type) = r:ring #a { is_commutative r.multiplication.op r.eq }
 
 /// I'm not 100% sure, but somehow I think that PERHAPS unit/normal part functions

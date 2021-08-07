@@ -36,7 +36,7 @@ let trans_lemma (#a:Type) (eq: equivalence_relation a) (x y z:a)
   = reveal_opaque (`%is_transitive) (is_transitive #a);
     reveal_opaque (`%is_symmetric) (is_symmetric #a)
 
-private let trans_lemma_4 (#a:Type) (eq: equivalence_relation a) (x:a)
+let trans_lemma_4 (#a:Type) (eq: equivalence_relation a) (x:a)
                                                                  (y:a{eq x y \/ eq y x})
                                                                  (z:a{eq y z \/ eq z y})
                                                                  (w:a{eq z w \/ eq w z})
@@ -917,7 +917,7 @@ let domain_characterizing_lemma (#a:Type) (dom: domain #a) (p q: a)
     assert (p `dom.multiplication.op` q `dom.eq` dom.addition.neutral)
   )  
   
-private let domain_law_from_pq_eq_pr (#a:Type) (d: domain #a) (p q r: a)
+let domain_law_from_pq_eq_pr (#a:Type) (d: domain #a) (p q r: a)
   : Lemma (requires d.multiplication.op p q `d.eq` d.multiplication.op p r) 
           (ensures p `d.eq` d.addition.neutral \/ (q `d.eq` r)) =  
   reveal_opaque (`%is_transitive) (is_transitive #a);     

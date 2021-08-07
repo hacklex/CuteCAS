@@ -26,7 +26,7 @@ let equivalence_wrt_condition (#a: Type) (op: binary_op a) (eq: equivalence_rela
   
 type equivalence_wrt (#a: Type) (op: binary_op a) = eq:equivalence_relation a{equivalence_wrt_condition op eq}
 
-let equivalence_is_symmetric (#a:Type) (eq: equivalence_relation a) (x:a) (y:a{x `eq` y})
+let equivalence_is_symmetric (#a:Type) (eq: equivalence_relation a) (x y:a)
   : Lemma (x `eq` y == y `eq` x) = reveal_opaque (`%is_symmetric) (is_symmetric #a)
 
 //private let eq_rel (a:Type) (eq: equivalence_relation a) : (t:equivalence_relation a {t == eq}) = eq

@@ -9,6 +9,15 @@ let is_valid_denominator_of (#a:Type) (d: integral_domain #a) (x: a) =
 
 type valid_denominator_of (#a:Type) (d: integral_domain #a) = (t: a{is_valid_denominator_of d t})
 
+let one_is_valid_denominator (#a:Type) (d: integral_domain #a) : Lemma (is_valid_denominator_of d d.multiplication.neutral) = 
+  reveal_opaque (`%is_neutral_invariant) (is_neutral_invariant #a);  
+  assert (d.unit_part_of d.multiplication.neutral `d.eq` d.multiplication.neutral);
+  neutral_equivalent_is_neutral d.multiplication.op d.eq d.multiplication.neutral (d.unit_part_of d.multiplication.neutral);
+  assert (is_unit_normal d.multiplication.op d.eq d.unit_part_of d.multiplication.neutral);
+  assert (~(d.multiplication.neutral `d.eq` d.addition.neutral));
+  absorber_nonequal_is_nonabsorber d.multiplication.op d.eq d.addition.neutral d.multiplication.neutral;
+  ()
+
 private type commutative_ring_mul (#a:Type) (r: commutative_ring #a) = (op:binary_op a{
   is_commutative op r.eq /\ 
   is_associative op r.eq /\ 
@@ -488,7 +497,7 @@ private let distributivity_lemma_left (#a:Type) (eq: equivalence_relation a) (mu
   : Lemma ((x `mul` (y `add` z)) `eq` ((x `mul` y) `add` (x `mul` z))) =  
     reveal_opaque (`%is_fully_distributive) (is_fully_distributive #a) 
  
-private let fractions_add_is_associative (#a:Type) (d: integral_domain #a) (x y z: fraction d) 
+private let fraction_add_is_associative (#a:Type) (d: integral_domain #a) (x y z: fraction d) 
   : Lemma ((fraction_add (fraction_add x y) z) `fraction_eq` (fraction_add x (fraction_add y z))) = 
    reveal_opaque (`%is_associative) (is_associative #a); 
    //we calculate the sum of three fractions in 2 different orders,
@@ -562,10 +571,10 @@ private let fractions_add_is_associative (#a:Type) (d: integral_domain #a) (x y 
    equal_early_escape_lemma sum_1 sum_2;
    assert (fraction_eq sum_1 sum_2) // production variant will only contain the lemma invocations of course :)
    
-private let fractions_addition_is_associative_lemma (#a:Type) (d: integral_domain #a) 
+private let fraction_addition_is_associative_lemma (#a:Type) (d: integral_domain #a) 
   : Lemma (is_associative #(fraction d) (fraction_add  #a) (fraction_eq #a)) = 
   reveal_opaque (`%is_associative) (is_associative #(fraction d));   
-  Classical.forall_intro_3 (fractions_add_is_associative d)
+  Classical.forall_intro_3 (fraction_add_is_associative d)
 
 let def_eq_means_eq (#a:Type) (eq: equivalence_relation a) (x:a) (y:a{y==x}) : Lemma (x `eq` y) = reveal_opaque (`%is_reflexive) (is_reflexive #a)
 
@@ -819,10 +828,75 @@ private let fraction_equivalence_respects_mul (#a:Type) (#d: integral_domain #a)
   trans_lemma_4 fraction_eq (fraction_mul e1 x) (fraction_mul x e1) (fraction_mul x e2) (fraction_mul e2 x); 
   ()
 
+let fraction_equivalence_respects_multiplication (#a:Type) (#d: integral_domain #a) : Lemma(equivalence_wrt_condition #(fraction d) (fraction_mul #a) (fraction_eq #a)) = 
+  reveal_opaque (`%equivalence_wrt_condition) (equivalence_wrt_condition #(fraction d)); 
+  Classical.forall_intro_3 (fraction_equivalence_respects_mul #a #d)
+
+//let is_inverse_operation_for (#a: Type) (inv: unary_op a) (op: binary_op a) (eq: equivalence_relation a) 
+//  = (forall (x:a). is_neutral_of (op x (inv x)) op eq /\ is_neutral_of (op (inv x) x) op eq)
+
+private let fraction_neg_is_inverse_for_add (#a:Type) (#d: integral_domain #a) (x: fraction d) : Lemma (
+  is_neutral_of (fraction_add x (fraction_neg x)) fraction_add fraction_eq /\
+  is_neutral_of (fraction_add (fraction_neg x) x) fraction_add fraction_eq) = 
+  let add = d.addition.op in
+  let neg = d.addition.inv in
+  let mul = d.multiplication.op in  
+  let eq = d.eq in  
+  assert ((fraction_neg x).num `eq` neg x.num);
+  assert ((fraction_neg x).den `eq` x.den);
+//  fraction_add_num_lemma d x (fraction_neg x);
+  assert ((fraction_add x (fraction_neg x)).den `eq` (fraction_add (fraction_neg x) x).den);
+  assert (((fraction_add x (fraction_neg x)).num) `eq` ((x.num `mul` x.den) `add` (x.den `mul`  neg x.num))); 
+  comm_lemma eq mul x.num x.den;
+  equivalence_wrt_operation_lemma #a #add eq (x.num `mul` x.den) (x.den `mul` x.num) (x.den `mul` neg x.num);
+  trans_lemma eq (fraction_add x (fraction_neg x)).num  
+                 ((x.num `mul` x.den) `add` (x.den `mul` neg x.num))
+                 ((x.den `mul` x.num) `add` (x.den `mul` neg x.num));   
+  reveal_opaque (`%is_fully_distributive) (is_fully_distributive #a); 
+  reveal_opaque (`%is_left_distributive) (is_left_distributive #a); 
+ // reveal_opaque (`%is_neutral_of) (is_neutral_of #a); 
+  left_distributivity_lemma mul add eq x.den x.num (neg x.num);
+  trans_lemma eq (fraction_add x (fraction_neg x)).num 
+                 ((x.den `mul` x.num) `add` (x.den `mul` neg x.num)) 
+                 (x.den `mul` (x.num `add` neg x.num));
+  inverse_operation_lemma add eq neg x.num;
+  assert (is_neutral_of (x.num `add` neg x.num) add eq);
+  neutral_is_unique add eq d.addition.neutral (x.num `add` neg x.num);
+  assert (d.addition.neutral `eq` (x.num `add` neg x.num));
+  symm_lemma eq (x.num `add` neg x.num) d.addition.neutral;
+  absorber_equal_is_absorber mul eq d.addition.neutral (x.num `add` neg x.num);
+  absorber_lemma mul eq (x.num `add` neg x.num) x.den;
+  absorber_equal_is_absorber mul eq (x.num `add` neg x.num) (x.den `mul` (x.num `add` neg x.num)); 
+  assert (is_absorber_of (x.den `mul` (x.num `add` neg x.num)) mul eq); 
+  absorber_is_unique mul eq (x.den `mul` (x.num `add` neg x.num)) d.addition.neutral;
+  neutral_equivalent_is_neutral add eq d.addition.neutral (x.den `mul` (x.num `add` neg x.num));
+  symm_lemma eq (x.den `mul` (x.num `add` neg x.num)) d.addition.neutral;
+  trans_lemma eq (fraction_add x (fraction_neg x)).num
+                 (x.den `mul` (x.num `add` neg x.num))
+                 d.addition.neutral;
+  neutral_equivalent_is_neutral add eq d.addition.neutral (fraction_add x (fraction_neg x)).num;
+  reveal_opaque (`%is_neutral_of) (is_neutral_of #(fraction d)); 
+  reveal_opaque (`%is_left_id_of) (is_left_id_of #(fraction d)); 
+  reveal_opaque (`%is_right_id_of) (is_right_id_of #(fraction d)); 
+  Classical.forall_intro (fraction_additive_neutral_lemma d (x `fraction_add` fraction_neg x));
+  assert (is_neutral_of (fraction_add x (fraction_neg x)) fraction_add fraction_eq);
+  fraction_add_is_commutative x (fraction_neg x);
+  assert (fraction_add x (fraction_neg x) `fraction_eq` fraction_add (fraction_neg x) x);
+  symm_lemma fraction_eq (fraction_add (fraction_neg x) x) (fraction_add x (fraction_neg x));
+  assert (fraction_eq (fraction_add (fraction_neg x) x) (fraction_add x (fraction_neg x)));
+  fraction_equivalence_respects_addition #a #d;
+  neutral_equivalent_is_neutral  fraction_add fraction_eq (x `fraction_add` fraction_neg x) (fraction_neg x `fraction_add` x); 
+  ()
+
+
+let fraction_neg_is_inverse_for_addition (#a:Type) (#d: integral_domain #a) : Lemma (is_inverse_operation_for (fraction_neg #a #d) fraction_add fraction_eq) =  
+  reveal_opaque (`%is_inverse_operation_for) (is_inverse_operation_for #(fraction d)); 
+  Classical.forall_intro (fraction_neg_is_inverse_for_add #a #d)
+
+
 private let fraction_negation_lemma (#a:Type) (#d: integral_domain #a) (x: fraction d) 
   : Lemma (is_neutral_of (x `fraction_add` (fraction_neg x)) fraction_add fraction_eq /\
-           is_neutral_of ((fraction_neg x) `fraction_add` x) (fraction_add) (fraction_eq))
-           = 
+           is_neutral_of ((fraction_neg x) `fraction_add` x) (fraction_add) (fraction_eq)) = 
   reveal_opaque (`%is_reflexive) (is_reflexive #a); 
   reveal_opaque (`%is_fully_distributive) (is_fully_distributive #a); 
   reveal_opaque (`%is_right_distributive) (is_right_distributive #a); 
@@ -852,4 +926,52 @@ private let fraction_negation_lemma (#a:Type) (#d: integral_domain #a) (x: fract
   assert (is_neutral_of s.num add d.eq);
   fraction_zero_is_neutral_lemma s; 
   fraction_add_is_commutative x (fraction_neg x);
+  fraction_equivalence_respects_addition #a #d;
+  fraction_neg_is_inverse_for_addition #a #d;
+  inverse_operation_lemma fraction_add fraction_eq fraction_neg x;
+  fraction_add_is_commutative x (fraction_neg x);
+  symm_lemma fraction_eq (x `fraction_add` fraction_neg x) (fraction_neg x `fraction_add` x);
   neutral_equivalent_is_neutral fraction_add fraction_eq (x `fraction_add` fraction_neg x) (fraction_neg x `fraction_add` x)
+
+private let fraction_neg_respects_equivalence (#a:Type) (#d: integral_domain #a) (x y: fraction d) : Lemma (x `fraction_eq` y ==> (fraction_neg x `fraction_eq` fraction_neg y)) 
+  = 
+  let neg = d.addition.inv in
+  let mul = d.multiplication.op in 
+  if (fraction_eq x y) then (
+    assert ((fraction_neg x).num `d.eq` d.addition.inv x.num);
+    ring_x_times_minus_y_is_minus_x_times_y d x.num y.den;
+    ring_x_times_minus_y_is_minus_xy d x.num y.den;
+    trans_lemma d.eq (neg x.num `mul` y.den) 
+                     (x.num `mul` neg y.den)
+                     (neg (x.num `mul` y.den));
+    assert ((x.num `mul` y.den) `d.eq` (x.den `mul` y.num));
+    equal_elements_means_equal_inverses d (x.num `mul` y.den) (x.den `mul` y.num);
+    assert (neg (x.num `mul` y.den) `d.eq` neg (x.den `mul` y.num));
+    ring_x_times_minus_y_is_minus_xy d x.den y.num;
+    symm_lemma d.eq (neg (mul x.den y.num)) (mul x.den (neg y.num));
+    assert (neg (x.den `mul` y.num) `d.eq` (x.den `mul` neg y.num));
+    trans_lemma_4 d.eq (neg x.num `mul` y.den)
+                       (neg (x.num `mul` y.den))
+                       (neg (x.den `mul` y.num))
+                       (x.den `mul` neg y.num);
+    () 
+  )
+
+let fraction_negation_respects_equivalence (#a:Type) (#d: integral_domain #a) : Lemma (respects_equivalence #(fraction d) fraction_neg fraction_eq) = 
+  reveal_opaque (`%respects_equivalence) (respects_equivalence #(fraction d)); 
+  Classical.forall_intro_2 (fraction_neg_respects_equivalence #a #d)
+
+let fraction_additive_group (#a:Type) (#d: integral_domain #a) : commutative_group #(fraction d) = 
+  fraction_equivalence_respects_addition #a #d;
+  fraction_neg_is_inverse_for_addition #a #d;
+  fraction_negation_respects_equivalence #a #d;
+  fraction_addition_is_associative_lemma d;  
+  reveal_opaque (`%is_neutral_of) (is_neutral_of #(fraction d)); 
+  reveal_opaque (`%is_left_id_of) (is_left_id_of #(fraction d)); 
+  reveal_opaque (`%is_right_id_of) (is_right_id_of #(fraction d)); 
+  one_is_valid_denominator d;
+  let zero = (Fraction d.addition.neutral d.multiplication.neutral) in
+  Classical.forall_intro (fraction_additive_neutral_lemma d zero);
+  Classical.forall_intro_2 (fraction_add_is_commutative #a #d);
+  reveal_opaque (`%is_commutative) (is_commutative #(fraction d)); 
+  Mkmagma (fraction_add #a #d) (fraction_eq #a #d) (fraction_neg #a #d) (Fraction d.addition.neutral d.multiplication.neutral)

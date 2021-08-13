@@ -386,6 +386,10 @@ let absorber_never_equals_non_absorber (#a: Type) (op: binary_op a) (eq: equival
   reveal_opaque (`%is_symmetric) (is_symmetric #a);   
   if (x `eq` y) then absorber_equal_is_absorber op eq x y
 
+let absorber_nonequal_is_nonabsorber (#a:Type) (op: binary_op a) (eq: equivalence_wrt op) (x: absorber_of op eq) (y: a)
+  : Lemma (~(eq x y) \/ ~(eq y x)  ==> ~(is_absorber_of y op eq)) = 
+  Classical.move_requires_2 (absorber_is_unique op eq) x y
+  
 unfold let is_absorber_of_magma (#a:Type) (z: a) (m: magma #a) = is_absorber_of z m.op m.eq
 
 /// When I try to keep the rlimit at minimum, lemmas like this one sometimes help
@@ -522,8 +526,13 @@ let un_distr_l (#a: Type) (op: binary_op a) (eq: equivalence_relation a) (f: (t:
 
 type units_of (#a: Type) (mul: binary_op a) (eq: equivalence_relation a) = x:a{is_unit x mul eq}
 
+[@@"opaque_to_smt"]
+let is_neutral_invariant (#a: Type) (mul: binary_op a) (eq: equivalence_wrt mul) (f: a -> a) = 
+  forall (x:a). (is_neutral_of x mul eq ==> eq x (f x) /\ eq (f x) x)
+
 let is_unit_part_function (#a: Type) (#mul: binary_op a) (#eq: equivalence_wrt mul) (f: a -> units_of mul eq) = 
   is_idempotent f eq /\
+  is_neutral_invariant mul eq f /\
   yields_units f mul eq /\
   respects_equivalence f eq /\
   unary_over_nonzeros_distributes_over f mul eq
@@ -549,6 +558,7 @@ type unit_normal_of (#a: Type) (mul: binary_op a) (eq: equivalence_wrt mul) (uni
 
 let is_normal_part_function (#a:Type) (#mul: binary_op a) (#eq: equivalence_wrt mul) (unit_part_func: a -> a) (f: a -> unit_normal_of mul eq unit_part_func) = 
   is_idempotent f eq /\
+  is_neutral_invariant mul eq f /\
   respects_equivalence f eq /\
   yields_unit_normals mul eq unit_part_func f /\
   unary_distributes_over f mul eq
@@ -877,7 +887,7 @@ let nonzero_is_not_equal_to_add_neutral (#a:Type) (r: ring #a)
 let nonzero_is_not_equal_to_add_neutral_p (#a:Type) (r: ring #a) (z: a)
   : Lemma (~(is_absorber_of z r.multiplication.op r.eq) <==> ~(r.eq z r.addition.neutral)) = zero_is_equal_to_add_neutral r
 
-type domain (#a: Type) = r:ring #a { has_no_absorber_divisors r.multiplication.op r.eq }
+type domain (#a: Type) = r:ring #a { has_no_absorber_divisors r.multiplication.op r.eq /\ ~(r.eq r.addition.neutral r.multiplication.neutral \/ r.eq r.multiplication.neutral r.addition.neutral ) }
 
 let domain_mul_absorber_lemma (#a:Type) (dom: domain #a) (x y:a) 
   : Lemma (is_absorber_of (dom.multiplication.op x y) dom.multiplication.op dom.eq <==> 

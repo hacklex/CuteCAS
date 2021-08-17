@@ -1,5 +1,5 @@
 module AlgebraTypes
-
+ 
 #push-options "--ifuel 0 --fuel 0 --z3rlimit 1 --query_stats"
 
 type binary_op (a:Type) = a -> a -> a
@@ -19,7 +19,7 @@ let is_transitive (#a:Type) (r: binary_relation a) = forall (x y z:a). x `r` y /
 /// (or 0/a to 0/1), and we'll use the custom equivalence relation,
 /// (a/b)=(c/d) ==def== (ad=bc). The three properties shall be then proven explicitly.
 type equivalence_relation (a: Type) = r:binary_relation a{is_reflexive r /\ is_symmetric r /\ is_transitive r}
-
+ 
 [@@"opaque_to_smt"]
 let equivalence_wrt_condition (#a: Type) (op: binary_op a) (eq: equivalence_relation a) = 
   (forall (x y z:a). (x `eq` y) ==> ((x `op` z) `eq` (y `op` z))  /\ (z `op` x) `eq` (z `op` y))
@@ -28,11 +28,11 @@ type equivalence_wrt (#a: Type) (op: binary_op a) = eq:equivalence_relation a{eq
 
 let equivalence_is_symmetric (#a:Type) (eq: equivalence_relation a) (x y:a)
   : Lemma (x `eq` y == y `eq` x) = reveal_opaque (`%is_symmetric) (is_symmetric #a)
-
-//private let eq_rel (a:Type) (eq: equivalence_relation a) : (t:equivalence_relation a {t == eq}) = eq
-
+ 
 let trans_lemma (#a:Type) (eq: equivalence_relation a) (x y z:a)
-  : Lemma (requires ((x `eq` y) \/ (y `eq` x)) /\ ((y `eq` z) \/ (z `eq` y)))  (ensures x `eq` z && z `eq` x)   
+  : Lemma (requires ((x `eq` y) \/ (y `eq` x)) /\ 
+                    ((y `eq` z) \/ (z `eq` y)))  
+          (ensures x `eq` z && z `eq` x)   
   = reveal_opaque (`%is_transitive) (is_transitive #a);
     reveal_opaque (`%is_symmetric) (is_symmetric #a)
 
@@ -56,7 +56,9 @@ let equivalence_wrt_operation_lemma (#a: Type) (#op: binary_op a) (eq: equivalen
     (z `op` e1) `eq` (z `op` e2) /\
     (z `op` e2) `eq` (z `op` e1)) = reveal_opaque (`%equivalence_wrt_condition) (equivalence_wrt_condition #a);
                                     reveal_opaque (`%is_symmetric) (is_symmetric #a) 
-    
+
+/// Back in the times of old, when there were no opaques, some lemmas failed without this.
+/// This artifact of the ancient times isn't supposed to be here. To be deleted asap.
 let eq_wrt_emulated (#a:Type) (#op: binary_op a) (eq: equivalence_relation a{equivalence_wrt_condition op eq}) (e1 e2 z: a)
   : Lemma 
   (requires e1 `eq` e2 \/ e2 `eq` e1) 
@@ -75,26 +77,7 @@ let eq_wrt_emulated (#a:Type) (#op: binary_op a) (eq: equivalence_relation a{equ
 let is_associative (#a:Type) (op:binary_op a) (eq: equivalence_relation a) = forall (x y z:a). ((x `op` y) `op` z) `eq` (x `op` (y `op` z))
 [@@"opaque_to_smt"]
 let is_commutative (#a:Type) (op:binary_op a) (eq: equivalence_relation a) = forall (x y:a). (x `op` y) `eq` (y `op` x)
-
-
-let associative_operation_lemma (#a:Type) (eq: equivalence_relation a) (op:binary_op a{is_associative op eq}) (x y z:a) 
-  : Lemma (((x `op` y) `op` z) `eq` (x `op` (y `op` z)) && (x `op` (y `op` z)) `eq` ((x `op` y) `op` z))
-  = reveal_opaque (`%is_associative) (is_associative #a);
-    reveal_opaque (`%is_symmetric) (is_symmetric #a) 
-  
-
-let commutative_substitution_lemma (#a:Type) (#eq: equivalence_relation a) (op: binary_op a{is_commutative op eq}) 
-  (x y z: a) : Lemma (x `eq` (y `op` z) == x `eq` (z `op` y)) = 
-  reveal_opaque (`%is_commutative) (is_commutative #a);
-  reveal_opaque (`%is_transitive) (is_transitive #a) 
-
-let associative_lemma_for_substitution (#a:Type) (eq: equivalence_relation a)
-  (op: binary_op a{is_associative op eq}) (x y z w: a)
-  : Lemma ( ((x `op` y) `op` z) `eq` w == (x `op` (y `op` z)) `eq` w) = 
-  reveal_opaque (`%is_associative) (is_associative #a);
-  reveal_opaque (`%is_transitive) (is_transitive #a); 
-  reveal_opaque (`%is_symmetric) (is_symmetric #a) 
-  
+ 
 [@@"opaque_to_smt"]
 let is_idempotent (#a:Type) (r: unary_op a) (eq: equivalence_relation a)  = forall (x:a). (r x) `eq` (r (r x))
 
@@ -160,10 +143,17 @@ let absorber_lemma (#a:Type) (op:binary_op a) (eq: equivalence_relation a) (z: a
 /// And Z3 is doing fine on that account, just saying.
 let absorber_is_unique (#a:Type) (op: binary_op a) (eq: equivalence_relation a) (z1 z2: a) 
   : Lemma (requires is_absorber_of z1 op eq /\ is_absorber_of z2 op eq) 
-          (ensures eq z1 z2 /\ eq z2 z1) = 
+          (ensures eq z1 z2 /\ eq z2 z1) 
+          = 
   reveal_opaque (`%is_transitive) (is_transitive #a); 
   reveal_opaque (`%is_symmetric) (is_symmetric #a); 
   reveal_opaque (`%is_absorber_of) (is_absorber_of #a)
+
+let absorber_is_unique_smt_lemma (#a:Type) (op: binary_op a) (eq: equivalence_relation a) (z1 z2: a)
+  : Lemma (requires is_absorber_of z1 op eq /\ is_absorber_of z2 op eq) 
+          (ensures eq z1 z2 /\ eq z2 z1)  
+          [SMTPat(is_absorber_of z1 op eq /\ is_absorber_of z2 op eq)]
+          = absorber_is_unique op eq z1 z2
   
 
 let absorber_eq_is_abs (#a:Type) (op: binary_op a) (eq: equivalence_wrt op) (z1: absorber_of op eq) (z2: a{z2 `eq` z1}) (t: a) 
@@ -202,7 +192,7 @@ let is_inverse_operation_for (#a: Type) (inv: unary_op a) (op: binary_op a) (eq:
   = (forall (x:a). is_neutral_of (op x (inv x)) op eq /\ is_neutral_of (op (inv x) x) op eq)
 
 let inverse_operation_lemma (#a:Type) (op: binary_op a) (eq: equivalence_wrt op) (inv: unary_op a{is_inverse_operation_for inv op eq}) (x: a) 
-  : Lemma (is_neutral_of (x `op` (inv x)) op eq /\ is_neutral_of ((inv x) `op` x) op eq) = 
+  : Lemma (is_neutral_of (x `op` (inv x)) op eq /\ is_neutral_of ((inv x) `op` x) op eq) =
   reveal_opaque (`%is_inverse_operation_for) (is_inverse_operation_for #a)
 
 /// The inverse operation type is also a refinement for arbitrary unary operation 
@@ -211,16 +201,19 @@ type inverse_op_for (#a: Type) (op: binary_op a) (eq: equivalence_relation a)
 
 let inverses_produce_neutral (#a:Type) (eq: equivalence_relation a) (op: binary_op a{is_associative op eq /\ equivalence_wrt_condition op eq}) (inv: inverse_op_for op eq) (x y: a)
   : Lemma (requires inv x `eq` y)
-          (ensures is_neutral_of (x `op` y) op eq) =
+          (ensures is_neutral_of (x `op` y) op eq /\ is_neutral_of (y `op` x) op eq) =
     equivalence_wrt_operation_lemma #a #op eq (inv x) y x;
     reveal_opaque (`%is_inverse_operation_for) (is_inverse_operation_for #a);
-    neutral_equivalent_is_neutral op eq (x `op` inv x) (x `op` y)
+    neutral_equivalent_is_neutral op eq (x `op` inv x) (x `op` y);
+    neutral_equivalent_is_neutral op eq (inv x `op` x) (y `op` x)
 
-let group_operation_lemma (#a:Type) (eq: equivalence_relation a) 
+private let group_operation_lemma_left (#a:Type) (eq: equivalence_relation a) 
                              (op: binary_op a{is_associative op eq /\ equivalence_wrt_condition op eq}) 
                              (inv: inverse_op_for op eq) (x y z:a) 
-  : Lemma (requires (x `op` z) `eq` (y `op` z)) (ensures (x `eq` y)) =    
-  reveal_opaque (`%is_transitive) (is_transitive #a); // we're going to need the transitivity of ==
+  : Lemma (requires (x `op` z) `eq` (y `op` z)) (ensures x `eq` y /\ y `eq` x) =    
+  reveal_opaque (`%is_transitive) (is_transitive #a);
+  reveal_opaque (`%is_associative) (is_associative #a); 
+  reveal_opaque (`%is_symmetric) (is_symmetric #a);
   let eq_wrt_lemma = equivalence_wrt_operation_lemma #a #op eq in
   let z'  = inv z in
   let op = op in
@@ -229,14 +222,47 @@ let group_operation_lemma (#a:Type) (eq: equivalence_relation a)
   let xz = x `op` z in                         // suppose zz'    = 1 (always possible in a group)
   let yz = y `op` z in                         // we have xz     = yz
   eq_wrt_lemma xz yz z';                       // then,   (xz)z' = (yz)z'
-  associative_operation_lemma eq op x z z';    // or,     x(zz') = (yz)z'
+  // associativity lemmas are now redundant,
+  // thanks to reveal_opaque 
+  // associative_operation_lemma eq op x z z'; // or,     x(zz') = (yz)z'
   inverse_operation_lemma op eq inv z;         // as we know, zz'= 1
   neutral_lemma op eq zz' x;                   // zz'=1,  (zz')x = x
   trans_lemma eq (xz `op` z') (x `op` zz') x;  // transitivity, (xz)z' = x(zz') = x, (xz)z'=x
   trans_lemma eq x (xz `op` z') (yz `op` z');  // transitivity, x = (xz)z' = (yz)z'
-  associative_operation_lemma eq op y z z';    // assoc again, (yz)z' = y(zz') 
+  // associative_operation_lemma eq op y z z'; // assoc again, (yz)z' = y(zz') 
   neutral_lemma op eq zz' y;                   // neutral again, y(zz')=y.
   ()                                           // the rest is left as an exercise for Z3
+
+
+private let group_operation_lemma_right (#a:Type) (eq: equivalence_relation a)
+                                (op: binary_op a{is_associative op eq /\ equivalence_wrt_condition op eq})
+                                (inv: inverse_op_for op eq) (x y z:a)
+  : Lemma (requires (z `op` x) `eq` (z `op` y)) (ensures x `eq` y /\ y `eq` x) =
+  reveal_opaque (`%is_transitive) (is_transitive #a); // we're going to need the transitivity of ==
+  reveal_opaque (`%is_associative) (is_associative #a); // we're going to need the transitivity of ==
+  reveal_opaque (`%is_symmetric) (is_symmetric #a);
+  let eq_wrt_lemma = equivalence_wrt_operation_lemma #a #op eq in
+  let z' = inv z in
+  let zx = op z x in
+  let zy = op z y in
+  let z'z = op z' z in
+  eq_wrt_lemma zx zy z';
+  inverse_operation_lemma op eq inv z;
+  neutral_lemma op eq z'z x;
+  trans_lemma eq (z' `op` zx) (z'z `op` x) x;
+  trans_lemma eq x (z' `op` zx) (z' `op` zy);
+  neutral_lemma op eq z'z y
+ // trans_lemma_4 eq x (z' `op` zy) (z'z `op` y) y
+
+let group_operation_lemma (#a:Type) (eq: equivalence_relation a)
+                                    (op: binary_op a{is_associative op eq /\ equivalence_wrt_condition op eq}) 
+                                    (inv: inverse_op_for op eq) 
+                                    (x y z: a)
+  : Lemma (requires ((z `op` x) `eq` (z `op` y) \/ (x `op` z) `eq` (y `op` z))) 
+          (ensures x `eq` y /\ y `eq` x) = 
+  if ((z `op` x) `eq` (z `op` y)) 
+  then group_operation_lemma_right eq op inv x y z
+  else group_operation_lemma_left eq op inv x y z
 
   
 let producing_neutral_means_inverses (#a:Type) 
@@ -245,28 +271,20 @@ let producing_neutral_means_inverses (#a:Type)
                                      (inv: inverse_op_for op eq) 
                                      (x y: a)
   : Lemma (requires is_neutral_of (x `op` y) op eq) 
-          (ensures inv x `eq` y) = 
-  reveal_opaque (`%is_neutral_of) (is_neutral_of #a); 
+          (ensures inv x `eq` y /\ x `eq` inv y) = 
+  reveal_opaque (`%equivalence_wrt_condition) (equivalence_wrt_condition #a); 
+  reveal_opaque (`%is_symmetric) (is_symmetric #a); 
   reveal_opaque (`%is_transitive) (is_transitive #a); 
+  reveal_opaque (`%is_associative) (is_associative #a);
   inverse_operation_lemma op eq inv y;
   inverse_operation_lemma op eq inv x;
-  assert (is_neutral_of (inv y `op` y) op eq);
-  // assert (is_neutral_of (x `op` y) op eq);
   neutral_is_unique op eq  (inv y `op` y) (x `op` y);
   group_operation_lemma eq op inv (inv y) x y;
-  // assert (inv y `eq` x);
-  equivalence_wrt_operation_lemma #a #op eq (inv y) x y;
   equivalence_wrt_operation_lemma #a #op eq (y `op` inv y) (y `op` x) (inv x);  
-  // assert (((y `op` inv y) `op` inv x) `eq` ((y `op` x) `op` (inv x)));
-  // assert (is_neutral_of (y `op` inv y) op eq);
-  neutral_lemma op eq (y `op` inv y) (inv x);
-  // assert ((inv x) `eq` ((y `op` x) `op` (inv x)));
-  associative_operation_lemma eq op y x (inv x);
-  // assert ((inv x) `eq` (y `op` (x `op` inv x)));
+  neutral_lemma op eq (y `op` inv y) (inv x);  
+  equivalence_wrt_operation_lemma #a #op eq ((y `op` x) `op` inv x) (y `op` (x `op` inv x)) (inv x);
   neutral_lemma op eq (x `op` inv x) y;
-  trans_lemma eq (inv x) (y `op` (x `op` inv x)) y;
-  // assert (inv x `eq` y);
-  // assert_spinoff (inv x `eq` y == true);
+  // trans_lemma eq (inv x) (y `op` (x `op` inv x)) y;
   () 
 
 let equivalence_lemma_from_implications (#a:Type) (p) (q)
@@ -276,14 +294,19 @@ let equivalence_lemma_from_implications (#a:Type) (p) (q)
                                         : Lemma (p x y <==> q x y) = 
                                         (Classical.move_requires_2 to_right) x y;
                                         (Classical.move_requires_2 to_left) x y
-   
-let inverse_lemma_def (#a:Type) (eq: equivalence_relation a) (op: binary_op a{is_associative op eq /\ equivalence_wrt_condition op eq}) (inv: inverse_op_for op eq) (x y: a)
-  : Lemma (is_neutral_of (x `op` y) op eq <==> inv x `eq` y) = 
+
+let inverse_element_defining_lemma (#a:Type) (eq: equivalence_relation a) (op: binary_op a{is_associative op eq /\ equivalence_wrt_condition op eq}) (inv: inverse_op_for op eq) (x y: a)
+  : Lemma (
+           (is_neutral_of (x `op` y) op eq <==> inv x `eq` y) /\
+           (is_neutral_of (x `op` y) op eq <==> inv y `eq` x) /\
+           (is_neutral_of (y `op` x) op eq <==> inv x `eq` y) /\
+           (is_neutral_of (y `op` x) op eq <==> inv y `eq` x)
+          ) = 
   (FStar.Classical.move_requires_2 (inverses_produce_neutral eq op inv)) x y;
   (FStar.Classical.move_requires_2 (producing_neutral_means_inverses eq op inv)) x y;
-  assert (is_neutral_of (op x y) op eq ==> inv x `eq` y);   
-  ()  
-
+  (FStar.Classical.move_requires_2 (inverses_produce_neutral eq op inv)) y x;
+  (FStar.Classical.move_requires_2 (producing_neutral_means_inverses eq op inv)) y x
+ 
 /// We shall generally keep in mind that distributivity laws must be considered separately
 /// If in future we consider K[x] with multiplication f(x)*g(x) defined as composition f(g(x)),
 /// we will do well to remember that only one of the two distributivities holds there.
@@ -379,8 +402,70 @@ type commutative_monoid (#a:Type)    = g: monoid #a{is_commutative g.op g.eq}
 type group (#a:Type)                 = g: monoid #a{is_inverse_operation_for g.inv g.op g.eq}
 type commutative_group (#a:Type)     = g: group #a{is_commutative g.op g.eq}
 
-let magma_eq_wrt_condition (#a:Type) (m: magma #a) : Lemma(equivalence_wrt_condition m.op m.eq) = ()
+let magma_associativity_lemma (#a:Type) (g: magma #a{is_associative g.op g.eq}) (x y z:a) 
+  : Lemma ((x `g.op` (y `g.op` z)) `g.eq` ((x `g.op` y) `g.op` z) /\ ((x `g.op` y) `g.op` z) `g.eq` (x `g.op` (y `g.op` z)))
+   [SMTPatOr [[ SMTPat (x `g.op` (y `g.op` z)); SMTPat ((x `g.op` y) `g.op` z) ]]] =
+  reveal_opaque (`%is_symmetric) (is_symmetric #a);   
+  reveal_opaque (`%is_associative) (is_associative #a)
 
+let magma_commutativity_lemma (#a:Type) (g: magma #a{is_commutative g.op g.eq}) (x y:a) 
+  : Lemma ((x `g.op` y) `g.eq` (y `g.op` x) /\ (y `g.op` x) `g.eq` (x `g.op` y))
+   [SMTPatOr [[ SMTPat (x `g.op` y); SMTPat (y `g.op` x) ]]] =
+  reveal_opaque (`%is_symmetric) (is_symmetric #a);   
+  reveal_opaque (`%is_commutative) (is_commutative #a)
+
+let magma_operation_respects_eq_smt_lemma (#a:Type) (g: magma #a) (x y z: a) : Lemma (requires x `g.eq` y)
+                                                                         (ensures (z `g.op` x) `g.eq` (z `g.op` y) /\
+                                                                                  (z `g.op` y) `g.eq` (z `g.op` x) /\
+                                                                                  (x `g.op` z) `g.eq` (y `g.op` z) /\
+                                                                                  (y `g.op` z) `g.eq` (x `g.op` z))
+                                                                         [SMTPatOr [
+                                                                           [SMTPat(g.op z x); SMTPat(g.eq x y)]; 
+                                                                           [SMTPat(g.op x z); SMTPat(g.eq x y)]; 
+                                                                           [SMTPat(g.op z y); SMTPat(g.eq x y)]; 
+                                                                           [SMTPat(g.op y z); SMTPat(g.eq x y)]
+                                                                         ]] = equivalence_wrt_operation_lemma g.eq x y z                                                        
+                                                                                 
+let monoid_neutral_smt_lemma (#a:Type) (g: monoid #a) (x: a) : Lemma (x `g.op` g.neutral `g.eq` x /\ g.neutral `g.op` x `g.eq` x)
+                                                                     [SMTPatOr[
+                                                                       [SMTPat(g.op x g.neutral)];
+                                                                       [SMTPat(g.op g.neutral x)]
+                                                                     ]] = neutral_lemma g.op g.eq g.neutral x
+let monoid_neutral_smt_lemma_2 (#a:Type) (g:monoid #a) (x: a) (y:a) : Lemma (requires is_neutral_of y g.op g.eq)
+                                                                            (ensures g.op x y `g.eq` x /\ g.op y x `g.eq` x)
+                                                                            [SMTPatOr[
+                                                                              [SMTPat(g.op x y)];
+                                                                              [SMTPat(g.op y x)]
+                                                                            ]] = neutral_lemma g.op g.eq y x
+let magma_absorber_smt_lemma_2 (#a:Type) (m: magma #a) (x y:a) : Lemma (requires is_absorber_of x m.op m.eq) (ensures m.op x y `m.eq` x /\ m.op y x `m.eq` x)
+                                                                            [SMTPatOr[
+                                                                              [SMTPat(m.op x y)];
+                                                                              [SMTPat(m.op y x)]
+                                                                            ]] = absorber_lemma m.op m.eq x y
+
+let group_inverse_smt_lemma (#a:Type) (g: group #a) (x: a) : Lemma (ensures g.op x (g.inv x) `g.eq` g.neutral /\
+                                                                            g.op (g.inv x) x `g.eq` g.neutral /\
+                                                                            is_neutral_of (g.op x (g.inv x)) g.op g.eq /\
+                                                                            is_neutral_of (g.op (g.inv x) x) g.op g.eq) 
+                                                                   [SMTPatOr[
+                                                                     [SMTPat(g.op x (g.inv x))];
+                                                                     [SMTPat(g.op (g.inv x) x)]
+                                                                   ]] =   
+  reveal_opaque (`%is_symmetric) (is_symmetric #a);   
+  inverse_operation_lemma g.op g.eq g.inv x;
+  neutral_is_unique g.op g.eq g.neutral (g.op x (g.inv x));
+  neutral_is_unique g.op g.eq g.neutral (g.op (g.inv x) x)
+                                                                            
+
+let group_operation_cancellation_law (#a:Type) (g: group #a) (e1 e2 x:a) 
+  : Lemma (requires g.eq (g.op e1 x) (g.op e2 x) \/ g.eq (g.op x e1) (g.op x e2))
+          (ensures g.eq e1 e2)
+          [SMTPatOr[
+            [SMTPat(g.eq (g.op e1 x) (g.op e2 x))];
+            [SMTPat(g.eq (g.op x e1) (g.op x e2))]
+          ]] =  
+  group_operation_lemma g.eq g.op g.inv e1 e2 x
+  
 let absorber_never_equals_non_absorber (#a: Type) (op: binary_op a) (eq: equivalence_wrt op) 
   (x: absorber_of op eq) (y: non_absorber_of op eq) : Lemma (~(x `eq` y)) = 
   reveal_opaque (`%is_symmetric) (is_symmetric #a);   
@@ -388,28 +473,33 @@ let absorber_never_equals_non_absorber (#a: Type) (op: binary_op a) (eq: equival
 
 let absorber_nonequal_is_nonabsorber (#a:Type) (op: binary_op a) (eq: equivalence_wrt op) (x: absorber_of op eq) (y: a)
   : Lemma (~(eq x y) \/ ~(eq y x)  ==> ~(is_absorber_of y op eq)) = 
-  Classical.move_requires_2 (absorber_is_unique op eq) x y
+  reveal_opaque (`%is_absorber_of) (is_absorber_of #a);   
+  reveal_opaque (`%is_symmetric) (is_symmetric #a);   
+  reveal_opaque (`%is_transitive) (is_transitive #a) //but why and how?!
   
 unfold let is_absorber_of_magma (#a:Type) (z: a) (m: magma #a) = is_absorber_of z m.op m.eq
 
 /// When I try to keep the rlimit at minimum, lemmas like this one sometimes help
 let neutral_inverse_is_neutral (#a:Type) (g: group #a) : Lemma (g.neutral `g.eq` (g.inv g.neutral)) =  
-  reveal_opaque (`%is_symmetric) (is_symmetric #a);   
   reveal_opaque (`%is_transitive) (is_transitive #a);
-  neutral_lemma g.op g.eq g.neutral (g.inv g.neutral);
-  inverse_operation_lemma g.op g.eq g.inv g.neutral;
-  neutral_is_unique g.op g.eq g.neutral (g.neutral `g.op` g.inv g.neutral)
+  // you should keep alive either the assertion, or the inverse_operation_lemma invocation.
+  // disabling both will fail the lemma. Keeping both is redundant. SMTPat, I can't understand how you tick.
+  assert (is_neutral_of (g.op (g.inv g.neutral) g.neutral) g.op g.eq)
+  //inverse_operation_lemma g.op g.eq g.inv g.neutral 
+  //group_operation_lemma g.eq g.op g.inv (g.inv g.neutral) g.neutral g.neutral
 
 let group_op_lemma (#a:Type) (g: group #a) (x y z:a) 
-  : Lemma (requires (x `g.op` z) `g.eq` (y `g.op` z)) (ensures (x `g.eq` y)) 
-  = group_operation_lemma g.eq g.op g.inv x y z
+  : Lemma (requires (x `g.op` z) `g.eq` (y `g.op` z) \/ (z `g.op` x) `g.eq` (z `g.op` y)) 
+          (ensures (x `g.eq` y /\ y `g.eq` x)) 
+  = () // group_operation_lemma g.eq g.op g.inv x y z 
+  //SMTPat eliminated the need to call the lemma explicitly.
 
-
-#push-options "--ifuel 1 --fuel 0 --z3rlimit 16"
+ 
 let group_element_equality_means_zero_difference (#a:Type) (g: group #a) (x y: a) 
   : Lemma (x `g.eq` y <==> (x `g.op` g.inv y) `g.eq` g.neutral) = 
-  inverse_operation_lemma g.op g.eq g.inv y;                   // is_neutral (y + -y), x + -y
-  neutral_is_unique g.op g.eq  (g.op y (g.inv y)) g.neutral;   // (y + (-y) = 0
+  // SMTPat says "no need to be so verbose anymore. But I keep this because I know better.
+  // inverse_operation_lemma g.op g.eq g.inv y;                   
+  // neutral_is_unique g.op g.eq  (g.op y (g.inv y)) g.neutral;   
   if (x `g.eq` y) then (
     equivalence_wrt_operation_lemma g.eq x y (g.inv y);
     assert ((x `g.op` g.inv y) `g.eq` (y `g.op` g.inv y));
@@ -424,15 +514,14 @@ let group_element_equality_means_zero_difference (#a:Type) (g: group #a) (x y: a
 let absorber_for_invertible_operation_is_nonsense (#a:Type) (op: binary_op a) (eq: equivalence_wrt op) (inv: inverse_op_for op eq)
    (y: non_absorber_of op eq) (z:a) : Lemma (requires is_absorber_of z op eq) (ensures False) =   
     reveal_opaque (`%is_absorber_of) (is_absorber_of #a);  
-    absorber_never_equals_non_absorber op eq z y;
+    //absorber_never_equals_non_absorber op eq z y;
     let z' = inv z in
     let zz' = op z z' in
-    absorber_lemma op eq z z';
+    //absorber_lemma op eq z z';
     inverse_operation_lemma op eq inv z;                  // zz' is the neutral element
     let yzz' = op y zz' in                                // I write "the absorber" here to underline its uniqueness
-    absorber_lemma op eq z z';                        (** 1. By definition of absorber, zz' should be equal to z.      *)
-    absorber_equal_is_absorber op eq z zz';
-    absorber_lemma op eq zz' y;
+    //absorber_lemma op eq z z';                        (** 1. By definition of absorber, zz' should be equal to z.      *)
+    //absorber_lemma op eq zz' y;
     absorber_equal_is_absorber op eq z zz';           (** 2. Any element equal to an absorber is the absorber,         *)
                                                       (**    therefore, zz' is also the absorber, since zz' = z.       *)
     (* assert (is_neutral_of zz' op eq); *)           (** 3. By definition of inverse, zz' is the neutral element.     *)
@@ -493,13 +582,23 @@ let euclidean_norm_forall_property (#a:Type) (eq: equivalence_relation a)
 type norm_function (#a:Type) (eq: equivalence_relation a) (mul: binary_op a{has_no_absorber_divisors mul eq})
   = f: nat_function_defined_on_non_absorbers mul eq{ forall (x y: non_absorber_of mul eq). euclidean_norm_property eq mul x y f }
 
+let product_of_nonabsorbers_is_nonabsorber (#a:Type) (eq: equivalence_relation a) (mul: binary_op a{has_no_absorber_divisors mul eq}) (x y: non_absorber_of mul eq) 
+  : Lemma (~(is_absorber_of (mul x y) mul eq) /\ ~(is_absorber_of (mul y x) mul eq)) =  
+  reveal_opaque (`%has_no_absorber_divisors) (has_no_absorber_divisors #a) 
+   
+ 
 let euclidean_norm_main_lemma (#a: Type) (eq: equivalence_relation a) (mul: binary_op a{has_no_absorber_divisors mul eq}) (f: norm_function eq mul) (x y: non_absorber_of mul eq)
-  : Lemma (Some?.v (reveal_opaque (`%has_no_absorber_divisors) (has_no_absorber_divisors #a); f (mul x y)) >= Some?.v (f x)) =
+  : Lemma (Some?.v (
+                      reveal_opaque (`%has_no_absorber_divisors) (has_no_absorber_divisors #a); 
+                      allow_inversion (option nat);
+                      f (mul x y)
+                   ) >= Some?.v (f x)) =
   assert (euclidean_norm_property eq mul x y f)
   
 private let test (a:Type) (eq:equivalence_relation a) (mul: binary_op a{has_no_absorber_divisors mul eq}) (f:norm_function eq mul) : Lemma ( 
-  forall (x y: non_absorber_of mul eq). Some?.v (reveal_opaque (`%has_no_absorber_divisors) (has_no_absorber_divisors #a); f (mul x y)) >= Some?.v (f x) ) = 
+  forall (x y: non_absorber_of mul eq). Some?.v (reveal_opaque (`%has_no_absorber_divisors) (has_no_absorber_divisors #a); allow_inversion (option nat); f (mul x y)) >= Some?.v (f x) ) = 
   reveal_opaque (`%has_no_absorber_divisors) (has_no_absorber_divisors #a);
+  allow_inversion (option nat);
   FStar.Classical.forall_intro_2 (euclidean_norm_main_lemma eq mul f)
 
 unfold let eq_of (p: magma) = p.eq
@@ -576,34 +675,115 @@ let unit_part_func_of_product_is_product_of_unit_parts (#a: Type) (#mul: binary_
 let product_of_unit_normals_is_normal (#a: Type) (#mul: binary_op a) (#eq: equivalence_wrt mul)
   (unit_part_func: unit_part_function mul eq)
   (x y: unit_normal_of mul eq unit_part_func)
-  : Lemma 
-    (requires ~(is_absorber_of x mul eq) /\ ~(is_absorber_of y mul eq))
-    (ensures is_unit_normal mul eq unit_part_func (x `mul` y)) =
+  : Lemma (requires ~(is_absorber_of x mul eq) /\ ~(is_absorber_of y mul eq))
+          (ensures is_unit_normal mul eq unit_part_func (x `mul` y)) =
   let up x = unit_part_func x in
   un_op_distr_lemma_p mul eq unit_part_func x y;                    // up (x*y) = up(x) * up(y) 
   yields_units_lemma mul eq unit_part_func (x `mul` y);             // up (x*y) is unit
   neutral_lemma mul eq (unit_part_func x) (unit_part_func y);       // unit part of unit normal is 1
   neutral_equivalent_is_neutral mul eq (up y) (up x `mul` up y);   
   neutral_equivalent_is_neutral mul eq (up x `mul` up y) (up (mul x y))
-
-
-type test_unit_part_func (#a: Type) (mul: binary_op a) (eq: equivalence_wrt mul) = unit_part_function mul eq
  
+[@@"opaque_to_smt"]
+let ring_multiplicative_group_condition (#a: Type) (g: monoid #a) = 
+  forall (x: non_absorber_of g.op g.eq). ( (g.op x (g.inv x) `g.eq` g.neutral) /\ (g.op (g.inv x) x `g.eq` g.neutral))
+
 noeq type ring (#a: Type) = {
   addition: commutative_group #a;
-  multiplication: (t: monoid #a {is_fully_distributive t.op addition.op t.eq /\ is_absorber_of addition.neutral t.op t.eq });
+  multiplication: (t: monoid #a {is_fully_distributive t.op addition.op t.eq});
   eq: (t:equivalence_relation a{ equivalence_wrt_condition addition.op t /\ equivalence_wrt_condition multiplication.op t /\ t===addition.eq /\ t===multiplication.eq });
   unit_part_of: a -> units_of multiplication.op eq;
   normal_part_of: a -> unit_normal_of multiplication.op eq unit_part_of;
   euclidean_norm: nat_function_defined_on_non_absorbers multiplication.op eq 
 } 
+
+// This one's the harbinger of performance drop.
+// Without SMTPat lemmas, this one was proven with ifuel/fuel/rlimit = 0/0/1.
+// With these, it now takes 1/0/2. I don't like this, but the deeper I dive,
+// the less I like writing verbose proofs like this one...
+#push-options "--ifuel 1 --fuel 0 --z3rlimit 2 --query_stats"
+let ring_addition_neutral_is_absorber (#a:Type) (r: ring #a) (x: a) 
+  : Lemma (x `r.multiplication.op` r.addition.neutral `r.eq` r.addition.neutral /\
+           r.addition.neutral `r.multiplication.op` x `r.eq` r.addition.neutral /\
+           r.addition.neutral `r.eq` (r.addition.neutral `r.multiplication.op` x) /\
+           r.addition.neutral `r.eq` (x `r.multiplication.op` r.addition.neutral)) =  
+  reveal_opaque (`%is_symmetric) (is_symmetric #a); 
+  reveal_opaque (`%is_reflexive) (is_reflexive #a); 
+  reveal_opaque (`%is_fully_distributive) (is_fully_distributive #a);
+//  reveal_opaque (`%is_right_distributive) (is_right_distributive #a);
+// reveal_opaque (`%is_neutral_of) (is_neutral_of #a); 
+// reveal_opaque (`%is_transitive) (is_transitive #a); 
+// reveal_opaque (`%is_commutative) (is_commutative #a); 
+  let eq = r.eq in
+  let mul = r.multiplication.op in
+  let add = r.addition.op in
+  let neg = r.addition.inv in 
+  let zero = r.addition.neutral in
+  let one = r.multiplication.neutral in
+  neutral_lemma add eq zero one;
+  neutral_equivalent_is_neutral mul eq one (add one zero);
+  neutral_lemma mul eq (add one zero) x;
+  assert (eq x (mul x (add one zero)));
+  assert (eq (mul x (add one zero)) (add (mul x one) (mul x zero)));
+//  reveal_opaque (`%is_left_distributive) (is_left_distributive #a);
+//  left_distributivity_lemma mul add eq x one zero;
+  trans_lemma eq x (mul x (add one zero)) (add (mul x one) (mul x zero));
+//  assert (eq x (add (mul x one) (mul x zero)));
+//  neutral_lemma mul eq one x;
+  assert (mul x one `eq` x);
+  equivalence_wrt_operation_lemma #a #add eq (mul x one) x (mul x zero);
+  assert (add (mul x one) (mul x zero) `eq` add x (mul x zero));
+  trans_lemma eq x (add (mul x one) (mul x zero)) (add x (mul x zero));
+  equivalence_wrt_operation_lemma #a #add eq x (add x (mul x zero)) (neg x);
+  assert (add (neg x) x `eq` add (neg x) (add x (mul x zero)));
+//  inverse_operation_lemma add eq neg x;
+//  neutral_is_unique add eq (add (neg x) x) zero;
+  assert (add (neg x) x `eq` zero);
+  trans_lemma eq (add (neg x) (add x (mul x zero)))
+                 (add (neg x) x)
+                 zero;
+  
+//  assert (add (neg x) (add x (mul x zero)) `eq` add (add (neg x) x) (mul x zero));
+//  assert (add (neg x) (add x (mul x zero)) `eq` add (add (neg x) x) (mul x zero));
+  neutral_lemma add eq (add (neg x) x) (mul x zero);
+  trans_lemma_4 eq zero
+                   (add (neg x) (add x (mul x zero)))
+                   (add (add (neg x) x) (mul x zero))
+                   (mul x zero);
+//  right_distributivity_lemma mul add eq one zero x;
+//  assert (eq (mul (add one zero) x) (add (mul one x) (mul zero x))); 
+  trans_lemma eq x (mul (add one zero) x) (add (mul one x) (mul zero x)); 
+  equivalence_wrt_operation_lemma #a #add eq (mul one x) x (mul zero x); 
+  trans_lemma eq x (add (mul one x) (mul zero x)) (add x (mul zero x));
+
+  equivalence_wrt_operation_lemma #a #add eq x (add x (mul zero x)) (neg x);
+  assert (add (neg x) x `eq` add (neg x) (add x (mul zero x))); 
  
+  trans_lemma eq (add (neg x) (add x (mul zero x)))
+                 (add (neg x) x)
+                 zero; 
+//  assert (add (neg x) (add x (mul zero x)) `eq` add (add (neg x) x) (mul zero x));
+//  neutral_lemma add eq (add (neg x) x) (mul zero x);
+  trans_lemma_4 eq zero
+                   (add (neg x) (add x (mul zero x)))
+                   (add (add (neg x) x) (mul zero x))
+                   (mul zero x); 
+  ()
+#pop-options
+
+let ring_addition_neutral_is_multiplication_absorber (#a:Type) (r: ring #a)
+  : Lemma (is_absorber_of r.addition.neutral r.multiplication.op r.eq) 
+          [SMTPat(r.addition.neutral)] = 
+  reveal_opaque (`%is_absorber_of) (is_absorber_of #a);
+  Classical.forall_intro (ring_addition_neutral_is_absorber r)
+ 
+
 unfold let neg_of (#a:Type) (r: ring #a) (p:a) : (t:a{ t `r.eq` (r.addition.neutral `r.addition.op` (r.addition.inv p) )}) 
-  =  
-  reveal_opaque (`%is_symmetric) (is_symmetric #a) ;
-  inverse_operation_lemma r.addition.op r.eq r.addition.inv p;
-  inverse_lemma_def r.eq r.addition.op r.addition.inv p (r.addition.inv p);
-  neutral_lemma r.addition.op r.eq  r.addition.neutral (r.addition.inv p);
+  =  //Without SMTPat, it took quite a lot of explicit steps:
+//  reveal_opaque (`%is_symmetric) (is_symmetric #a) ;
+//  inverse_operation_lemma r.addition.op r.eq r.addition.inv p;
+//  inverse_element_defining_lemma r.eq r.addition.op r.addition.inv p (r.addition.inv p);
+//  neutral_lemma r.addition.op r.eq  r.addition.neutral (r.addition.inv p);
   r.addition.inv p
 
 unfold let minus_of (#a:Type) (r: ring #a) (x:a) (y:a) : (t:a{ t `r.eq` (x `r.addition.op` (r.addition.inv y) )}) = 
@@ -615,10 +795,12 @@ let double_inverse_is_id (#a:Type) (op: binary_op a) (eq: equivalence_wrt op{is_
   inverse_operation_lemma op eq inv x;
   inverse_operation_lemma op eq inv (inv x);   
   neutral_is_unique op eq (x `op` inv x) (inv (inv x) `op` inv x);
-  group_operation_lemma eq op inv x (inv (inv x)) (inv x);
-  symm_lemma eq (inv (inv x)) x
+  group_operation_lemma eq op inv x (inv (inv x)) (inv x)   //;
+//  symm_lemma eq (inv (inv x)) x                           //At least, SMTPat cut this one off.
 
-let minus_minus_x_is_x (#a:Type) (r: ring #a) (x: a) : Lemma (neg_of r (neg_of r x) `r.eq` x /\ x `r.eq` (neg_of r (neg_of r x)))
+let minus_minus_x_is_x (#a:Type) (r: ring #a) (x: a) 
+  : Lemma (r.addition.inv (r.addition.inv x) `r.eq` x /\ x `r.eq` (r.addition.inv (r.addition.inv x)))
+          [SMTPat(r.addition.inv (r.addition.inv x))]
   = double_inverse_is_id r.addition.op r.eq r.addition.inv x  
 
 let x_eq_y_means_inv_x_eq_inv_y (#a:Type) (op: binary_op a) (eq: equivalence_wrt op{is_associative op eq}) (inv: inverse_op_for op eq) (x y:a)
@@ -630,9 +812,9 @@ let x_eq_y_means_inv_x_eq_inv_y (#a:Type) (op: binary_op a) (eq: equivalence_wrt
     equivalence_wrt_operation_lemma eq x y x';
     equivalence_wrt_operation_lemma eq x y y';
     neutral_equivalent_is_neutral op eq (op y y') (op x y');
-    assert (is_neutral_of (op x y') op eq);
-    producing_neutral_means_inverses eq op inv x y';
-    assert (inv x `eq` inv y)    
+    // assert (is_neutral_of (op x y') op eq);
+    producing_neutral_means_inverses eq op inv x y'
+    // assert (inv x `eq` inv y)    
   ) else (
     if (inv x `eq` inv y) then (
       let x' = inv x in
@@ -641,27 +823,25 @@ let x_eq_y_means_inv_x_eq_inv_y (#a:Type) (op: binary_op a) (eq: equivalence_wrt
       let y'' = (inv (inv y)) in
       double_inverse_is_id op eq inv x;
       double_inverse_is_id op eq inv y; 
-      assert (inv x' `eq` x);
-      assert (inv y' `eq` y);
+      //assert (inv x' `eq` x);
+      //assert (inv y' `eq` y);
       inverse_operation_lemma op eq inv y'; 
-      equivalence_wrt_operation_lemma eq x' y' x'';
+      //equivalence_wrt_operation_lemma eq x' y' x'';
       equivalence_wrt_operation_lemma eq x' y' y'';
       neutral_equivalent_is_neutral op eq (op y' y'') (op x' y'');
-      assert (is_neutral_of (op x' y'') op eq);
+      //assert (is_neutral_of (op x' y'') op eq);
       producing_neutral_means_inverses eq op inv x' y'';
       trans_lemma_4 eq x x'' y'' y
     )
   )
- 
+  
 let ring_additive_inv_x_is_x_times_minus_one (#a:Type) (r: ring #a) (x: a)
   : Lemma ((r.addition.inv x) `r.eq` (r.multiplication.op x (r.addition.inv r.multiplication.neutral)) /\
            (r.multiplication.op x (r.addition.inv r.multiplication.neutral)) `r.eq` (r.addition.inv x)) = 
     reveal_opaque (`%is_symmetric) (is_symmetric #a); 
     reveal_opaque (`%is_transitive) (is_transitive #a); 
-    reveal_opaque (`%equivalence_wrt_condition) (equivalence_wrt_condition #a); 
-    reveal_opaque (`%is_left_distributive) (is_left_distributive #a); 
+    //reveal_opaque (`%is_left_distributive) (is_left_distributive #a); 
     reveal_opaque (`%is_fully_distributive) (is_fully_distributive #a); 
-    reveal_opaque (`%is_inverse_operation_for) (is_inverse_operation_for #a); 
     let eq = r.eq in
     let mul = r.multiplication.op in
     let add = r.addition.op in
@@ -669,48 +849,54 @@ let ring_additive_inv_x_is_x_times_minus_one (#a:Type) (r: ring #a) (x: a)
     let zero = r.addition.neutral in
     let one = r.multiplication.neutral in
     let ix = inv x in  
-    assert (is_neutral_of (one `add` (inv one)) add eq);
-    neutral_is_unique r.addition.op r.eq zero (one `add` (inv one));
-//    assert (zero `eq` (one `add` (inv one)));
-    equivalence_wrt_operation_lemma #a #mul eq zero (one `add` (inv one)) x;
-//    assert (mul x (one `add` (inv one)) `eq` (mul x zero));
-//    assert (mul x zero `eq` zero);
-//    assert ((mul x (one `add` (inv one))) `eq` ((mul x one) `add` (mul x (inv one)))); 
-    symm_lemma eq ((mul x one) `add` (mul x (inv one))) (mul x (one `add` (inv one)));
-    //this one speeds up the process if uncommented
-//    left_distributivity_lemma mul add eq (mul x one)
-    assert (is_left_distributive mul add eq);
-    left_distributivity_lemma mul add eq x one (inv one);
-    assert (((mul x one) `add` (mul x (inv one))) `eq` (mul x (one `add` (inv one))));    
-    //this one requires spinoff!!! for some reason...
-    inverse_operation_lemma add r.eq inv one;
-    assert (is_neutral_of (one `add` inv one) add r.eq);
-    neutral_is_unique add r.eq zero (one `add` inv one);
-    assert (eq (one `add` inv one) zero);
-    absorber_equal_is_absorber mul r.eq zero (one `add` inv one);
-    absorber_lemma mul r.eq (one `add` inv one) x;
-    assert_spinoff (mul x (one `add` (inv one)) `eq` zero);       
-    trans_lemma r.eq ((mul x one) `add` (mul x (inv one))) (mul x (one `add` (inv one))) zero;
-    assert (((mul x one) `add` (mul x (inv one))) `eq` zero);
-    assert (is_neutral_of zero add eq);
+     ring_addition_neutral_is_multiplication_absorber r;
+    // assert (is_neutral_of (one `add` (inv one)) add eq);
+     neutral_is_unique r.addition.op r.eq zero (one `add` (inv one));
+    // assert (zero `eq` (one `add` (inv one)));
+    // equivalence_wrt_operation_lemma #a #mul eq zero (one `add` (inv one)) x;
+    // assert (mul x (one `add` (inv one)) `eq` (mul x zero));
+    // assert (mul x zero `eq` zero);
+    // assert ((mul x (one `add` (inv one))) `eq` ((mul x one) `add` (mul x (inv one)))); 
+    // symm_lemma eq ((mul x one) `add` (mul x (inv one))) (mul x (one `add` (inv one)));
+    // this one speeds up the process if uncommented
+    // assert (is_left_distributive mul add eq);
+    // left_distributivity_lemma mul add eq x one (inv one);
+    // assert (((mul x one) `add` (mul x (inv one))) `eq` (mul x (one `add` (inv one))));    
+    // this one requires spinoff!!! for some reason...
+    // inverse_operation_lemma add r.eq inv one;
+    // assert (is_neutral_of (one `add` inv one) add r.eq);
+    // neutral_is_unique add r.eq zero (one `add` inv one);
+    // assert (eq (one `add` inv one) zero);
+    // absorber_equal_is_absorber mul r.eq zero (one `add` inv one);
+    // absorber_lemma mul r.eq (one `add` inv one) x;
+    // assert (mul x (one `add` (inv one)) `eq` zero);       
+    // trans_lemma r.eq ((mul x one) `add` (mul x (inv one))) (mul x (one `add` (inv one))) zero;
+    // assert (((mul x one) `add` (mul x (inv one))) `eq` zero);
+    // assert (is_neutral_of zero add eq);
     neutral_equivalent_is_neutral add eq zero ((mul x one) `add` (mul x (inv one)));
-    assert (is_neutral_of ((mul x one) `add` (mul x (inv one))) add eq);
+    // assert (is_neutral_of ((mul x one) `add` (mul x (inv one))) add eq);
     producing_neutral_means_inverses eq add inv (mul x one) (mul x (inv one));
-    assert (eq (inv (mul x one)) (mul x (inv one)));
-    assert (is_neutral_of one mul eq);
-    neutral_lemma mul eq one x;
-    assert (mul x one `eq` x);    
+    // assert (eq (inv (mul x one)) (mul x (inv one)));
+    // assert (is_neutral_of one mul eq);
+    // neutral_lemma mul eq one x;
+    // assert (mul x one `eq` x);    
     x_eq_y_means_inv_x_eq_inv_y add eq inv (mul x one) x;
-    assert (inv (mul x one) `eq` (inv x));
-    trans_lemma eq (inv x) (inv (mul x one)) (mul x (inv one))
+    // assert (inv (mul x one) `eq` (inv x));
+    trans_lemma eq (inv x) (inv (mul x one)) (mul x (inv one));
+    () 
 
 let equal_elements_means_equal_inverses (#a:Type) (r: ring #a) (x y:a) 
-  : Lemma ((r.eq x y == (r.addition.inv x `r.eq` r.addition.inv y)) /\ (r.eq x y == (r.addition.inv y `r.eq` r.addition.inv x))) =   
+  : Lemma ((r.eq x y == (r.addition.inv x `r.eq` r.addition.inv y)) /\ 
+           (r.eq x y == (r.addition.inv y `r.eq` r.addition.inv x))) =   
           reveal_opaque (`%is_symmetric) (is_symmetric #a); 
           reveal_opaque (`%is_reflexive) (is_reflexive #a);     
           x_eq_y_means_inv_x_eq_inv_y r.addition.op r.eq r.addition.inv x y 
  
 let inv_switch_lemma (#a:Type) (r: ring #a) (x y:a) : Lemma (x `r.eq` (r.addition.inv y) <==> (r.addition.inv x) `r.eq` y) =   
+
+  reveal_opaque (`%is_transitive) (is_transitive #a); 
+  equal_elements_means_equal_inverses r x (r.addition.inv y)
+  (* This is how the proof looked like without SMTPats
   if (x `r.eq` r.addition.inv y) then (
     equal_elements_means_equal_inverses r x (r.addition.inv y);
     minus_minus_x_is_x r y;
@@ -720,7 +906,8 @@ let inv_switch_lemma (#a:Type) (r: ring #a) (x y:a) : Lemma (x `r.eq` (r.additio
     equal_elements_means_equal_inverses r (r.addition.inv x) y;
     minus_minus_x_is_x r x;    
     trans_lemma r.eq x (r.addition.inv (r.addition.inv x)) (r.addition.inv y)
-  ) 
+  )
+  *)
 
 let ring_additive_inverse_is_unique (#a:Type) (r:ring #a) (x y: a) 
   : Lemma (requires x `r.eq` y \/ y `r.eq` x) 
@@ -729,14 +916,15 @@ let ring_additive_inverse_is_unique (#a:Type) (r:ring #a) (x y: a)
     equal_elements_means_equal_inverses r x y
 
 
-/// Make this fully symmetric with the previous lemma, if you want an exercise :)
+/// Make this fully symmetric to the previous lemma, if you want an exercise :) 
 let ring_additive_inv_x_is_minus_one_times_x (#a:Type) (r: ring #a) (x: a)
   : Lemma ((r.addition.inv x) `r.eq` (r.multiplication.op (r.addition.inv r.multiplication.neutral) x)) = 
-    reveal_opaque (`%is_symmetric) (is_symmetric #a); 
+   // reveal_opaque (`%is_symmetric) (is_symmetric #a); 
     reveal_opaque (`%is_transitive) (is_transitive #a); 
     reveal_opaque (`%is_right_distributive) (is_right_distributive #a); 
     reveal_opaque (`%is_fully_distributive) (is_fully_distributive #a); 
-    reveal_opaque (`%is_inverse_operation_for) (is_inverse_operation_for #a); 
+   // reveal_opaque (`%is_inverse_operation_for) (is_inverse_operation_for #a); 
+    ring_addition_neutral_is_multiplication_absorber r;
     let eq = r.eq in
     let mul = r.multiplication.op in
     let add = r.addition.op in
@@ -748,28 +936,30 @@ let ring_additive_inv_x_is_minus_one_times_x (#a:Type) (r: ring #a) (x: a)
     neutral_is_unique r.addition.op r.eq zero (inv one `add` one);
     equivalence_wrt_operation_lemma #a #mul eq zero (inv one `add` one) x;
     absorber_equal_is_absorber mul eq zero (inv one `add` one);
-//    assert (mul (inv one `add` one) x `eq` (mul (inv one) x `add` mul one x));
-//    assert ( (mul (inv one) x `add` mul one x) `eq` (mul (inv one `add` one) x));
-    right_distributivity_lemma mul add eq (inv one) one x;
-//    assert (mul (inv one `add` one) x `eq` (mul (inv one) x `add` mul one x));
-    symm_lemma eq (mul (inv one) x `add` mul one x) (mul (inv one `add` one) x);
+    // assert (mul (inv one `add` one) x `eq` (mul (inv one) x `add` mul one x));
+    // assert ( (mul (inv one) x `add` mul one x) `eq` (mul (inv one `add` one) x));
+    
+    // Uncommenting right_distributivity_lemma FAILS THE PROOF!
+    // right_distributivity_lemma mul add eq (inv one) one x;
+    
+    // assert (mul (inv one `add` one) x `eq` (mul (inv one) x `add` mul one x));
+    // symm_lemma eq (mul (inv one) x `add` mul one x) (mul (inv one `add` one) x);
     absorber_lemma mul eq (inv one `add` one) x;        
     trans_lemma eq (mul (inv one) x `add` mul one x) (mul (inv one `add` one) x) zero;
-//  assert ((mul (inv one) x `add` mul one x) `eq` zero);
+    assert ((mul (inv one) x `add` mul one x) `eq` zero);
     neutral_equivalent_is_neutral add eq zero (mul (inv one) x `add` mul one x);
     producing_neutral_means_inverses eq add inv (mul (inv one) x) (mul one x);
-//    assert (inv (mul (inv one) x) `eq` (mul one x));
+    // assert (inv (mul (inv one) x) `eq` (mul one x));
     inv_switch_lemma r (mul (inv one) x) (mul one x);
-//    assert (mul (inv one) x `eq` (inv (mul one x)));
-    symm_lemma eq (inv (mul one x)) (mul (inv one) x);    
-//    assert (mul one x `eq` x);
+    assert (mul (inv one) x `eq` (inv (mul one x)));
+    // symm_lemma eq (inv (mul one x)) (mul (inv one) x);    
+    assert (mul one x `eq` x);
     neutral_lemma mul eq one x;
     ring_additive_inverse_is_unique r x (mul one x);
-//    assert (inv x `eq` inv (mul one x));
-//    assert (inv (mul one x) `eq` mul (inv one) x);
+    assert (inv x `eq` inv (mul one x));
+    assert (inv (mul one x) `eq` mul (inv one) x);
     trans_lemma eq (inv x) (inv (mul one x)) (mul (inv one) x);    
-  ()
-    
+  () 
 
 let ring_times_minus_one_is_commutative (#a:Type) (r: ring #a) (x:a) 
   : Lemma ( 
@@ -793,18 +983,22 @@ let ring_x_times_minus_y_is_minus_xy (#a:Type) (r:ring #a) (x y: a) : Lemma ((x 
   let neg = r.addition.inv in 
   let zero = r.addition.neutral in
   let one = r.multiplication.neutral in
+  reveal_opaque (`%is_associative) (is_associative #a);
+  reveal_opaque (`%is_transitive) (is_transitive #a);   
+  reveal_opaque (`%is_symmetric) (is_symmetric #a);   
   ring_additive_inv_x_is_x_times_minus_one r y; // -y = (y * -1)
   equivalence_wrt_operation_lemma #a #mul eq (neg y) (y `mul` neg one) x; // x*(-y) = x*(y*(-1))
-  associative_operation_lemma eq mul x y (neg one);                       // x*(y*(-1)) = (x*y)*(-1)
+  //associative_operation_lemma eq mul x y (neg one);                       // x*(y*(-1)) = (x*y)*(-1)
   ring_additive_inv_x_is_x_times_minus_one r (x `mul` y);                 // (xy)*(-1) = -(xy)
-  trans_lemma eq (x `mul` neg y) (x `mul` (y `mul` neg one)) ((x `mul` y) `mul` neg one);
-  trans_lemma eq (x `mul` neg y) ((x `mul` y) `mul` neg one) (neg (x `mul` y));  
+ // trans_lemma eq (x `mul` neg y) (x `mul` (y `mul` neg one)) ((x `mul` y) `mul` neg one);
+ // trans_lemma eq (x `mul` neg y) ((x `mul` y) `mul` neg one) (neg (x `mul` y));  
   ()
 
 let ring_x_times_minus_y_is_minus_x_times_y (#a:Type) (r:ring #a) (x y: a) : Lemma (
     (x `r.multiplication.op` r.addition.inv y) `r.eq` (r.addition.inv x `r.multiplication.op` y) &&
     (r.addition.inv x `r.multiplication.op` y) `r.eq` (x `r.multiplication.op` r.addition.inv y) 
-  ) =   
+  ) =     
+  reveal_opaque (`%is_transitive) (is_transitive #a);   
   let eq = r.eq in
   let mul = r.multiplication.op in
   let add = r.addition.op in
@@ -812,19 +1006,19 @@ let ring_x_times_minus_y_is_minus_x_times_y (#a:Type) (r:ring #a) (x y: a) : Lem
   let zero = r.addition.neutral in
   let one = r.multiplication.neutral in
   ring_additive_inv_x_is_minus_one_times_x r y;  
-  associative_operation_lemma eq mul x (neg one) y;
-  assert (neg y `eq` mul (neg one) y);
-  equivalence_wrt_operation_lemma #a #mul eq (neg y) (mul (neg one) y) x;
-  assert ((x `mul` neg y) `eq` (x `mul` (neg one `mul` y)));
-  associative_operation_lemma eq mul x (neg one) y;
-  assert ((x `mul` (neg one `mul` y)) `eq` ((x `mul` neg one) `mul` y));
-  trans_lemma eq (x `mul` neg y) (x `mul` (neg one `mul` y)) ((x `mul` neg one) `mul` y);
-  assert (eq (x `mul` neg y) ((x `mul` neg one) `mul` y));
-  ring_additive_inv_x_is_x_times_minus_one r x;
-  assert ((x `mul` neg one) `eq` neg x);
-  equivalence_wrt_operation_lemma #a #mul eq (x `mul` neg one) (neg x) y;
-  assert ( ((x `mul` neg one) `mul` y) `eq` (neg x `mul` y) );
-  trans_lemma eq (x `mul` neg y) ((x `mul` neg one) `mul` y) (neg x `mul` y)
+  // associative_operation_lemma eq mul x (neg one) y;
+  // assert (neg y `eq` mul (neg one) y);
+  // equivalence_wrt_operation_lemma #a #mul eq (neg y) (mul (neg one) y) x;
+  // assert ((x `mul` neg y) `eq` (x `mul` (neg one `mul` y)));
+  // associative_operation_lemma eq mul x (neg one) y;
+  // assert ((x `mul` (neg one `mul` y)) `eq` ((x `mul` neg one) `mul` y));
+  // trans_lemma eq (x `mul` neg y) (x `mul` (neg one `mul` y)) ((x `mul` neg one) `mul` y);
+  // assert (eq (x `mul` neg y) ((x `mul` neg one) `mul` y));
+  ring_additive_inv_x_is_x_times_minus_one r x
+  // assert ((x `mul` neg one) `eq` neg x);
+  // equivalence_wrt_operation_lemma #a #mul eq (x `mul` neg one) (neg x) y;
+  // assert ( ((x `mul` neg one) `mul` y) `eq` (neg x `mul` y) )
+  // trans_lemma eq (x `mul` neg y) ((x `mul` neg one) `mul` y) (neg x `mul` y)
 
 let ring_product_with_minus_lemma (#a:Type) (r:ring #a) (x y: a) 
   : Lemma (
@@ -842,16 +1036,17 @@ let neg_distr_lemma (#a:Type) (r: ring #a) (x y z: a)
   let neg = r.addition.inv in 
   let zero = r.addition.neutral in
   let one = r.multiplication.neutral in
-  reveal_opaque (`%is_left_distributive) (is_left_distributive #a); 
+  reveal_opaque (`%is_transitive) (is_transitive #a); 
   reveal_opaque (`%is_fully_distributive) (is_fully_distributive #a); 
-  left_distributivity_lemma mul add eq x y (neg z);
+  // left_distributivity_lemma mul add eq x y (neg z);
   ring_x_times_minus_y_is_minus_xy r x z;
-  assert ((x `mul` neg z) `eq` neg (x `mul` z)); 
-  equivalence_wrt_operation_lemma #a #add eq (x `mul` neg z) (neg (x `mul` z)) (x `mul` y);
-  assert (((x `mul` y) `add` (x `mul` neg z)) `eq` ((x `mul` y) `add` (neg (x `mul` z))));
-  trans_lemma eq (x `mul` (y `add` neg z)) ((x `mul` y) `add` (x `mul` neg z))  ((x `mul` y) `add` (neg (x `mul` z)));
+  // assert ((x `mul` neg z) `eq` neg (x `mul` z)); 
+  // equivalence_wrt_operation_lemma #a #add eq (x `mul` neg z) (neg (x `mul` z)) (x `mul` y);
+  // assert (((x `mul` y) `add` (x `mul` neg z)) `eq` ((x `mul` y) `add` (neg (x `mul` z))));
+  // trans_lemma eq (x `mul` (y `add` neg z)) ((x `mul` y) `add` (x `mul` neg z))  ((x `mul` y) `add` (neg (x `mul` z)));
   ()
 
+(*
 let neut_add_lemma (#a: Type) (r: ring #a) : Lemma (is_neutral_of r.addition.neutral r.addition.op r.eq) = () 
 let neut_lemma (#a: Type) (r: ring #a) : Lemma (is_neutral_of r.multiplication.neutral r.multiplication.op r.eq) = ()
 let add_eq_of (#a:Type) (r: ring #a) : equivalence_wrt r.addition.op = r.eq
@@ -860,6 +1055,7 @@ let mul_neutral_lemma (#a: Type) (r: ring #a) (x: a{is_neutral_of x r.multiplica
   : Lemma (r.eq x r.multiplication.neutral) =
   reveal_opaque (`%is_symmetric) (is_symmetric #a);   
   neutral_is_unique r.multiplication.op r.eq r.multiplication.neutral x
+*)
 
 unfold let is_zero_of (#a: Type) (r: ring #a) (x: a) = is_absorber_of x r.multiplication.op r.eq
 
@@ -871,9 +1067,12 @@ let two_zeros_are_equal (#a:Type) (r: ring #a) (x y: (t:a{r.eq t r.addition.neut
 
 let eq_symmetry (#a:Type) (eq: equivalence_relation a) (x y: a) 
   : Lemma (requires (x `eq` y \/ y `eq` x)) (ensures (x `eq` y /\ y `eq` x)) = reveal_opaque (`%is_symmetric) (is_symmetric #a)
- 
+  
 let zero_is_equal_to_add_neutral_p (#a:Type) (r: ring #a) (z: a)
   : Lemma (is_zero_of r z <==> r.eq z r.addition.neutral) = 
+  ring_addition_neutral_is_multiplication_absorber r;
+  reveal_opaque (`%is_reflexive) (is_reflexive #a);   
+  reveal_opaque (`%is_absorber_of) (is_absorber_of #a); 
   if (r.eq z r.addition.neutral) 
   then absorber_equal_is_absorber r.multiplication.op r.eq r.addition.neutral z  
   else FStar.Classical.move_requires_2 (absorber_is_unique r.multiplication.op r.eq) z r.addition.neutral  
@@ -906,7 +1105,8 @@ private let domain_lemma_2 (#a:Type) (dom: domain #a) (x y:a)
  
 let domain_zero_product_means_zero_factor (#a:Type) (dom: domain #a) (p q: a) 
   : Lemma (requires (p `dom.multiplication.op` q) `dom.eq` dom.addition.neutral)
-          (ensures (p `dom.eq` dom.addition.neutral \/ q `dom.eq` dom.addition.neutral)) =     
+          (ensures (p `dom.eq` dom.addition.neutral \/ q `dom.eq` dom.addition.neutral)) =                 
+  ring_addition_neutral_is_multiplication_absorber dom;
   neutral_equivalent_is_neutral dom.addition.op dom.eq dom.addition.neutral (p `dom.multiplication.op` q);
   absorber_equal_is_absorber dom.multiplication.op dom.eq dom.addition.neutral (p `dom.multiplication.op` q); 
   domain_multiplication_law_inv dom.eq dom.multiplication.op p q;
@@ -915,7 +1115,8 @@ let domain_zero_product_means_zero_factor (#a:Type) (dom: domain #a) (p q: a)
 let domain_characterizing_lemma (#a:Type) (dom: domain #a) (p q: a) 
   : Lemma ((p `dom.multiplication.op` q) `dom.eq` dom.addition.neutral <==>
            (p `dom.eq` dom.addition.neutral \/ q `dom.eq` dom.addition.neutral)) =   
-  reveal_opaque (`%is_transitive) (is_transitive #a);     
+  reveal_opaque (`%is_transitive) (is_transitive #a);              
+  ring_addition_neutral_is_multiplication_absorber dom;    
   FStar.Classical.move_requires_2 (domain_zero_product_means_zero_factor dom) p q;
   if (dom.eq p dom.addition.neutral) then (
     absorber_equal_is_absorber dom.multiplication.op dom.eq dom.addition.neutral p;
@@ -978,4 +1179,25 @@ type euclidean_domain (#a:Type) = r:integral_domain #a
 { 
   euclidean_norm_forall_property r.eq r.multiplication.op r.euclidean_norm
 }
- 
+
+/// Skewfields, aka division rings, are non-commutative counterparts for fields,
+/// offering multiplicative inverses for each nonzero element, but not guaranteeing
+/// ab⁻¹ to be equal to b⁻¹a.
+/// Since these only appear in rather exotic situations (mind octonions),
+/// I'll probably never have an instance of this type anyway.
+type skewfield (#a:Type) = r:domain #a { ring_multiplicative_group_condition r.multiplication }
+
+/// Fields, on the other hands, are quite common.
+/// We'll later have the notions for
+///  - extensions for fields (algebraic and transcendental)
+///  - differential fields (and extensions)
+///  - fields of fractions for integral domains
+/// 
+/// We do not require the field to have unit_part and normal_part properly defined,
+/// as for fields, all elements do have the multiplicative inverses, therefore their
+/// "unit parts" are supposed to coincide with themselves, and we don't have a good notion
+/// for irreducibles in fields anyway.
+type field (#a:Type) = r:domain #a {
+  is_commutative r.multiplication.op r.eq /\
+  ring_multiplicative_group_condition r.multiplication
+}

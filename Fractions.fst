@@ -9,6 +9,22 @@ let is_valid_denominator_of (#a:Type) (d: integral_domain #a) (x: a) =
 
 type valid_denominator_of (#a:Type) (d: integral_domain #a) = (t: a{is_valid_denominator_of d t})
 
+let normal_of_nonabs_is_abs_is_wtf (#a:Type) (d: integral_domain #a) (x: non_absorber_of d.multiplication.op d.eq) : Lemma (requires is_absorber_of (d.normal_part_of x) d.multiplication.op d.eq) (ensures False) =
+  unit_and_normal_decomposition_lemma d.multiplication.op d.eq d.unit_part_of d.normal_part_of x;
+  reveal_opaque (`%is_reflexive) (is_reflexive #a);  
+  reveal_opaque (`%is_symmetric) (is_symmetric #a);  
+  reveal_opaque (`%is_transitive) (is_transitive #a);  
+  absorber_lemma d.multiplication.op d.eq (d.normal_part_of x) (d.unit_part_of x);
+  assert (x `d.eq` d.normal_part_of x);
+  absorber_equal_is_absorber d.multiplication.op d.eq (d.normal_part_of x) x; 
+  ()
+
+let normal_part_of_non_absorber_is_nonabsorber (#a:Type) (#d: integral_domain #a) (x: non_absorber_of d.multiplication.op d.eq) 
+  : Lemma (~(is_absorber_of (d.normal_part_of x) d.multiplication.op d.eq)) = Classical.move_requires (normal_of_nonabs_is_abs_is_wtf d) x
+
+let normal_part_of_non_absorber_is_valid_denominator (#a:Type) (#d: integral_domain #a) (x: non_absorber_of d.multiplication.op d.eq) 
+  : Lemma (is_valid_denominator_of d (d.normal_part_of x)) = normal_part_of_non_absorber_is_nonabsorber x
+
 let one_is_valid_denominator (#a:Type) (d: integral_domain #a) : Lemma (is_valid_denominator_of d d.multiplication.neutral) = 
   reveal_opaque (`%is_neutral_invariant) (is_neutral_invariant #a);  
   //ring_addition_neutral_is_multiplication_absorber d;
@@ -644,17 +660,15 @@ let fraction_additive_neutral_condition (#a:Type) (d: integral_domain #a) (x: fr
   reveal_opaque (`%is_left_id_of) (is_left_id_of #(fraction d));
   reveal_opaque (`%is_right_id_of) (is_right_id_of #(fraction d));
   Classical.forall_intro (fraction_additive_neutral_lemma d x) 
-  
-#pop-options
-
+    
 private let fraction_mul (#a:Type) (#d: integral_domain #a) (x y: fraction d) : (t: fraction d{
   t.num `d.eq` (x.num `d.multiplication.op` y.num) /\
-  t.den `d.eq` (x.den `d.multiplication.op` y.den)
+  t.den `d.eq` (x.den `d.multiplication.op` y.den) 
 }) = 
   product_of_denominators_is_denominator x y;
   reveal_opaque (`%is_reflexive) (is_reflexive #a); 
   Fraction (x.num `d.multiplication.op` y.num) (x.den `d.multiplication.op` y.den)
-
+ 
 private let fraction_mul_is_commutative (#a:Type) (#d: integral_domain #a) (x y: fraction d) : Lemma (  fraction_mul x y `fraction_eq` fraction_mul y x) = 
   reveal_opaque (`%is_reflexive) (is_reflexive #a); 
   reveal_opaque (`%is_commutative) (is_commutative #a);  
@@ -674,6 +688,50 @@ private let fraction_mul_is_commutative (#a:Type) (#d: integral_domain #a) (x y:
   equivalence_wrt_operation_lemma #a #mul eq (y.den `mul` x.den) (x.den `mul` y.den) (y.num `mul` x.num);
   trans_lemma_4 eq ( (x.num `mul` y.num) `mul` (y.den `mul` x.den))  ( (y.den `mul` x.den) `mul` (x.num `mul` y.num)) ( (y.den `mul` x.den) `mul` (y.num `mul` x.num)) ( (x.den `mul` y.den) `mul` (y.num `mul` x.num)) ;
   ()
+
+let absorber_numerator_means_absorber_fraction (#a:Type) (#d: integral_domain #a) (z x: fraction d) 
+  : Lemma (requires is_absorber_of z.num d.multiplication.op d.eq)
+          (ensures fraction_eq (fraction_mul x z) z && fraction_eq (fraction_mul z x) z) =
+//          (ensures z `fraction_mul` x `fraction_eq` z /\ x `fraction_mul` z `fraction_eq` z) = 
+  let mul = d.multiplication.op in  
+  let add = d.addition.op in  
+  let eq = d.eq in   
+  // Uncomment these two and the proof will fail!
+  // reveal_opaque (`%is_reflexive) (is_reflexive #a); 
+  // reveal_opaque (`%is_symmetric) (is_symmetric #a); 
+  absorber_lemma mul eq z.num x.num;
+  //assert ((z `fraction_mul` x).num `eq` (z.num));
+  //assert ((x `fraction_mul` z).num `eq` (z.num));
+  //ring_addition_neutral_is_multiplication_absorber d;
+  absorber_equal_is_absorber mul eq z.num (z `fraction_mul` x).num;
+  absorber_equal_is_absorber mul eq z.num (x `fraction_mul` z).num;
+  absorber_lemma mul eq (z `fraction_mul` x).num z.den;
+  absorber_lemma mul eq (x `fraction_mul` z).num z.den;
+  absorber_lemma mul eq z.num (z `fraction_mul` x).den;
+  absorber_lemma mul eq z.num (x `fraction_mul` z).den;
+  //assert (((z `fraction_mul` x).num `mul` z.den) `eq` (z `fraction_mul` x).num);
+  //assert ((z `fraction_mul` x).num `eq` z.num);
+  trans_lemma_4 eq ((z `fraction_mul` x).num `mul` z.den) (z `fraction_mul` x).num z.num ((z `fraction_mul` x).den `mul` z.num);
+  trans_lemma_4 eq ((x `fraction_mul` z).num `mul` z.den) (x `fraction_mul` z).num z.num ((x `fraction_mul` z).den `mul` z.num);
+  //assert (((z `fraction_mul` x).num `mul` z.den) `eq` ((z `fraction_mul` x).den `mul` z.num));
+  //assert (fraction_eq (fraction_mul z x) z);
+  fraction_mul_is_commutative x z;
+  //assert (fraction_eq (fraction_mul x z) (fraction_mul z x));
+  trans_lemma fraction_eq (fraction_mul x z) (fraction_mul z x) z;
+  () 
+
+let fraction_absorber_condition (#a:Type) (#d: integral_domain #a) (z: fraction d)
+  : Lemma (requires is_absorber_of z.num d.multiplication.op d.eq)
+          (ensures is_absorber_of z fraction_mul fraction_eq) = 
+  reveal_opaque (`%is_absorber_of) (is_absorber_of #(fraction d)); 
+  let aux (x: fraction d) : Lemma (fraction_eq (fraction_mul x z) z && fraction_eq (fraction_mul z x) z) 
+    = absorber_numerator_means_absorber_fraction z x in
+  FStar.Classical.forall_intro aux
+
+let non_absorber_fraction_has_nonzero_numerator (#a:Type) (#d: integral_domain #a) (x: fraction d) 
+  : Lemma (requires ~(is_absorber_of x fraction_mul fraction_eq)) 
+          (ensures ~(is_absorber_of x.num d.multiplication.op d.eq)) = 
+  Classical.move_requires fraction_absorber_condition x
 
 private let fraction_mul_is_associative (#a:Type) (#d: integral_domain #a) (x y z: fraction d) : Lemma (fraction_mul (fraction_mul x y) z `fraction_eq` fraction_mul x (fraction_mul y z)) = 
   reveal_opaque (`%is_associative) (is_associative #a);  
@@ -708,6 +766,7 @@ let fraction_is_mul_neutral (#a:Type) (#d: integral_domain #a) (x: fraction d{d.
   reveal_opaque (`%is_neutral_of) (is_neutral_of #(fraction d)); 
   Classical.forall_intro (fraction_mul_neutral_lemma x)  
 
+#push-options "--ifuel 1 --fuel 0 --z3rlimit 2 --using_facts_from '* -*_smt_lemma*' --query_stats"
 private let fraction_one_is_neutral_lemma (#a:Type) (#d: integral_domain #a) (x: fraction d{is_neutral_of x.num d.multiplication.op d.eq /\ is_neutral_of x.den d.multiplication.op d.eq}) : Lemma (is_neutral_of x (fraction_mul) fraction_eq) =
   reveal_opaque (`%is_neutral_of) (is_neutral_of #(fraction d)); 
   reveal_opaque (`%is_left_id_of) (is_left_id_of #(fraction d)); 
@@ -715,7 +774,46 @@ private let fraction_one_is_neutral_lemma (#a:Type) (#d: integral_domain #a) (x:
   neutral_is_unique d.multiplication.op d.eq x.num x.den;
   symm_lemma d.eq x.den x.num;
   Classical.forall_intro (fraction_mul_neutral_lemma x)
+#pop-options
 
+private let fraction_zero (#a:Type) (#d: integral_domain #a) : (z:neutral_element_of #(fraction d) fraction_add fraction_eq { is_absorber_of z fraction_mul fraction_eq 
+                                                                                                                            /\ d.eq z.num d.addition.neutral
+                                                                                                                            /\ d.eq z.den d.multiplication.neutral })
+  = 
+  one_is_valid_denominator d;
+  let zero = Fraction d.addition.neutral d.multiplication.neutral in
+  fraction_zero_is_neutral_lemma zero;
+  fraction_absorber_condition zero;
+  reveal_opaque (`%is_reflexive) (is_reflexive #a); 
+  zero
+
+private let fraction_one (#a:Type) (#d: integral_domain #a) : (u: neutral_element_of #(fraction d) fraction_mul fraction_eq { (u.num `d.eq` d.multiplication.neutral) /\ (u.den `d.eq` d.multiplication.neutral) }) = 
+  one_is_valid_denominator d;
+  let one = Fraction d.multiplication.neutral d.multiplication.neutral in
+  fraction_one_is_neutral_lemma one;
+  reveal_opaque (`%is_reflexive) (is_reflexive #a); 
+  one
+
+let fraction_eq_means_expr (#a:Type) (#d:integral_domain #a) (x y: fraction d) : Lemma (requires fraction_eq x y) (ensures d.eq (d.multiplication.op x.num y.den) (d.multiplication.op x.den y.num)) = ()
+
+let fraction_one_eq_zero_means_wtf (#a: Type) (d: integral_domain #a) : Lemma (requires fraction_eq (fraction_one #a #d) (fraction_zero #a #d)) (ensures False) = 
+  let one = fraction_one #a #d in
+  let zero = fraction_zero #a #d in
+  reveal_opaque (`%is_reflexive) (is_reflexive #a);
+  reveal_opaque (`%is_transitive) (is_transitive #a);
+  reveal_opaque (`%is_symmetric) (is_symmetric #a);
+  neutral_lemma d.multiplication.op d.eq d.multiplication.neutral d.multiplication.neutral;
+  ()
+
+let fraction_one_is_not_equal_to_fraction_zero (#a: Type) (#d: integral_domain #a) 
+  : Lemma (~(fraction_eq (fraction_one #a #d) (fraction_zero #a #d)) /\ ~(fraction_eq (fraction_zero #a #d) (fraction_one #a #d))) = 
+  reveal_opaque (`%is_symmetric) (is_symmetric #(fraction d)); 
+  Classical.move_requires (fraction_one_eq_zero_means_wtf #a) d;
+  ()
+
+let equal_means_eq (#a:Type) (#d: integral_domain #a) (x y: a) : Lemma (requires (x == y)) (ensures d.eq x y /\ d.eq y x) = 
+  reveal_opaque (`%is_reflexive) (is_reflexive #a) 
+  
 private let ring_distributivity_lemma (#a:Type) (r: ring #a) : Lemma (is_right_distributive r.multiplication.op r.addition.op r.eq /\ is_left_distributive r.multiplication.op r.addition.op r.eq) = 
   reveal_opaque (`%is_fully_distributive) (is_fully_distributive #a);
   reveal_opaque (`%is_right_distributive) (is_right_distributive #a); 
@@ -862,6 +960,77 @@ let fraction_equivalence_respects_multiplication (#a:Type) (#d: integral_domain 
   reveal_opaque (`%equivalence_wrt_condition) (equivalence_wrt_condition #(fraction d)); 
   Classical.forall_intro_3 (fraction_equivalence_respects_mul #a #d)
 
+let fraction_eq_means_condition (#a:Type) (#d: integral_domain #a) (x y: fraction d)
+  : Lemma (requires fraction_eq x y)
+          (ensures (d.multiplication.op x.num y.den `d.eq` d.multiplication.op x.den y.num)) = ()
+
+let domain_pr_eq_pq_means_r_eq_q (#a:Type) (d: integral_domain #a) (p q r: a)
+  : Lemma (requires d.eq (d.multiplication.op p q) (d.multiplication.op p r) /\ ~(is_absorber_of p d.multiplication.op d.eq))
+          (ensures d.eq q r) = 
+          domain_law_from_pq_eq_pr d p q r;
+          nonzero_is_not_equal_to_add_neutral_p d p;
+          ()
+ 
+let fraction_absorber_means_numerator_absorber (#a:Type) (#d: integral_domain #a) (x: fraction d)  
+  : Lemma (requires is_absorber_of x fraction_mul fraction_eq)
+          (ensures is_absorber_of x.num d.multiplication.op d.eq) = 
+          let p = x.num in                    
+          let aux (q: a) : Lemma (d.eq p (d.multiplication.op p q) /\ d.eq p (d.multiplication.op q p) /\ d.eq (d.multiplication.op p q) p /\ d.eq (d.multiplication.op q p) p) = 
+            one_is_valid_denominator d;
+            let qf : fraction d = Fraction q d.multiplication.neutral in
+            let xqf = fraction_mul x qf in
+            let ( *) = d.multiplication.op in
+            reveal_opaque (`%is_reflexive) (is_reflexive #a); 
+            reveal_opaque (`%is_transitive) (is_transitive #a); 
+            reveal_opaque (`%is_symmetric) (is_symmetric #a); 
+            reveal_opaque (`%is_commutative) (is_commutative #a); 
+            assert (p `d.eq` x.num);       
+            assert (xqf.den `d.eq` (x.den * d.multiplication.neutral));
+            assert (xqf.den `d.eq` x.den);
+            assert (xqf.num `d.eq` (p `d.multiplication.op` q));
+            assert (xqf.den `d.eq` (x.den `d.multiplication.op` d.multiplication.neutral));
+            neutral_lemma d.multiplication.op d.eq d.multiplication.neutral x.den;
+            assert (xqf.den `d.eq` x.den);
+            assert (is_absorber_of x fraction_mul fraction_eq);
+            fraction_equivalence_respects_multiplication #a #d;
+            absorber_lemma fraction_mul fraction_eq x qf;
+            assert (fraction_eq xqf x);
+            fraction_eq_means_condition xqf x;
+            assert ((xqf.num * x.den) `d.eq` (x.den * x.num));            
+            assert ((x.den * xqf.num) `d.eq` (x.den * x.num));
+            denominator_is_nonzero d x.den;
+            assert (~(is_absorber_of x.den d.multiplication.op d.eq));
+            domain_pr_eq_pq_means_r_eq_q d x.den xqf.num x.num; 
+            assert ((p * q) `d.eq` p);
+            assert ((q * p) `d.eq` p);
+            symm_lemma d.eq p (p*q);
+            symm_lemma d.eq p (q*p);
+          () in
+          reveal_opaque (`%is_absorber_of) (is_absorber_of #a); 
+          Classical.forall_intro aux
+
+let frac_abs_cond (#a:Type) (#d: integral_domain #a) (x: non_absorber_of #(fraction d) fraction_mul fraction_eq) : Lemma (~(is_absorber_of x.num d.multiplication.op d.eq)) = 
+    (Classical.move_requires (fraction_absorber_condition)) x;
+    ()
+
+let frac_nonabs_cond (#a:Type) (#d: integral_domain #a) (x: fraction d)
+  : Lemma (requires ~(is_absorber_of x.num d.multiplication.op d.eq))
+          (ensures ~(is_absorber_of x fraction_mul fraction_eq)) =           
+          Classical.move_requires (fraction_absorber_means_numerator_absorber) x
+
+#push-options "--ifuel 2 --fuel 0 --z3rlimit 3 --query_stats"
+private let fraction_mul_domain_law (#a:Type) (#d: integral_domain #a) (p q: non_absorber_of #(fraction d) fraction_mul fraction_eq)
+  : Lemma (~(is_absorber_of (fraction_mul p q) fraction_mul fraction_eq)) = 
+  let pq = fraction_mul p q in    
+  assert (pq.num `d.eq` d.multiplication.op p.num q.num);
+  frac_abs_cond p;
+  frac_abs_cond q;
+  domain_multiplication_law d.eq d.multiplication.op p.num q.num;
+  assert (~(is_absorber_of pq.num d.multiplication.op d.eq));
+  frac_nonabs_cond pq;
+  (Classical.move_requires fraction_absorber_condition) pq
+  
+
 //let is_inverse_operation_for (#a: Type) (inv: unary_op a) (op: binary_op a) (eq: equivalence_relation a) 
 //  = (forall (x:a). is_neutral_of (op x (inv x)) op eq /\ is_neutral_of (op (inv x) x) op eq)
 
@@ -990,50 +1159,7 @@ let fraction_negation_respects_equivalence (#a:Type) (#d: integral_domain #a) : 
   reveal_opaque (`%respects_equivalence) (respects_equivalence #(fraction d)); 
   Classical.forall_intro_2 (fraction_neg_respects_equivalence #a #d)
  
-let absorber_numerator_means_absorber_fraction (#a:Type) (#d: integral_domain #a) (z x: fraction d) 
-  : Lemma (requires is_absorber_of z.num d.multiplication.op d.eq)
-          (ensures fraction_eq (fraction_mul x z) z && fraction_eq (fraction_mul z x) z) =
-//          (ensures z `fraction_mul` x `fraction_eq` z /\ x `fraction_mul` z `fraction_eq` z) = 
-  let mul = d.multiplication.op in  
-  let add = d.addition.op in  
-  let eq = d.eq in   
-  // Uncomment these two and the proof will fail!
-  // reveal_opaque (`%is_reflexive) (is_reflexive #a); 
-  // reveal_opaque (`%is_symmetric) (is_symmetric #a); 
-  absorber_lemma mul eq z.num x.num;
-  //assert ((z `fraction_mul` x).num `eq` (z.num));
-  //assert ((x `fraction_mul` z).num `eq` (z.num));
-  //ring_addition_neutral_is_multiplication_absorber d;
-  absorber_equal_is_absorber mul eq z.num (z `fraction_mul` x).num;
-  absorber_equal_is_absorber mul eq z.num (x `fraction_mul` z).num;
-  absorber_lemma mul eq (z `fraction_mul` x).num z.den;
-  absorber_lemma mul eq (x `fraction_mul` z).num z.den;
-  absorber_lemma mul eq z.num (z `fraction_mul` x).den;
-  absorber_lemma mul eq z.num (x `fraction_mul` z).den;
-  //assert (((z `fraction_mul` x).num `mul` z.den) `eq` (z `fraction_mul` x).num);
-  //assert ((z `fraction_mul` x).num `eq` z.num);
-  trans_lemma_4 eq ((z `fraction_mul` x).num `mul` z.den) (z `fraction_mul` x).num z.num ((z `fraction_mul` x).den `mul` z.num);
-  trans_lemma_4 eq ((x `fraction_mul` z).num `mul` z.den) (x `fraction_mul` z).num z.num ((x `fraction_mul` z).den `mul` z.num);
-  //assert (((z `fraction_mul` x).num `mul` z.den) `eq` ((z `fraction_mul` x).den `mul` z.num));
-  //assert (fraction_eq (fraction_mul z x) z);
-  fraction_mul_is_commutative x z;
-  //assert (fraction_eq (fraction_mul x z) (fraction_mul z x));
-  trans_lemma fraction_eq (fraction_mul x z) (fraction_mul z x) z;
-  () 
-
-let fraction_absorber_condition (#a:Type) (#d: integral_domain #a) (z: fraction d)
-  : Lemma (requires is_absorber_of z.num d.multiplication.op d.eq)
-          (ensures is_absorber_of z fraction_mul fraction_eq) = 
-  reveal_opaque (`%is_absorber_of) (is_absorber_of #(fraction d)); 
-  let aux (x: fraction d) : Lemma (fraction_eq (fraction_mul x z) z && fraction_eq (fraction_mul z x) z) 
-    = absorber_numerator_means_absorber_fraction z x in
-  FStar.Classical.forall_intro aux
-
-let non_absorber_fraction_has_nonzero_numerator (#a:Type) (#d: integral_domain #a) (x: fraction d) 
-  : Lemma (requires ~(is_absorber_of x fraction_mul fraction_eq)) 
-          (ensures ~(is_absorber_of x.num d.multiplication.op d.eq)) = 
-  Classical.move_requires fraction_absorber_condition x
-
+   
 let fraction_eq_properties (#a:Type) (d: integral_domain #a) : Lemma (
   equivalence_wrt_condition (fraction_add #a #d) fraction_eq /\
   equivalence_wrt_condition (fraction_mul #a #d) fraction_eq /\
@@ -1073,8 +1199,7 @@ let fraction_neg_respects_equivalence_of_units (#a:Type) (#d: integral_domain #a
                                                (x y: units_of #(fraction d) fraction_add fraction_eq) 
   : Lemma(fraction_eq x y ==> fraction_eq (fraction_neg x) (fraction_neg y)) = 
   fraction_neg_respects_equivalence x y
-
-#push-options "--ifuel 2 --fuel 2 --z3rlimit 5 --query_stats"
+ 
 let fraction_neg_units (#a:Type) (#d: integral_domain #a) : (unary_op_on_units_of (fraction_add #a #d) fraction_eq) = 
   fraction_negation_respects_equivalence #a #d;
   fraction_add_all_are_units #a #d;  
@@ -1171,13 +1296,136 @@ let fraction_additive_group (#a:Type) (#d: integral_domain #a) : commutative_gro
       Classical.forall_intro_2 (fraction_neg_respects_equivalence_of_units #a #d);    
   fraction_neg) zero
 
+let frac_eq_mul (#a:Type) (#d: integral_domain #a) : equivalence_wrt #(fraction d) fraction_mul = fraction_eq
 
-let fraction_inv (#a:Type) (#d: integral_domain #a) (x: non_absorber_of fraction_mul fraction_eq) 
-  : (t:fraction d{ is_neutral_of (t `fraction_mul` x) fraction_mul fraction_eq /\ 
+private let fraction_unit_and_absorber_is_wtf (#a:Type) (#d: integral_domain #a) (x: fraction d) 
+  : Lemma (requires is_unit x fraction_mul fraction_eq /\ is_absorber_of x fraction_mul fraction_eq) (ensures False) =   
+  let ( *) = fraction_mul #a #d in
+  let eq = fraction_eq #a #d in
+  reveal_opaque (`%is_unit) (is_unit #(fraction d)); 
+  reveal_opaque (`%is_symmetric) (is_symmetric #(fraction d)); 
+  reveal_opaque (`%is_transitive) (is_transitive #(fraction d)); 
+  let x' = IndefiniteDescription.indefinite_description_ghost (units_of ( *) eq) (fun x' -> (is_neutral_of (x * x') ( *) eq /\ is_neutral_of (x' * x) ( *) eq)) in
+  let xx' = x * x' in
+  let one = fraction_one #a #d in
+  let zero = fraction_zero #a #d in
+  assert (is_neutral_of xx' ( *) eq);
+  assert (is_neutral_of one ( *) eq);
+  neutral_is_unique ( *) eq one xx'; 
+  assert (eq xx' one);
+  absorber_lemma ( *) eq x x'; 
+  assert (is_absorber_of xx' ( *) eq);
+  absorber_is_unique ( *) eq zero xx';
+  assert (eq xx' zero); 
+  fraction_one_eq_zero_means_wtf #a d;
+  ()
+
+let fraction_nonabsorber_means_numerator_nonabsorber  (#a:Type) (#d: integral_domain #a) (x: fraction d) : Lemma (requires ~(is_absorber_of x fraction_mul fraction_eq)) (ensures ~(is_absorber_of x.num d.multiplication.op d.eq)) = frac_abs_cond x
+
+let fraction_eq_condition (#a:Type) (#d: integral_domain #a) (x y: fraction d) : Lemma (requires d.eq (d.multiplication.op x.num y.den) (d.multiplication.op x.den y.num)) (ensures fraction_eq x y) = ()
+
+#push-options "--ifuel 4 --fuel 2 --z3rlimit 30 --query_stats"
+let fraction_nonabsorber_is_unit (#a:Type) (#d: integral_domain #a) (x: non_absorber_of (fraction_mul #a #d) (fraction_eq #a #d)) : Lemma (is_unit x fraction_mul fraction_eq) = 
+  fraction_nonabsorber_means_numerator_nonabsorber x;
+  assert (~(is_absorber_of x.num d.multiplication.op d.eq)); 
+  let ( *) = d.multiplication.op in  
+  let inv = d.multiplication.inv in  
+  let eq : equivalence_wrt d.multiplication.op = d.eq in
+  let up = d.unit_part_of in
+  let np = d.normal_part_of in 
+  let u = x.num in
+  let v = x.den in
+  let one = fraction_one #a #d in
+  let d_one = d.multiplication.neutral in
+  assert (one.num `d.eq` d_one);
+  unit_and_normal_decomposition_lemma ( *) eq up np u;
+  normal_part_of_non_absorber_is_valid_denominator #a #d x.num;
+  let xsden : valid_denominator_of d = np x.num in
+  let x' = Fraction (x.den * inv (up x.num)) xsden in
+  let xx' = fraction_mul x x' in
+  assert (xx'.num `eq` (x.num * (x.den * inv (up x.num))));
+  assert (xx'.den `eq` (x.den * np x.num));
+  reveal_opaque (`%is_reflexive) (is_reflexive #a); 
+  reveal_opaque (`%is_symmetric) (is_symmetric #a); 
+  reveal_opaque (`%is_transitive) (is_transitive #a);  
+
+  unit_and_normal_decomposition_lemma ( *) eq up np x.num;
+  
+  assert (xx'.num `eq` ((up x.num * np x.num) * (x.den * inv (up x.num)))); 
+  comm_lemma eq ( *) (up x.num * np x.num) (x.den * inv (up x.num));
+  assert (eq ((up x.num * np x.num) * (x.den * inv (up x.num))) ((x.den * inv (up x.num)) * (up x.num * np x.num)));
+  assoc_lemma4 eq ( *) x.den (inv (up x.num)) (up x.num) (np x.num);
+  assert (eq ((x.den * inv (up x.num)) * (up x.num * np x.num)) ( (x.den * (inv (up x.num) * up x.num)) * (np x.num)));
+  assert (is_neutral_of (inv (up x.num) * up x.num) ( *) eq);
+  neutral_lemma ( *) eq (inv (up x.num) * up x.num) x.den;
+  equivalence_wrt_operation_lemma eq (x.den * (inv (up x.num) * up x.num)) x.den (np x.num);
+   
+  trans_lemma_4 eq xx'.num
+                   ((x.den * inv (up x.num)) * (up x.num * np x.num))
+                   ((x.den * (inv (up x.num) * up x.num)) * (np x.num))
+                   xx'.den;
+   
+  assert ((xx'.num * d_one) `eq` (xx'.den * d_one)); 
+  assert (fraction_eq xx' one);
+  neutral_equivalent_is_neutral fraction_mul fraction_eq one xx';
+  reveal_opaque (`%is_reflexive) (is_reflexive #(fraction d)); 
+  reveal_opaque (`%is_symmetric) (is_symmetric #(fraction d)); 
+  reveal_opaque (`%is_transitive) (is_transitive #(fraction d)); 
+  assert (is_neutral_of (fraction_mul x x') fraction_mul fraction_eq); 
+  fraction_mul_is_commutative x x';
+  assert (fraction_eq (fraction_mul x x') (fraction_mul x' x));
+  neutral_equivalent_is_neutral fraction_mul fraction_eq (fraction_mul x x') (fraction_mul x' x);
+  assert (is_neutral_of (fraction_mul x' x) fraction_mul fraction_eq); 
+  let ex_fun (ix) = is_neutral_of (x `fraction_mul` ix) fraction_mul fraction_eq /\ is_neutral_of (ix `fraction_mul` x) fraction_mul fraction_eq in
+  
+  assert (ex_fun x'); 
+  Classical.exists_intro ex_fun x';
+  reveal_opaque (`%is_unit) (is_unit #(fraction d)); 
+  assert_spinoff (is_unit x fraction_mul fraction_eq); 
+  ()
+#pop-options
+
+
+let fraction_unit_cant_be_absorber (#a:Type) (#d: integral_domain #a) (x: units_of fraction_mul fraction_eq) : Lemma (~(is_absorber_of x fraction_mul fraction_eq)) = 
+  Classical.move_requires (fraction_unit_and_absorber_is_wtf #a #d) x
+
+let fraction_absorber_cant_be_unit (#a:Type) (#d: integral_domain #a) (x: absorber_of fraction_mul fraction_eq) : Lemma (~(is_unit x fraction_mul fraction_eq)) =
+  Classical.move_requires (fraction_unit_and_absorber_is_wtf #a #d) x
+
+private let domain_unit_and_absorber_is_wtf (#a:Type) (#d: integral_domain #a) (x: a) 
+  : Lemma (requires is_unit x d.multiplication.op d.eq /\ is_absorber_of x d.multiplication.op d.eq) (ensures False) =   
+  let ( *) = d.multiplication.op in
+  let eq = d.eq in
+  reveal_opaque (`%is_unit) (is_unit #a); 
+  reveal_opaque (`%is_symmetric) (is_symmetric #a); 
+  reveal_opaque (`%is_transitive) (is_transitive #a); 
+  let x' = IndefiniteDescription.indefinite_description_ghost (units_of ( *) eq) (fun x' -> (is_neutral_of (x * x') ( *) eq /\ is_neutral_of (x' * x) ( *) eq)) in
+  let xx' = x * x' in
+  assert (is_neutral_of xx' ( *) eq);
+  assert (is_neutral_of d.multiplication.neutral d.multiplication.op d.eq);
+  neutral_is_unique ( *) eq d.multiplication.neutral xx'; 
+  assert (eq xx' d.multiplication.neutral);
+  absorber_lemma ( *) eq x x'; 
+  assert (is_absorber_of xx' ( *) eq);
+  absorber_is_unique ( *) eq d.addition.neutral xx';
+  assert (eq xx' d.addition.neutral); 
+  ()
+
+let domain_unit_cant_be_absorber (#a:Type) (#d: integral_domain #a) (x: units_of d.multiplication.op d.eq) : Lemma (~(is_absorber_of x d.multiplication.op d.eq)) = 
+  Classical.move_requires (domain_unit_and_absorber_is_wtf #a #d) x
+
+let domain_absorber_cant_be_unit (#a:Type) (#d: integral_domain #a) (x: absorber_of d.multiplication.op d.eq) : Lemma (~(is_unit x d.multiplication.op d.eq)) =
+  Classical.move_requires (domain_unit_and_absorber_is_wtf #a #d) x
+ 
+#push-options "--ifuel 1 --fuel 0 --z3rlimit 3 --query_stats"
+let fraction_inv (#a:Type) (#d: integral_domain #a) (x: units_of fraction_mul fraction_eq) 
+  : (t:units_of fraction_mul fraction_eq{ is_neutral_of (t `fraction_mul` x) fraction_mul fraction_eq /\ 
                    is_neutral_of (x `fraction_mul` t) fraction_mul fraction_eq /\
                    t.num `d.eq` (d.multiplication.inv (d.unit_part_of x.num) `d.multiplication.op` x.den) /\
                    t.den `d.eq` (d.normal_part_of x.num)  }) = 
+  fraction_unit_cant_be_absorber x;
   reveal_opaque (`%is_absorber_of) (is_absorber_of #(fraction d)); 
+  reveal_opaque (`%is_unit) (is_unit #(fraction d)); 
   reveal_opaque (`%is_reflexive) (is_reflexive #a); 
   reveal_opaque (`%is_symmetric) (is_symmetric #a); 
   reveal_opaque (`%is_transitive) (is_transitive #a); 
@@ -1211,10 +1459,10 @@ let fraction_inv (#a:Type) (#d: integral_domain #a) (x: non_absorber_of fraction
   assert (xx'.num `eq` (x.den * np x.num));
   assert (xx'.den `eq` (x.den * np x.num));
   fraction_is_mul_neutral xx';
-  fraction_is_mul_neutral x'x;  
+  fraction_is_mul_neutral x'x;   
   invfrac
- 
-
+#pop-options
+  
 let fraction_equality_lemma (#a: Type) (#d: integral_domain #a) (x y: fraction d)
   : Lemma (requires ((x.num `d.multiplication.op` y.den) `d.eq` (x.den `d.multiplication.op` y.num)))
           (ensures (fraction_eq x y /\ fraction_eq y x)) = symm_lemma fraction_eq y x
@@ -1306,6 +1554,68 @@ let fraction_inv_respects_equivalence (#p:Type) (#d: integral_domain #p) (x y: n
   assert ( ((fraction_inv x).num * (fraction_inv y).den) `eq` ((fraction_inv x).den * (fraction_inv y).num) );
   fraction_equality_lemma (fraction_inv x) (fraction_inv y);
   ()
+
+let fraction_nonabsorber_is_unit (#a:Type) (#d: integral_domain #a) (x: fraction d) : Lemma (requires ~(is_absorber_of x fraction_mul fraction_eq))
+                                                                                            (ensures is_unit x fraction_mul fraction_eq) = admit()
+
+let fraction_mul_cm (#a:Type) (#d: integral_domain #a) : commutative_monoid #(fraction d) = 
+  Classical.forall_intro_2 (fraction_mul_is_commutative #a #d);
+  let op : binary_op (fraction d) = fraction_mul in
+  let eq : equivalence_wrt op = fraction_eq in
+  let inv : unary_op_on_units_of op eq = fraction_inv in
+  admit();
+
+  Mkmagma op eq fraction_inv (fraction_one #a #d)  
+
+
+unfold let invertible_mul (#a:Type) (#d: integral_domain #a) (x y: non_absorber_of #(fraction d) fraction_mul fraction_eq)
+                       : non_absorber_of #(fraction d) fraction_mul fraction_eq = 
+                       fraction_mul_domain_law x y;
+                       fraction_mul x y
+
+unfold let inv_mul (#a:Type) (#d: integral_domain #a) : binary_op (non_absorber_of #(fraction d) fraction_mul fraction_eq) = invertible_mul
+
+let fraction_inverse_respects_equivalence (#a: Type) (#d: integral_domain #a) 
+  : Lemma (respects_equivalence #(non_absorber_of #(fraction d) inv_mul fraction_eq) fraction_inv fraction_eq) = 
+
+  admit();
+  ()
+
+let frac_inv2 (#a:Type) (#d: integral_domain #a) : partial_inverse_op_for #(fraction d) fraction_mul fraction_eq = 
+  Classical.forall_intro_2 (fraction_inv_respects_equivalence #a #d);
+  admit();
+  fraction_inv
+
+let fraction_eq_nonabs (#a:Type) (d: integral_domain #a) (x y: non_absorber_of #(fraction d) fraction_mul fraction_eq)=
+  fraction_eq #a #d
+  
+let fraction_inverse_respects_equivalence (#a:Type) (d: integral_domain #a) : Lemma (respects_equivalence #(non_absorber_of #(fraction d) fraction_mul fraction_eq) fraction_inv (
+    reveal_opaque (`%is_absorber_of) (is_absorber_of #(fraction d));
+    let f_eq : equivalence_relation (non_absorber_of #(fraction d) fraction_mul fraction_eq) = fraction_eq in
+    f_eq)) 
+  = 
+  
+  admit()
+
+
+
+let fraction_multiplicative_almost_group (#a:Type) (#d: integral_domain #a) : commutative_monoid #(fraction d) = 
+  fraction_equivalence_respects_multiplication #a #d;
+  Classical.forall_intro_2 (fraction_inv_respects_equivalence #a #d);
+  admit();
+  Classical.forall_intro_3 (fraction_mul_is_associative #a #d);
+  Classical.forall_intro_2 (fraction_mul_is_commutative #a #d);
+
+  let one = (Fraction d.multiplication.neutral d.multiplication.neutral) in
+  reveal_opaque (`%is_neutral_of) (is_neutral_of #(fraction d));
+  Classical.forall_intro (fraction_mul_neutral_lemma one);
+//  fraction_inv_yields_inverses_for_units
+
+  Mkmagma #(fraction d) fraction_add fraction_eq (
+      reveal_opaque (`%respects_equivalence) (respects_equivalence #(units_of #(fraction d) fraction_add fraction_eq));
+      Classical.forall_intro_2 (fraction_neg_respects_equivalence_of_units #a #d);    
+  fraction_neg) one
+
 
 let fraction_multiplicative_group (#a:Type) (#d: integral_domain #a) : commutative_monoid #(fraction d) = 
   fraction_equivalence_respects_multiplication #a #d;

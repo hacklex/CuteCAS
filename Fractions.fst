@@ -172,7 +172,7 @@ private let fraction_nonabsorbers_are_regular (#p:Type) (#d: integral_domain #p)
   Classical.forall_intro_2 (Classical.move_requires_2 aux3)
 
 
-let fraction_ring (#a:Type) (#d: integral_domain #a) : field #(fraction d) = 
+let fraction_field (#a:Type) (d: integral_domain #a) : field #(fraction d) = 
   fraction_distributivity_lemma #a #d;
   fraction_equivalence_respects_addition #a #d;
   fraction_equivalence_respects_multiplication #a #d; 

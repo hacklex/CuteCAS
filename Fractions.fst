@@ -78,7 +78,7 @@ private let left_distributivity (#p: Type) (#dom: integral_domain #p) (x y z: fr
     ring_distributivity_lemma dom;
     let ( *) = dom.multiplication.op in
     let (+) = dom.addition.op in
-    let mul = dom.multiplication.op in //because ( *) is uglier than mul
+    let mul = dom.multiplication.op in //because ( *) is both uglier than mul and slower to type
     let eq = dom.eq in   
     let (a,b,c,d,e,f) = (x.num,x.den,y.num,y.den,z.num,z.den) in  
     calc eq {
@@ -102,16 +102,19 @@ private let left_distributivity (#p: Type) (#dom: integral_domain #p) (x y z: fr
       }
       (b*(a*(c*f))) + (b*(a*(d*e)));      
     };
-    assert ((fraction_mul x (fraction_add y z)).den `eq` (b*(d*f)));
+    assert ((fraction_mul x (fraction_add y z)).den `eq` (b*(d*f))); 
     calc eq {
       (fraction_add (fraction_mul x y) (fraction_mul x z)).den;
       eq {}
       (b*d)*(b*f);
-      eq {assoc_lemma4 eq mul b d b f; bring_any_operand_forth eq mul b d b f; assoc_lemma4 eq mul b b d f }
+      eq {
+        assoc_lemma4 eq mul b d b f; 
+        bring_any_operand_forth eq mul b d b f; 
+        assoc_lemma4 eq mul b b d f 
+      }
       b*(b*(d*f));
     };
-    fraction_equality_from_known_factor (fraction_mul x (fraction_add y z)) (fraction_add (fraction_mul x y) (fraction_mul x z)) b;   
-    ()  
+    fraction_equality_from_known_factor (fraction_mul x (fraction_add y z)) (fraction_add (fraction_mul x y) (fraction_mul x z)) b
 
 let right_distributivity (#p: Type) (#dom: integral_domain #p) (x y z: fraction dom) 
   : Lemma (fraction_eq (fraction_mul (fraction_add x y) z) (fraction_add (fraction_mul x z) (fraction_mul y z))) =

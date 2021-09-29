@@ -10,13 +10,13 @@ For now, just a sandbox where I play with F* and try implementing abstract algeb
 * abstract equivalence relation (symmetric, reflexive, transitive function of type `t -> t -> bool`);
 * binary operations (with lemmas on commutativity, associativity, neutral elements, absorbers, inverses);
 * grouplike structures (magma -> semigroup -> monoid -> group) with separately defined commutative versions;
-* ringlike structures (ring -> domain -> euclidean domain) with distributivity lemmas and unit/normal decomposition for euclidean domains;
-* started working with abstract fractions over euclidean domains (still need to generalize over arbitrary integral domains)
+* ringlike structures (ring -> domain -> euclidean domain -> skewfield -> field) with distributivity lemmas and unit/normal decomposition for euclidean domains;
+* fields of fractions
 
 # What's next?
 
 * completing framework for euclidean domains (div/rem, gcd/eea)
-* completing framework for abstract fractions (need to prove that they form a field, and implement reduced fractions wherever eea/gcd is available)
+* enhancing fields of fractions over euclidean domains by introducing the reduced fractions via EEA/GCD
 * introduce the notion of polynomial ring over a field, prove it to be a domain, and provide the framework for it
 * head towards differential fields. See my [F# CAS sketch](https://github.com/hacklex/AbstractMathTypes) for details
 
@@ -30,5 +30,12 @@ and require ridiculous values of `z3rlimit` to be verified.
 
 # This F* code is BAD!
 
-I know. It quite probably is. I'm currently learning the language and would be glad to improve the code if you tell me what exactly can be improved here, and how.
-So, feel free to drop an issue, or make a pull request, or just fork and then show me something good, if you feel like it.
+I know. It quite probably is. I'm currently learning the language and would be glad to improve the code if you tell me 
+what exactly can be improved here, and how. So, feel free to drop an issue, or make a pull request, or just fork and 
+then show me something good, if you feel like it.
+
+In fact, you might even notice how the code gets better as I advance from basic stuff like semigroups to slightly more advanced 
+stuff like proving certain properties of a field of fractions. That is because I gain experience in the process of writing this 
+framework, and the further I advance, the better my code becomes. 
+
+I'd love to get the feedback on the code quality. Don't hesitate, don't pull the punches. I only aim to get better with this language :)

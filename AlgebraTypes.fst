@@ -77,7 +77,9 @@ let eq_wrt_emulated (#a:Type) (#op: binary_op a) (eq: equivalence_relation a{equ
 let is_associative (#a:Type) (op:binary_op a) (eq: equivalence_relation a) = forall (x y z:a). ((x `op` y) `op` z) `eq` (x `op` (y `op` z))
 [@@"opaque_to_smt"]
 let is_commutative (#a:Type) (op:binary_op a) (eq: equivalence_relation a) = forall (x y:a). (x `op` y) `eq` (y `op` x)
- 
+
+
+
 [@@"opaque_to_smt"]
 let is_idempotent (#a:Type) (r: unary_op a) (eq: equivalence_relation a)  = forall (x:a). (r x) `eq` (r (r x))
 
@@ -345,7 +347,6 @@ let has_no_zero_divisors (#a:Type) (zero:a) (op_mul: binary_op a) (eq: equivalen
 let is_divisor_of (#a:Type) (op_mul: binary_op a) (eq: equivalence_relation a) (divisor: a) (dividend: a) = 
   exists (quotient: a). (quotient `op_mul` divisor) `eq` dividend
 
-
 /// We provide the two lemmas that ensure divides, second one purely to
 /// demonstrate how one uses exists_intro. Usually you're fine with '= ()'.
 let inst_divides (#a:Type) (op_mul: binary_op a) (eq: equivalence_relation a) (y: a) (x: a) (z:a{(z `op_mul` y) `eq` x})
@@ -402,6 +403,11 @@ unfold private let multi_equality_5 (#a: Type) (eq: equivalence_relation a) (e1 
   e4 `eq` e1 && e4 `eq` e2 && e4 `eq` e3 && e4 `eq` e5 &&
   e5 `eq` e1 && e5 `eq` e2 && e5 `eq` e3 && e5 `eq` e4 
   
+/// Regular associativity lemma, straightforward and with minimal possible requirements.
+let assoc_lemma3 (#a:Type) (eq: equivalence_relation a) (op: binary_op a{is_associative op eq}) (x y z: a) 
+  : Lemma (((x `op` y) `op` z) `eq` (x `op` (y `op` z)) /\ (x `op` (y `op` z)) `eq` ((x `op` y) `op` z)) 
+  = reveal_opaque (`%is_associative) (is_associative #a);
+    reveal_opaque (`%is_symmetric) (is_symmetric #a)
 
 /// Associativity for all possible parentheses configurations between 4 terms.
 /// This one's a bit monstrous, but it comes in handy later. 
@@ -425,6 +431,40 @@ let assoc_lemma4 (#a:Type) (eq: equivalence_relation a) (op: binary_op a{is_asso
     //assert (((x `op` y) `op` z) `eq` (x `op` (y `op` z)));
     //equivalence_wrt_operation_lemma   #a #op eq ((x `op` y) `op` z) (x `op` (y `op` z)) w
     //assert ((((x `op` y) `op` z) `op` w) `eq` (((x `op` (y `op` z)) `op` w)));
+
+ 
+/// This one is used to assert commutativity, works with both add and mul.
+/// Used when revealing is_commutative opaque wastes too much rlimit.
+let comm_lemma (#a:Type) (eq: equivalence_relation a) (op: binary_op a{is_commutative op eq}) (x y: a)
+  : Lemma ( (x `op` y) `eq` (y `op` x) /\ (y `op` x) `eq` (x `op` y)) = 
+    reveal_opaque (`%is_commutative) (is_commutative #a)
+    
+#push-options "--ifuel 0 --fuel 0 --z3rlimit 2"
+let bring_any_operand_forth (#a: Type) 
+                  (eq: equivalence_relation a) 
+                  (op: binary_op a { is_associative op eq /\ is_commutative op eq /\ equivalence_wrt_condition op eq })
+                  (x y z w: a) : Lemma (
+                    multi_equality_5 eq (x `op` y `op` z `op` w)
+                                        (x `op` (y `op` (z `op` w))) 
+                                        (y `op` (x `op` (z `op` w))) 
+                                        (z `op` (x `op` (y `op` w)))
+                                        (w `op` (x `op` (y `op` z)))) =                     
+    reveal_opaque (`%is_associative) (is_associative #a);
+    reveal_opaque (`%is_commutative) (is_commutative #a);
+    reveal_opaque (`%is_transitive) (is_transitive #a);
+    reveal_opaque (`%is_symmetric) (is_symmetric #a);
+    reveal_opaque (`%equivalence_wrt_condition) (equivalence_wrt_condition #a);
+    assoc_lemma4 eq op x y z w;
+    assert (multi_equality_5 eq (x `op` (y `op` (z `op` w)))
+                                (x `op` y `op` z `op` w)
+                                (y `op` x `op` z `op` w)
+                                (z `op` x `op` y `op` w)
+                                (w `op` x `op` y `op` z));
+    assoc_lemma4 eq op y x z w; 
+    assoc_lemma4 eq op z x y w; 
+    assoc_lemma4 eq op w x y z     
+#pop-options                     
+
 
 let unit_product_is_unit (#a:Type) (mul: binary_op a) (eq: equivalence_wrt mul{is_associative mul eq}) (x y: units_of mul eq)  
   : Lemma (is_unit (mul x y) mul eq) = 
@@ -842,11 +882,24 @@ let product_of_unit_normals_is_normal (#a: Type) (#mul: binary_op a) (#eq: equiv
 noeq type ring (#a: Type) = {
   addition: commutative_group #a;
   multiplication: (t: monoid #a {is_fully_distributive t.op addition.op t.eq});
-  eq: (t:equivalence_relation a{ equivalence_wrt_condition addition.op t /\ equivalence_wrt_condition multiplication.op t /\ t===addition.eq /\ t===multiplication.eq });
+  eq: (t:equivalence_relation a{ equivalence_wrt_condition addition.op t /\ equivalence_wrt_condition multiplication.op t /\ t==addition.eq /\ t==multiplication.eq });
   unit_part_of: a -> units_of multiplication.op eq;
   normal_part_of: a -> unit_normal_of multiplication.op eq unit_part_of;
   euclidean_norm: nat_function_defined_on_non_absorbers multiplication.op eq 
 } 
+
+let ring_distributivity_lemma (#a:Type) (r: ring #a) 
+    : Lemma (is_right_distributive r.multiplication.op r.addition.op r.eq 
+            /\ is_left_distributive r.multiplication.op r.addition.op r.eq) = 
+    reveal_opaque (`%is_fully_distributive) (is_fully_distributive #a);
+    reveal_opaque (`%is_right_distributive) (is_right_distributive #a); 
+    reveal_opaque (`%is_left_distributive) (is_left_distributive #a)
+ 
+/// This one is made private because we only work with commutative multiplication here
+unfold let mul_of (#a:Type) (r: ring #a) = r.multiplication.op
+
+/// And this one is made private just for the sake of symmetry with mul_of
+unfold let add_of (#a:Type) (r: ring #a) = r.addition.op
 
 let ring_add_yields_inv_for_units (a:Type) (r: ring #a) : Lemma (yields_inverses_for_units r.addition.op r.eq r.addition.inv) = yields_inverses_for_units_lemma a r.addition
 
@@ -1125,6 +1178,7 @@ let ring_additive_inv_x_is_minus_one_times_x (#a:Type) (r: ring #a) (x: a)
     assert (forall(x:units_of add eq). inv (inv x) `eq` x);
     trans_lemma eq (inv x) (inv (mul one x)) (mul (inv one) x);    
   () 
+#pop-options
 
 let ring_times_minus_one_is_commutative (#a:Type) (r: ring #a) (x:a) 
   : Lemma ( 
@@ -1267,11 +1321,16 @@ private let domain_lemma_2 (#a:Type) (dom: domain #a) (x y:a)
   : Lemma (requires is_absorber_of (dom.multiplication.op x y) dom.multiplication.op dom.eq) 
           (ensures is_absorber_of x dom.multiplication.op dom.eq \/ is_absorber_of y dom.multiplication.op dom.eq) = 
   domain_mul_absorber_lemma dom x y
- 
+
+let domain_deduce_zero_factor_from_zero_product_and_nonzero_factor (#a:Type) (d: domain #a) (x y: a)
+  : Lemma (is_absorber_of (x `d.multiplication.op` y) d.multiplication.op d.eq 
+       /\ ~(is_absorber_of y d.multiplication.op d.eq)
+       ==> is_absorber_of x d.multiplication.op d.eq) 
+  = reveal_opaque (`%has_no_absorber_divisors) (has_no_absorber_divisors #a) 
+
 let domain_zero_product_means_zero_factor (#a:Type) (dom: domain #a) (p q: a) 
   : Lemma (requires (p `dom.multiplication.op` q) `dom.eq` dom.addition.neutral)
-          (ensures (p `dom.eq` dom.addition.neutral \/ q `dom.eq` dom.addition.neutral)) =                 
-  //ring_addition_neutral_is_multiplication_absorber dom;
+          (ensures (p `dom.eq` dom.addition.neutral \/ q `dom.eq` dom.addition.neutral)) =   
   neutral_equivalent_is_neutral dom.addition.op dom.eq dom.addition.neutral (p `dom.multiplication.op` q);
   absorber_equal_is_absorber dom.multiplication.op dom.eq dom.addition.neutral (p `dom.multiplication.op` q); 
   domain_multiplication_law_inv dom.eq dom.multiplication.op p q;
@@ -1287,6 +1346,7 @@ let domain_nonzero_product_means_nonzero_factors (#a:Type) (r: ring #a) (p q: a)
   : Lemma (requires ~(is_absorber_of (r.multiplication.op p q) r.multiplication.op r.eq))
           (ensures ~(is_absorber_of p r.multiplication.op r.eq) /\ ~(is_absorber_of q r.multiplication.op r.eq)) =
   Classical.move_requires_2 (ring_zero_factor_means_zero_product r) p q
+
 
           
 let domain_characterizing_lemma (#a:Type) (dom: domain #a) (p q: a) 
@@ -1337,6 +1397,36 @@ let domain_law_from_pq_eq_pr (#a:Type) (d: domain #a) (p q r: a)
    ) else ()
   )
  
+let domain_cancellation_law (#a:Type) (d: domain #a) (p q r: a)
+  : Lemma (requires d.eq (d.multiplication.op p q) (d.multiplication.op p r) /\ ~(is_absorber_of p d.multiplication.op d.eq))
+          (ensures d.eq q r) = 
+          domain_law_from_pq_eq_pr d p q r;
+          nonzero_is_not_equal_to_add_neutral_p d p 
+ 
+let domain_unit_and_absorber_is_nonsense (#a:Type) (#d: domain #a) (x: a) 
+  : Lemma (requires is_unit x d.multiplication.op d.eq /\ is_absorber_of x d.multiplication.op d.eq) (ensures False) =   
+  let ( *) = d.multiplication.op in
+  let eq = d.eq in
+  reveal_opaque (`%is_unit) (is_unit #a); 
+  reveal_opaque (`%is_symmetric) (is_symmetric #a); 
+  reveal_opaque (`%is_transitive) (is_transitive #a); 
+  let x' = IndefiniteDescription.indefinite_description_ghost (units_of ( *) eq) (fun x' -> (is_neutral_of (x * x') ( *) eq /\ is_neutral_of (x' * x) ( *) eq)) in
+  let xx' = x * x' in
+  assert (is_neutral_of xx' ( *) eq);
+  assert (is_neutral_of d.multiplication.neutral d.multiplication.op d.eq);
+  neutral_is_unique ( *) eq d.multiplication.neutral xx'; 
+  assert (eq xx' d.multiplication.neutral);
+  absorber_lemma ( *) eq x x'; 
+  assert (is_absorber_of xx' ( *) eq);
+  absorber_is_unique ( *) eq d.addition.neutral xx';
+  assert (eq xx' d.addition.neutral); 
+  () 
+
+let domain_unit_cant_be_absorber (#a:Type) (#d: domain #a) (x: units_of d.multiplication.op d.eq) : Lemma (~(is_absorber_of x d.multiplication.op d.eq)) = 
+  Classical.move_requires (domain_unit_and_absorber_is_nonsense #a #d) x
+
+let domain_absorber_cant_be_unit (#a:Type) (#d: domain #a) (x: absorber_of d.multiplication.op d.eq) : Lemma (~(is_unit x d.multiplication.op d.eq)) =
+  Classical.move_requires (domain_unit_and_absorber_is_nonsense #a #d) x
   
 type commutative_ring (#a: Type) = r:ring #a { is_commutative r.multiplication.op r.eq }
 
@@ -1351,6 +1441,19 @@ type integral_domain (#a: Type) = r:domain #a
   is_unit_part_function r.unit_part_of /\
   is_normal_part_function r.unit_part_of r.normal_part_of    
 }
+ 
+private let normal_of_nonabs_cant_be_abs (#a:Type) (d: integral_domain #a) (x: non_absorber_of d.multiplication.op d.eq) : Lemma (requires is_absorber_of (d.normal_part_of x) d.multiplication.op d.eq) (ensures False) =
+  unit_and_normal_decomposition_lemma d.multiplication.op d.eq d.unit_part_of d.normal_part_of x;
+  reveal_opaque (`%is_reflexive) (is_reflexive #a);  
+  reveal_opaque (`%is_symmetric) (is_symmetric #a);  
+  reveal_opaque (`%is_transitive) (is_transitive #a);  
+  absorber_lemma d.multiplication.op d.eq (d.normal_part_of x) (d.unit_part_of x);
+  assert (x `d.eq` d.normal_part_of x);
+  absorber_equal_is_absorber d.multiplication.op d.eq (d.normal_part_of x) x; 
+  ()
+
+let normal_part_of_nonabsorber_is_nonabsorber (#a:Type) (#d: integral_domain #a) (x: non_absorber_of d.multiplication.op d.eq) 
+  : Lemma (~(is_absorber_of (d.normal_part_of x) d.multiplication.op d.eq)) = Classical.move_requires (normal_of_nonabs_cant_be_abs d) x
 
 type euclidean_domain (#a:Type) = r:integral_domain #a 
 { 

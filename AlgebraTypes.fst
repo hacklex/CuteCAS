@@ -390,8 +390,6 @@ let respects_equivalence (#a:Type) (f: unary_op a) (eq: equivalence_relation a) 
 
 type units_of (#a: Type) (mul: binary_op a) (eq: equivalence_relation a) = x:a{is_unit x mul eq}
 
-open FStar.IndefiniteDescription
-
 /// This one is only needed for the lemma below to turn 12 lines of equality into just 4.
 unfold private let eq_twoway (#a:Type) (eq: equivalence_relation a) (x y: a) = (x `eq` y) && (y `eq` x)
 
@@ -518,7 +516,6 @@ type unary_op_on_units_of (#a:Type) (op: binary_op a) (eq: equivalence_wrt op) =
      reveal_opaque (`%is_symmetric) (is_symmetric #(units_of op eq));   
      reveal_opaque (`%is_transitive) (is_transitive #a);
      reveal_opaque (`%is_transitive) (is_transitive #(units_of op eq));
-     reveal_opaque (`%is_unit) (is_unit #a);
      eq
    )
   }
@@ -568,8 +565,7 @@ let magma_inv_respects_eq (#a:Type) (m: magma #a) : Lemma (
   reveal_opaque (`%is_symmetric) (is_symmetric #a);   
   reveal_opaque (`%is_symmetric) (is_symmetric #(units_of m.op m.eq));   
   reveal_opaque (`%is_transitive) (is_transitive #a);
-  reveal_opaque (`%is_transitive) (is_transitive #(units_of m.op m.eq));
-  reveal_opaque (`%is_unit) (is_unit #a);
+  reveal_opaque (`%is_transitive) (is_transitive #(units_of m.op m.eq)); 
   respects_equivalence #(units_of m.op m.eq) m.inv m.eq) = ()
 
 type semigroup (#a:Type)             = g: magma #a{is_associative g.op g.eq /\ yields_inverses_for_units #a g.op g.eq g.inv}
@@ -676,6 +672,9 @@ let neutral_inverse_is_neutral (#a:Type) (g: group #a) : Lemma (g.neutral `g.eq`
   reveal_opaque (`%is_transitive) (is_transitive #a);
   // you should keep alive either the assertion, or the inverse_operation_lemma invocation.
   // disabling both will fail the lemma. Keeping both is redundant. SMTPat, I can't understand how you tick.
+  // 
+  // UPD 11.10.21: with FStar 2021.09.25 it only takes reveal_opaque. No assertion needed anymore.
+  //
   assert (is_neutral_of (g.op (g.inv g.neutral) g.neutral) g.op g.eq)
   //inverse_operation_lemma g.op g.eq g.inv g.neutral 
   //group_operation_lemma g.eq g.op g.inv (g.inv g.neutral) g.neutral g.neutral
@@ -684,7 +683,7 @@ let group_op_lemma (#a:Type) (g: group #a) (x y z:a)
   : Lemma (requires (x `g.op` z) `g.eq` (y `g.op` z) \/ (z `g.op` x) `g.eq` (z `g.op` y)) 
           (ensures (x `g.eq` y /\ y `g.eq` x)) 
   = () // group_operation_lemma g.eq g.op g.inv x y z 
-  //SMTPat eliminated the need to call the lemma explicitly.
+       // SMTPat eliminated the need to call the lemma explicitly.
 
  
 let group_element_equality_means_zero_difference (#a:Type) (g: group #a) (x y: a) 
@@ -712,7 +711,8 @@ let absorber_for_invertible_operation_is_nonsense (#a:Type) (op: binary_op a) (e
     //absorber_lemma op eq z z';
     inverse_operation_lemma op eq inv z;                  // zz' is the neutral element
     let yzz' = op y zz' in                                // I write "the absorber" here to underline its uniqueness
-    //absorber_lemma op eq z z';                        (** 1. By definition of absorber, zz' should be equal to z.      *)
+    //absorber_lemma op eq z z';                        
+                                                      (** 1. By definition of absorber, zz' should be equal to z.      *)
     //absorber_lemma op eq zz' y;
     absorber_equal_is_absorber op eq z zz';           (** 2. Any element equal to an absorber is the absorber,         *)
                                                       (**    therefore, zz' is also the absorber, since zz' = z.       *)
@@ -725,8 +725,8 @@ let absorber_for_invertible_operation_is_nonsense (#a:Type) (op: binary_op a) (e
     nonabsorber_equal_is_nonabsorber op eq y yzz';    (**    So, we got the contradiction here!                        *) 
 //  assert (~(is_absorber_of yzz' op eq)); 
 //  assert (is_absorber_of yzz' op eq);               (**    Deleting the last two asserts gave* 10x proof slowdown!   *)
-// * The slowdowns were noticed BEFORE the introduction of opaques. 
-//   With opaques, most stuff here passes the verification with 0/0/1 resource settings
+//  * The slowdowns were noticed BEFORE the introduction of opaques. 
+//  With opaques, most stuff here passes the verification with 0/0/1 resource settings
     ()    
 
 let group_has_no_absorbers (#a:Type) (g: group #a) (z:a) (y:non_absorber_of g.op g.eq) 

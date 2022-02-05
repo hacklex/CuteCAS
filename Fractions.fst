@@ -71,7 +71,6 @@ private let left_distributivity_nocalc (#p: Type) (#dom: integral_domain #p) (x 
 
 private let left_distributivity (#p: Type) (#dom: integral_domain #p) (x y z: fraction dom) 
   : Lemma (fraction_eq (fraction_mul x (fraction_add y z)) (fraction_add (fraction_mul x y) (fraction_mul x z))) =
-    reveal_opaque (`%is_reflexive) (is_reflexive #p); 
     reveal_opaque (`%is_symmetric) (is_symmetric #p); 
     reveal_opaque (`%is_transitive) (is_transitive #p);    
     reveal_opaque (`%is_fully_distributive) (is_fully_distributive #p);
@@ -80,25 +79,27 @@ private let left_distributivity (#p: Type) (#dom: integral_domain #p) (x y z: fr
     let (+) = dom.addition.op in
     let mul = dom.multiplication.op in //because ( *) is both uglier than mul and slower to type
     let eq = dom.eq in   
+    let mul_assoc_4 = assoc_lemma4 eq mul in
+    let mul_assoc_3 = assoc_lemma3 eq mul in
+    let mul_congruence = equivalence_wrt_operation_lemma #p #mul eq in
+    let add_congruence = equivalence_wrt_operation_lemma #p #(+) eq in
     let (a,b,c,d,e,f) = (x.num,x.den,y.num,y.den,z.num,z.den) in  
     calc eq {
-      (fraction_add (fraction_mul x y) (fraction_mul x z)).num;
-      eq {}
-      ((a*c)*(b*f)) + ((b*d)*(a*e));
+      ((a*c)*(b*f)) + ((b*d)*(a*e)); //numerator of xy+xz
       eq { 
-         assoc_lemma4 eq mul a c b f;                                                         // (ac)(bf)   =>   a (cbf)
-         bring_any_operand_forth eq mul a c b f;                                              // a(cbf)     =>   b(acf)
-         equivalence_wrt_operation_lemma #p #(+) eq ((a*c)*(b*f)) (b*(a*(c*f))) ((b*d)*(a*e)) // acbf+bdae  =>   bacf+bdae
+         mul_assoc_4 a c b f;                                     // (ac)(bf)   =>   a (cbf)
+         bring_any_operand_forth eq mul a c b f;                  // a(cbf)     =>   b(acf)
+         add_congruence ((a*c)*(b*f)) (b*(a*(c*f))) ((b*d)*(a*e)) // acbf+bdae  =>   bacf+bdae
       }        
       (b*(a*(c*f))) + ((b*d)*(a*e));
       eq {
-         assoc_lemma4 eq mul b d a e;                                                         // (bd)(ae)   =>   b(d(ae))
-         assoc_lemma3 eq mul d a e;                                                           // d(ae)      =>   (da)e
-         comm_lemma eq mul d a;                                                               // da         =>   ad 
-         equivalence_wrt_operation_lemma #p #mul eq (d*a) (a*d) e;                            // (da)e      =>   (ad)e
-         assoc_lemma3 eq mul a d e;                                                           // (ad)e      =>   a(de)        
-         equivalence_wrt_operation_lemma #p #mul eq ((d*a)*e) (a*(d*e)) b;                    // b(d(ae))   =>   b(a(de))
-         equivalence_wrt_operation_lemma #p #(+) eq ((b*d)*(a*e)) (b*(a*(d*e))) (b*(a*(c*f))) // bacf+bdae  =>   b(acf)+b(ade)
+         mul_assoc_4 b d a e;                                     // (bd)(ae)   =>   b(d(ae))
+         mul_assoc_3 d a e;                                       // d(ae)      =>   (da)e
+         comm_lemma eq mul d a;                                   // da         =>   ad 
+         mul_congruence (d*a) (a*d) e;                            // (da)e      =>   (ad)e
+         assoc_lemma3 eq mul a d e;                               // (ad)e      =>   a(de)        
+         mul_congruence ((d*a)*e) (a*(d*e)) b;                    // b(d(ae))   =>   b(a(de))
+         add_congruence ((b*d)*(a*e)) (b*(a*(d*e))) (b*(a*(c*f))) // bacf+bdae  =>   b(acf)+b(ade)
       }
       (b*(a*(c*f))) + (b*(a*(d*e)));      
     };
@@ -121,20 +122,24 @@ let right_distributivity (#p: Type) (#dom: integral_domain #p) (x y z: fraction 
   reveal_opaque (`%is_reflexive) (is_reflexive #(fraction dom)); 
   reveal_opaque (`%is_symmetric) (is_symmetric #(fraction dom));  
   reveal_opaque (`%is_transitive) (is_transitive #(fraction dom));   
-  let eq_wrt_add = equivalence_wrt_operation_lemma #(fraction dom) #fraction_add fraction_eq in
-  comm_lemma fraction_eq fraction_mul z x; 
-  comm_lemma fraction_eq fraction_mul z y;  
-  assert (fraction_mul z x `fraction_eq` fraction_mul x z);
-  calc fraction_eq {
-    fraction_mul (fraction_add x y) z;
-    fraction_eq {comm_lemma fraction_eq fraction_mul (fraction_add x y) z}
-    fraction_mul z (fraction_add x y);  
-    fraction_eq {left_distributivity z x y}
-    fraction_add (fraction_mul z x) (fraction_mul z y);
-    fraction_eq {eq_wrt_add (fraction_mul z x) (fraction_mul x z) (fraction_mul z y)}
-    fraction_add (fraction_mul x z) (fraction_mul z y);
-    fraction_eq {eq_wrt_add (fraction_mul z y) (fraction_mul y z) (fraction_mul x z)}
-    fraction_add (fraction_mul x z) (fraction_mul y z);
+  let equivalence_wrt_add = equivalence_wrt_operation_lemma #(fraction dom) #fraction_add fraction_eq in
+  let (=) = fraction_eq #p #dom in
+  let (+) = fraction_add #p #dom in
+  let ( *) = fraction_mul #p #dom in
+  let commutativity = comm_lemma (=) ( *) in
+  commutativity z x; 
+  commutativity z y;  
+  assert (z*x = x*z);
+  calc (=) {
+    (x+y)*z;
+    = {commutativity (x + y) z}
+    z*(x + y);  
+    = {left_distributivity z x y}
+    z*x + z*y;
+    = {equivalence_wrt_add (z*x) (x*z) (z*y)}
+    x*z + z*y;
+    = {equivalence_wrt_add (z*y) (y*z) (x*z)}
+    x*z + y*z;
   } 
   
 private let fraction_distributivity_lemma (#p: Type) (#dom: integral_domain #p) 

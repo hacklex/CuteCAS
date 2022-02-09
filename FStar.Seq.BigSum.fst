@@ -219,7 +219,7 @@ let get_int_range (n: pos) : (f:seq (t:nat{t<n}){length f = n /\ (forall (k:nat{
                            in
     aux (n)
     
-let matrix_seq #c #eq (cm: comm_monoid c eq) (m n: pos) (generator: (under m) -> (under n) -> c)
+let matrix_seq #c (m n: pos) (generator: (under m) -> (under n) -> c)
   : Pure (z:seq c{length z = m `op_Multiply` n}) 
          (requires True)
          (ensures fun x -> ( (forall (i: under m) (j: under n). index x (get_ij m n i j) == generator i j) /\ 
@@ -243,39 +243,39 @@ let matrix_seq #c #eq (cm: comm_monoid c eq) (m n: pos) (generator: (under m) ->
   result
   
 let matrix_snoc #c #eq (cm: comm_monoid c eq) (m n: pos) (generator: (under m) -> (under n) -> c)
-  : Lemma (matrix_seq cm m n generator == append (slice (matrix_seq cm m n generator) 0 ((m-1)*n))
-                                                      (slice (matrix_seq cm m n generator) ((m-1)*n) (m*n))) 
-  = lemma_eq_elim (matrix_seq cm m n generator) 
-                  (append (slice (matrix_seq cm m n generator) 0 ((m-1)*n))
-                          (slice (matrix_seq cm m n generator) ((m-1)*n) (m*n)))
+  : Lemma (matrix_seq m n generator == append (slice (matrix_seq m n generator) 0 ((m-1)*n))
+                                                      (slice (matrix_seq m n generator) ((m-1)*n) (m*n))) 
+  = lemma_eq_elim (matrix_seq m n generator) 
+                  (append (slice (matrix_seq m n generator) 0 ((m-1)*n))
+                          (slice (matrix_seq m n generator) ((m-1)*n) (m*n)))
 
 #push-options "--ifuel 0 --fuel 0 --z3rlimit 4 --query_stats"
 let matrix_sum_snoc2 #c #eq (cm: comm_monoid c eq) (m: not_less_than 2) (n: pos) (generator: (under m) -> (under n) -> c)
-  : Lemma (foldm_snoc cm (matrix_seq cm m n generator) `eq.eq` 
-    cm.mult (foldm_snoc cm (matrix_seq cm (m-1) n generator))
-            (foldm_snoc cm (slice (matrix_seq cm m n generator) ((m-1)*n) (m*n))))
+  : Lemma (foldm_snoc cm (matrix_seq m n generator) `eq.eq` 
+    cm.mult (foldm_snoc cm (matrix_seq (m-1) n generator))
+            (foldm_snoc cm (slice (matrix_seq m n generator) ((m-1)*n) (m*n))))
   = 
-    lemma_eq_elim (matrix_seq cm m n generator) (append (matrix_seq cm (m-1) n generator)
-                                                        (slice (matrix_seq cm m n generator) ((m-1)*n) (m*n)));    
-    Seq.Permutation.foldm_snoc_append cm (matrix_seq cm (m-1) n generator)
-                                         (slice (matrix_seq cm m n generator) ((m-1)*n) (m*n)) 
+    lemma_eq_elim (matrix_seq m n generator) (append (matrix_seq (m-1) n generator)
+                                                        (slice (matrix_seq m n generator) ((m-1)*n) (m*n)));    
+    Seq.Permutation.foldm_snoc_append cm (matrix_seq (m-1) n generator)
+                                         (slice (matrix_seq m n generator) ((m-1)*n) (m*n)) 
 
 let matrix_sum_snoc #c #eq (cm: comm_monoid c eq) (m n: pos) (generator: (under m) -> (under n) -> c)
-  : Lemma (foldm_snoc cm (matrix_seq cm m n generator) `eq.eq` 
-    cm.mult (foldm_snoc cm (slice (matrix_seq cm m n generator) 0 ((m-1)*n)))
-            (foldm_snoc cm (slice (matrix_seq cm m n generator) ((m-1)*n) (m*n))))
-  = Seq.Permutation.foldm_snoc_append cm (slice (matrix_seq cm m n generator) 0 ((m-1)*n))
-                                         (slice (matrix_seq cm m n generator) ((m-1)*n) (m*n));
-    lemma_eq_elim (matrix_seq cm m n generator) (append (slice (matrix_seq cm m n generator) 0 ((m-1)*n))
-                                                        (slice (matrix_seq cm m n generator) ((m-1)*n) (m*n))) 
+  : Lemma (foldm_snoc cm (matrix_seq m n generator) `eq.eq` 
+    cm.mult (foldm_snoc cm (slice (matrix_seq m n generator) 0 ((m-1)*n)))
+            (foldm_snoc cm (slice (matrix_seq m n generator) ((m-1)*n) (m*n))))
+  = Seq.Permutation.foldm_snoc_append cm (slice (matrix_seq m n generator) 0 ((m-1)*n))
+                                         (slice (matrix_seq m n generator) ((m-1)*n) (m*n));
+    lemma_eq_elim (matrix_seq m n generator) (append (slice (matrix_seq m n generator) 0 ((m-1)*n))
+                                                        (slice (matrix_seq m n generator) ((m-1)*n) (m*n))) 
 #pop-options
 
 #push-options "--ifuel 0 --fuel 0 --z3rlimit 3 --query_stats"
 let matrix_last_line_equals_big_sum #c #eq (cm: comm_monoid c eq) (m n: pos) (generator: (under m) -> (under n) -> c) 
-  : Lemma (foldm_snoc cm (slice (matrix_seq cm m n generator) ((m-1)*n) (m*n)) `eq.eq` 
+  : Lemma (foldm_snoc cm (slice (matrix_seq m n generator) ((m-1)*n) (m*n)) `eq.eq` 
            big_sum cm 0 (n-1) (generator (m-1))) =  
 
-  assert (equal (slice (matrix_seq cm m n generator) ((m-1)*n) (m*n))
+  assert (equal (slice (matrix_seq m n generator) ((m-1)*n) (m*n))
                 (init n (generator (m-1))));
   Classical.forall_intro eq.reflexivity;
   Classical.forall_intro_2 (Classical.move_requires_2 cm.commutativity);
@@ -288,7 +288,7 @@ let matrix_last_line_equals_big_sum #c #eq (cm: comm_monoid c eq) (m n: pos) (ge
 let rec matrix_sum_equals_big_sum #c #eq (cm: comm_monoid c eq) (m n: pos) 
                                          (gen_m: not_less_than m) (gen_n: not_less_than n) 
                                          (generator: (under gen_m)->(under gen_n)->c)
-  : Lemma (ensures foldm_snoc cm (matrix_seq cm m n generator) `eq.eq` 
+  : Lemma (ensures foldm_snoc cm (matrix_seq m n generator) `eq.eq` 
            big_sum cm 0 (m-1) (fun (i: under m) -> big_sum cm 0 (n-1) (generator i)))
           (decreases m)
   = if m=1 then matrix_last_line_equals_big_sum cm m n generator
@@ -303,8 +303,8 @@ let rec matrix_sum_equals_big_sum #c #eq (cm: comm_monoid c eq) (m n: pos)
       big_sum_snoc cm 0 (m-1) outer_func;  
       matrix_sum_snoc2 cm m n generator;
       matrix_last_line_equals_big_sum cm m n generator;               
-      cm.congruence (foldm_snoc cm (matrix_seq cm (m-1) n generator))
-                    (foldm_snoc cm (slice (matrix_seq cm m n generator) ((m-1)*n) (m*n)))
+      cm.congruence (foldm_snoc cm (matrix_seq (m-1) n generator))
+                    (foldm_snoc cm (slice (matrix_seq m n generator) ((m-1)*n) (m*n)))
                     (big_sum cm 0 (m-2) outer_func)
                     (big_sum cm 0 (n-1) (generator (m-1)));
       ()
@@ -316,8 +316,8 @@ let inv_gen #c (#m:pos) (#n:pos) (generator: (under m)->(under n)->c)
   = fun j i -> generator i j
 
 let matrix_transposed_eq_lemma #c #eq (cm: comm_monoid c eq) (m n: pos) (generator: (under m)->(under n)->c) (ij: under (m*n)) 
-  : Lemma (eq.eq (index (matrix_seq cm m n generator) ij) 
-                 (index (matrix_seq cm n m (inv_gen generator)) (transpose_ji m n ij))) = Classical.forall_intro eq.reflexivity 
+  : Lemma (eq.eq (index (matrix_seq m n generator) ij) 
+                 (index (matrix_seq n m (inv_gen generator)) (transpose_ji m n ij))) = Classical.forall_intro eq.reflexivity 
 
 let transpose_inequality_lemma (m n: pos) (ij: under (m*n)) (kl: under (n*m)) 
   : Lemma (requires kl <> ij) (ensures transpose_ji m n ij <> transpose_ji m n kl) = 
@@ -325,12 +325,12 @@ let transpose_inequality_lemma (m n: pos) (ij: under (m*n)) (kl: under (n*m))
   dual_indices m n kl
   
 let matrix_permutation_lemma #c #eq (cm: comm_monoid c eq) (m n: pos) (generator: (under m)->(under n)->c)
-  : Lemma (is_permutation' eq (matrix_seq cm m n generator) (matrix_seq cm n m (inv_gen generator)) (transpose_ji m n)) 
+  : Lemma (is_permutation' eq (matrix_seq m n generator) (matrix_seq n m (inv_gen generator)) (transpose_ji m n)) 
   = 
   Classical.forall_intro (matrix_transposed_eq_lemma cm m n generator); 
   Classical.forall_intro_2 (Classical.move_requires_2 (transpose_inequality_lemma m n));
-  reveal_is_permutation' eq (matrix_seq cm m n generator)
-                            (matrix_seq cm n m (inv_gen generator))
+  reveal_is_permutation' eq (matrix_seq m n generator)
+                            (matrix_seq n m (inv_gen generator))
                             (transpose_ji m n) 
 
 let matrix_big_sum_transpose #c #eq (cm: comm_monoid c eq) (m n: pos) (generator: (under m) -> (under n) -> c)
@@ -338,11 +338,11 @@ let matrix_big_sum_transpose #c #eq (cm: comm_monoid c eq) (m n: pos) (generator
           `eq.eq` big_sum cm 0 (n-1) (fun (j: under n) -> big_sum cm 0 (m-1) (inv_gen generator j))) =  
   Classical.forall_intro_2 (Classical.move_requires_2 eq.symmetry);
   Classical.forall_intro_3 (Classical.move_requires_3 eq.transitivity); 
-  let matrix_mn = matrix_seq cm m n generator in
-  let matrix_nm = matrix_seq cm n m (fun j i -> generator i j) in
+  let matrix_mn = matrix_seq m n generator in
+  let matrix_nm = matrix_seq n m (fun j i -> generator i j) in
   matrix_permutation_lemma cm m n generator;
-  foldm_snoc_perm cm (matrix_seq cm m n generator)
-                     (matrix_seq cm n m (inv_gen generator))
+  foldm_snoc_perm cm (matrix_seq m n generator)
+                     (matrix_seq n m (inv_gen generator))
                      (transpose_ji m n);
   matrix_sum_equals_big_sum cm m n m n generator;
   matrix_sum_equals_big_sum cm n m n m (inv_gen generator);      

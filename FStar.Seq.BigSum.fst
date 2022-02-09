@@ -8,41 +8,64 @@ open FStar.Seq.Extras
 
 open MatrixIndexTransform
 
+
+/// This module introduces the notion of big_sum over arbitrary commutative monoid
+/// without involving sequences (seq), and proves several useful properties of such
+/// sums.
+///
+/// Also we establish the equality of folding over sequences to big_sums of the
+/// corresponding range.
+
+
 #push-options "--ifuel 0 --fuel 1 --z3rlimit 1 --query_stats"
 
 type comm_monoid c eq = Algebra.CommMonoid.Equiv.cm c eq 
 
 let ( *) = op_Multiply 
 
+/// These are way better readable than the inline formulas 
 unfold type not_less_than (x: int) = (t: int{t>=x})
 unfold type inbetween (x: int) (y: not_less_than x) = (t: int{t>=x && t<=y})
 unfold type counter_of_range (x: int) (y: not_less_than x) = (t: nat{t<(y+1-x)})
 unfold let range_count (x: int) (y: not_less_than x) : pos = (y+1)-x
 
-let bounds_lemma (n0:int) (nk: not_less_than n0) (i: counter_of_range n0 nk) 
+/// This lemma, especially when used with forall_intro, helps the prover verify
+/// the index ranges of sequences that correspond to arbitrary big_sums
+private let bounds_lemma (n0:int) (nk: not_less_than n0) (i: counter_of_range n0 nk) 
   : Lemma (n0+i >= n0 /\ n0+i <= nk) = ()
-  
+
+/// Big sum (sigma notation in mathematics) folding of an arbitrary function expr
+/// defined over a finite range of integers.
+///
+/// Notice how one should very strictly control the domains of lambdas,
+/// otherwise the proofs easily fail.
 let rec big_sum #c #eq (cm: Algebra.CommMonoid.Equiv.cm c eq) 
                  (n0: int) (nk: not_less_than n0) (expr: (inbetween n0 nk) -> c) 
-                 : Pure (c) 
-                 (requires True)  
-                 (ensures (fun (x:c) -> ((nk = n0) ==> (x == expr nk)))) 
-                 (decreases nk-n0) = 
+                 : Pure c 
+                   (requires True)  
+                   (ensures (fun (x:c) -> ((nk = n0) ==> (x == expr nk)))) 
+                   (decreases nk-n0) = 
   if nk = n0 then expr nk
   else (big_sum cm n0 (nk-1) expr) `cm.mult` expr nk
 
+/// This lemma establishes the definitional equality of the big_sum given said equality
+/// for all the arguments from the allowed range
 let rec big_sum_equality #c #eq (cm: Algebra.CommMonoid.Equiv.cm c eq) 
                          (n0: int) (nk: int{nk>=n0}) (expr1 expr2: (inbetween n0 nk)->c)
   : Lemma (requires (forall (i: inbetween n0 nk). expr1 i == expr2 i))
           (ensures big_sum cm n0 nk expr1 == big_sum cm n0 nk expr2)
           (decreases nk-n0) = 
   if nk>n0 then big_sum_equality cm n0 (nk-1) expr1 expr2 
- 
+
+/// This lemma decomposes the big_sum into the sum of the first (k-1) elements
+/// plus the remaining last one.
+/// Obviously requires the argument range that is at least 2 elements long.
 let big_sum_snoc #c #eq (cm: Algebra.CommMonoid.Equiv.cm c eq) 
                  (n0: int) (nk: int{nk > n0}) (expr: (inbetween n0 nk) -> c) 
                  : Lemma (big_sum cm n0 nk expr == big_sum cm n0 (nk-1) expr `cm.mult` (expr nk)) = ()
 
- 
+/// This lemma establishes the equality of big_sum to its foldm_snoc counterpart.
+/// The equality is considered with respect to the commutative monoid used for folding.
 #push-options "--ifuel 0 --fuel 1 --z3rlimit 2 --z3refresh --query_stats"
 let rec big_sum_equals_foldm #c #eq 
                              (cm: Algebra.CommMonoid.Equiv.cm c eq) 
@@ -86,8 +109,10 @@ let rec big_sum_equals_foldm #c #eq
     eq.transitivity lhs (subfold `op` last) rhs
   )
 #pop-options
- 
-let fold_decomposition_aux #c #eq (cm: Algebra.CommMonoid.Equiv.cm c eq)
+
+/// This is the auxiliary lemma for the fold_decomposition lemma below, handling the
+/// induction base case. It is extracted to a separate lemma to minimimze resource usage.
+private let fold_decomposition_aux #c #eq (cm: Algebra.CommMonoid.Equiv.cm c eq)
                            (n0: int) 
                            (nk: int{nk=n0}) 
                            (expr1 expr2: (inbetween n0 nk) -> c)
@@ -108,8 +133,11 @@ let fold_decomposition_aux #c #eq (cm: Algebra.CommMonoid.Equiv.cm c eq)
     Seq.Permutation.foldm_snoc_singleton cm (expr1 nk);  
     Seq.Permutation.foldm_snoc_singleton cm (expr2 nk); 
     cm.congruence (foldm_snoc cm ts1) (foldm_snoc cm ts2) (expr1 nk) (expr2 nk)
- 
-let fold_decomposition_aux_backup #c #eq (cm: Algebra.CommMonoid.Equiv.cm c eq)
+
+/// This is the initial version of the auxiliary lemma, with all assertions left intact.
+/// It is no longer needed, but in case one wants to understand why and how exactly does
+/// the final lemma version work, this version might provide some insight.
+private let fold_decomposition_aux_backup #c #eq (cm: Algebra.CommMonoid.Equiv.cm c eq)
                            (n0: int) 
                            (nk: int{nk=n0}) 
                            (expr1 expr2: (inbetween n0 nk) -> c)
@@ -141,8 +169,11 @@ let fold_decomposition_aux_backup #c #eq (cm: Algebra.CommMonoid.Equiv.cm c eq)
     assert (rhs `eq.eq` (cm.mult (expr1 nk) (expr2 nk)));
     eq.symmetry rhs (cm.mult (expr1 nk) (expr2 nk));
     eq.transitivity lhs (cm.mult (expr1 nk) (expr2 nk)) rhs 
-    
-let aux_shuffle_lemma #c #eq (cm: Algebra.CommMonoid.Equiv.cm c eq) (s1 s2 l1 l2: c)
+
+/// This is another auxiliary basic algebra manipulations lemma.
+/// I removed the assertions and comments since there is nothing really
+/// interesting going on.
+private let aux_shuffle_lemma #c #eq (cm: Algebra.CommMonoid.Equiv.cm c eq) (s1 s2 l1 l2: c)
   : Lemma (((s1 `cm.mult` s2) `cm.mult` (l1 `cm.mult` l2)) `eq.eq`  
            ((s1 `cm.mult` l1) `cm.mult` (s2 `cm.mult` l2))) =  
   Classical.forall_intro eq.reflexivity;
@@ -155,12 +186,22 @@ let aux_shuffle_lemma #c #eq (cm: Algebra.CommMonoid.Equiv.cm c eq) (s1 s2 l1 l2
   cm.congruence ((s2+s1)+l1) l2 (s2+(s1+l1)) l2;
   cm.congruence (s2+(s1+l1)) l2 ((s1+l1)+s2) l2 
 
+/// This constructs a sequence initialization function from an expression used with big_sum,
+/// i.e. offsets the argument by n0 and handles the function domain 
 unfold let init_func_from_expr #c (#n0: int) (#nk: not_less_than n0) (expr: (inbetween n0 nk) -> c) (a: inbetween n0 nk) (b: inbetween a nk) : ((counter_of_range a b) -> c)
   = fun (i: counter_of_range a b) -> expr (n0+i)
 
+/// This constructs a pointwise sum function from two functions sharing the same domain,
+/// with respect to given commutative monoid.
 unfold let func_sum #a #c #eq (cm: comm_monoid c eq) (f g: a->c) : (t:(a->c){ forall (x:a). t x == f x `cm.mult` g x}) 
   = fun (x:a) -> cm.mult (f x) (g x)
 
+/// This lemma proves the equality of big_sum of sums to sum of big_sums,
+/// i.e. big_sum [i] (f(i)+g(i)) `eq.eq` big_sum[i]f(i) + big_sum[i]g(i).
+///
+/// The proof gets very verbose, and it takes quite some control over function domains
+/// in order for prover to be happy about it. I'll be happy to replace this
+/// proof with a more efficient and/or shorter one :)
 #push-options "--ifuel 0 --fuel 1 --z3rlimit 10 --z3refresh --query_stats"
 let rec fold_decomposition #c #eq (cm: Algebra.CommMonoid.Equiv.cm c eq)
                            (n0: int) 
@@ -211,14 +252,12 @@ let rec fold_decomposition #c #eq (cm: Algebra.CommMonoid.Equiv.cm c eq)
 ) 
 #pop-options
 
-let get_int_range (n: pos) : (f:seq (t:nat{t<n}){length f = n /\ (forall (k:nat{k<n}). index f k = k) })
-  = let rec aux (k:inbetween 0 n) : Tot (z:seq (t:nat{t<n}){length z=k /\ (forall (id:nat{id<k}). index z id == id ) }) 
-                                 (decreases k) 
-                           = if k=0 then empty
-                             else Seq.Properties.snoc (aux (k-1)) (k-1)
-                           in
-    aux (n)
-    
+/// This function returns a range of integers from 0 to (n-1) with index value available to the prover.
+/// This can probably be simplified with just init n (fun x -> x)...
+private let get_int_range (n: pos) : (f:seq (t:nat{t<n}){length f = n /\ (forall (k:nat{k<n}). index f k = k) }) = init n (fun x -> x)
+
+/// This function constructs a flattened matrix (seq) given generator function
+/// Notice how the domains of both indices are strictly controlled.
 let matrix_seq #c (m n: pos) (generator: (under m) -> (under n) -> c)
   : Pure (z:seq c{length z = m `op_Multiply` n}) 
          (requires True)
@@ -241,7 +280,9 @@ let matrix_seq #c (m n: pos) (generator: (under m) -> (under n) -> c)
   Classical.forall_intro aux1;
   Classical.forall_intro_2 aux;
   result
-  
+
+/// This auxiliary lemma establishes the decomposition of the matrix into the concatenation
+/// of first (m-1) rows and the last row. 
 let matrix_snoc #c #eq (cm: comm_monoid c eq) (m n: pos) (generator: (under m) -> (under n) -> c)
   : Lemma (matrix_seq m n generator == append (slice (matrix_seq m n generator) 0 ((m-1)*n))
                                                       (slice (matrix_seq m n generator) ((m-1)*n) (m*n))) 
@@ -250,7 +291,10 @@ let matrix_snoc #c #eq (cm: comm_monoid c eq) (m n: pos) (generator: (under m) -
                           (slice (matrix_seq m n generator) ((m-1)*n) (m*n)))
 
 #push-options "--ifuel 0 --fuel 0 --z3rlimit 4 --query_stats"
-let matrix_sum_snoc2 #c #eq (cm: comm_monoid c eq) (m: not_less_than 2) (n: pos) (generator: (under m) -> (under n) -> c)
+
+/// This auxiliary lemma establishes the equality of the fold of the entire matrix
+/// to the sum of folds of (the submatrix of first (m-1) rows) and (the last row).
+private let matrix_sum_snoc #c #eq (cm: comm_monoid c eq) (m: not_less_than 2) (n: pos) (generator: (under m) -> (under n) -> c)
   : Lemma (foldm_snoc cm (matrix_seq m n generator) `eq.eq` 
     cm.mult (foldm_snoc cm (matrix_seq (m-1) n generator))
             (foldm_snoc cm (slice (matrix_seq m n generator) ((m-1)*n) (m*n))))
@@ -260,18 +304,9 @@ let matrix_sum_snoc2 #c #eq (cm: comm_monoid c eq) (m: not_less_than 2) (n: pos)
     Seq.Permutation.foldm_snoc_append cm (matrix_seq (m-1) n generator)
                                          (slice (matrix_seq m n generator) ((m-1)*n) (m*n)) 
 
-let matrix_sum_snoc #c #eq (cm: comm_monoid c eq) (m n: pos) (generator: (under m) -> (under n) -> c)
-  : Lemma (foldm_snoc cm (matrix_seq m n generator) `eq.eq` 
-    cm.mult (foldm_snoc cm (slice (matrix_seq m n generator) 0 ((m-1)*n)))
-            (foldm_snoc cm (slice (matrix_seq m n generator) ((m-1)*n) (m*n))))
-  = Seq.Permutation.foldm_snoc_append cm (slice (matrix_seq m n generator) 0 ((m-1)*n))
-                                         (slice (matrix_seq m n generator) ((m-1)*n) (m*n));
-    lemma_eq_elim (matrix_seq m n generator) (append (slice (matrix_seq m n generator) 0 ((m-1)*n))
-                                                        (slice (matrix_seq m n generator) ((m-1)*n) (m*n))) 
-#pop-options
-
-#push-options "--ifuel 0 --fuel 0 --z3rlimit 3 --query_stats"
-let matrix_last_line_equals_big_sum #c #eq (cm: comm_monoid c eq) (m n: pos) (generator: (under m) -> (under n) -> c) 
+/// This auxiliary lemma shows that the fold of the last line of a matrix
+/// is equal to the corresponding big_sum 
+private let matrix_last_line_equals_big_sum #c #eq (cm: comm_monoid c eq) (m n: pos) (generator: (under m) -> (under n) -> c) 
   : Lemma (foldm_snoc cm (slice (matrix_seq m n generator) ((m-1)*n) (m*n)) `eq.eq` 
            big_sum cm 0 (n-1) (generator (m-1))) =  
 
@@ -284,7 +319,9 @@ let matrix_last_line_equals_big_sum #c #eq (cm: comm_monoid c eq) (m n: pos) (ge
   let expr = generator (m-1) in
   big_sum_equals_foldm cm 0 (n-1) expr;
   lemma_eq_elim (init (range_count 0 (n-1)) (fun i -> expr (0+i))) (init n (generator (m-1)))
-           
+
+/// This lemma establishes that the fold of a matrix is equal to
+/// the double big_sum over the matrix generator
 let rec matrix_sum_equals_big_sum #c #eq (cm: comm_monoid c eq) (m n: pos) 
                                          (gen_m: not_less_than m) (gen_n: not_less_than n) 
                                          (generator: (under gen_m)->(under gen_n)->c)
@@ -301,7 +338,7 @@ let rec matrix_sum_equals_big_sum #c #eq (cm: comm_monoid c eq) (m n: pos)
       let outer_func : ((under m)->c) = fun (i:under m) -> big_sum cm 0 (n-1) (generator i) in
       big_sum_equality cm 0 (m-2) (fun (i: under (m-1)) -> big_sum cm 0 (n-1) (generator i)) outer_func;
       big_sum_snoc cm 0 (m-1) outer_func;  
-      matrix_sum_snoc2 cm m n generator;
+      matrix_sum_snoc cm m n generator;
       matrix_last_line_equals_big_sum cm m n generator;               
       cm.congruence (foldm_snoc cm (matrix_seq (m-1) n generator))
                     (foldm_snoc cm (slice (matrix_seq m n generator) ((m-1)*n) (m*n)))
@@ -311,19 +348,23 @@ let rec matrix_sum_equals_big_sum #c #eq (cm: comm_monoid c eq) (m n: pos)
     )
 #pop-options
 
+/// This function provides the transposed matrix generator, with indices swapped
+/// Notice how the forall property of the result function is happily proved automatically by z3 :)
 let inv_gen #c (#m:pos) (#n:pos) (generator: (under m)->(under n)->c) 
   : (f:((under n)->(under m)->c){ forall (j: under n)(i: under m). f j i == generator i j }) 
   = fun j i -> generator i j
 
-let matrix_transposed_eq_lemma #c #eq (cm: comm_monoid c eq) (m n: pos) (generator: (under m)->(under n)->c) (ij: under (m*n)) 
+/// Auxiliary lemmas needed for the double big_sum swapping equality proof
+private let matrix_transposed_eq_lemma #c #eq (cm: comm_monoid c eq) (m n: pos) (generator: (under m)->(under n)->c) (ij: under (m*n)) 
   : Lemma (eq.eq (index (matrix_seq m n generator) ij) 
                  (index (matrix_seq n m (inv_gen generator)) (transpose_ji m n ij))) = Classical.forall_intro eq.reflexivity 
 
-let transpose_inequality_lemma (m n: pos) (ij: under (m*n)) (kl: under (n*m)) 
+private let transpose_inequality_lemma (m n: pos) (ij: under (m*n)) (kl: under (n*m)) 
   : Lemma (requires kl <> ij) (ensures transpose_ji m n ij <> transpose_ji m n kl) = 
   dual_indices m n ij;
   dual_indices m n kl
-  
+
+/// This lemma shows that the transposed matrix is a permutation of the original one
 let matrix_permutation_lemma #c #eq (cm: comm_monoid c eq) (m n: pos) (generator: (under m)->(under n)->c)
   : Lemma (is_permutation' eq (matrix_seq m n generator) (matrix_seq n m (inv_gen generator)) (transpose_ji m n)) 
   = 
@@ -332,7 +373,8 @@ let matrix_permutation_lemma #c #eq (cm: comm_monoid c eq) (m n: pos) (generator
   reveal_is_permutation' eq (matrix_seq m n generator)
                             (matrix_seq n m (inv_gen generator))
                             (transpose_ji m n) 
-
+                            
+/// This lemma allows swapping the two big_sums applied to the same generator
 let matrix_big_sum_transpose #c #eq (cm: comm_monoid c eq) (m n: pos) (generator: (under m) -> (under n) -> c)
   : Lemma (big_sum cm 0 (m-1) (fun (i:under m) -> big_sum cm 0 (n-1) (generator i))
           `eq.eq` big_sum cm 0 (n-1) (fun (j: under n) -> big_sum cm 0 (m-1) (inv_gen generator j))) =  

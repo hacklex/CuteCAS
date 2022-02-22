@@ -1,5 +1,5 @@
 # CuteCAS
-Abstract Algebra for FStar
+Abstract Algebra for [FStar](https://www.fstar-lang.org/)
 
 # What's this?
 
@@ -39,3 +39,11 @@ stuff like proving certain properties of a field of fractions. That is because I
 framework, and the further I advance, the better my code becomes. 
 
 I'd love to get the feedback on the code quality. Don't hesitate, don't pull the punches. I only aim to get better with this language :)
+
+# How to do something
+
+```
+fstar --codegen FSharp IntRingExample.fst --odir fsharp
+```
+
+Play with sandbox

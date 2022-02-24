@@ -11,14 +11,34 @@ open Polynomials.Definition
 open Polynomials.Equivalence
 open Polynomials.Compact
 
+let max (x y: nat) : (t:nat{ t >= x /\ t >= y /\ (if x>y then t=x else t=y) }) = if x>y then x else y
+
+let nth_of_cons #c (#r: commutative_ring #c) (h: c) (t: noncompact_poly_over_ring r) : Lemma (forall (i: nat{i<length t}). nth t i == nth (h +$ t) (i+1)) = ()
+
 let rec noncompact_poly_add #c (#r: commutative_ring #c) (p q: noncompact_poly_over_ring r) 
   : Tot (z:noncompact_poly_over_ring r {
-           (length p=length q /\ length z=length p) ==> (forall (i:nat{i<length p}). index z i == r.addition.op (index p i) (index q i)) }) 
+           ((length p=length q /\ length z=length p) ==> (forall (i:nat{i<length p}). index z i == r.addition.op (index p i) (index q i))) 
+           /\  (forall (i: nat{i < max (length p) (length q) }). nth z i `r.eq` r.addition.op (nth p i) (nth q i))
+         }) 
         (decreases length p + length q) = 
+  reveal_opaque (`%is_reflexive) (is_reflexive #c); 
   if is_empty p && is_empty q then empty
   else if is_nonempty p && is_empty q then p
   else if is_empty p && is_nonempty q then q
-  else (r.addition.op (head p) (head q)) +$ (noncompact_poly_add (tail p) (tail q))
+  else (  
+    let tail_add = noncompact_poly_add (tail p) (tail q) in
+    let sum = (r.addition.op (head p) (head q)) +$ tail_add in
+    //assert (nth sum 0 `r.eq` r.addition.op (nth p 0) (nth q 0));    
+    //assert (forall (i: nat{i>0 && i<max (length p) (length q)}). nth sum i == nth tail_add (i-1));
+    assert (forall (i: nat{i>0 && i<max (length p) (length q)}). nth sum i `r.eq` r.addition.op (nth (tail p) (i-1)) (nth (tail q) (i-1)));
+    //assert (forall (i: nat{i>0 && i<max (length p) (length q)}). nth sum i `r.eq` r.addition.op (nth p i) (nth q i));
+    //assert (forall (i: nat{ i<max (length p) (length q)}). nth sum i `r.eq` r.addition.op (nth p i) (nth q i));
+    (r.addition.op (head p) (head q)) +$ (noncompact_poly_add (tail p) (tail q))
+  )
+
+let nth_of_sum #c (#r: commutative_ring #c) (p q: noncompact_poly_over_ring r) (n: nat{n<max (length p) (length q)}) : Lemma (nth (noncompact_poly_add p q) n `r.eq` r.addition.op (nth p n) (nth q n)) 
+  = ()
+  
 
 let rec noncompact_poly_add_is_commutative #c (#r: commutative_ring #c) (p q: noncompact_poly_over_ring r) 
   : Lemma (ensures (noncompact_poly_add p q) `noncompact_poly_eq` (noncompact_poly_add q p)) (decreases length p + length q) = 

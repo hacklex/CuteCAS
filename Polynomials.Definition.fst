@@ -64,3 +64,8 @@ let starts_with #c (#r: commutative_ring #c)
                 (poly: noncompact_poly_over_ring r) 
                 (subpoly: noncompact_poly_over_ring r{length subpoly<=length poly}) 
   = slice poly 0 (length subpoly) == subpoly
+
+let nth #c (#r: commutative_ring #c) (p: noncompact_poly_over_ring r) (n: nat) : c = 
+  if n >= length p then r.addition.neutral else index p n
+
+let max (x y: nat) : (t:nat{ t >= x /\ t >= y /\ (if x>y then t=x else t=y) }) = if x>y then x else y

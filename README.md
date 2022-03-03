@@ -39,3 +39,11 @@ stuff like proving certain properties of a field of fractions. That is because I
 framework, and the further I advance, the better my code becomes. 
 
 I'd love to get the feedback on the code quality. Don't hesitate, don't pull the punches. I only aim to get better with this language :)
+
+# Why isn't polynomials module completed?
+
+Because I'm currently don't yet know how to prove associativity and distributivity for poly multiplication in F*. I have 
+some ideas, but no concrete plan yet. If you have a good idea of how to pull this off -- feel free to contact me either
+in F* slack chat, or here via an issue.
+
+Of course, if you offer your own proof for that via a pull request, I'd be more than happy to add it to the library :)

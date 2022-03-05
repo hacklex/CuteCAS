@@ -17,8 +17,9 @@ let nth_of_cons #c (#r: commutative_ring #c) (h: c) (t: noncompact_poly_over_rin
 
 let rec noncompact_poly_add #c (#r: commutative_ring #c) (p q: noncompact_poly_over_ring r) 
   : Tot (z:noncompact_poly_over_ring r {
-           ((length p=length q /\ length z=length p) ==> (forall (i:nat{i<length p}). index z i == r.addition.op (index p i) (index q i))) 
-           /\  (forall (i: nat{i < max (length p) (length q) }). nth z i `r.eq` r.addition.op (nth p i) (nth q i))
+           ((length p=length q /\ length z=length p) ==> (forall (i:nat{i<length p}). index z i == r.addition.op (index p i) (index q i))) /\
+           (forall (i: nat{i < max (length p) (length q) }). nth z i `r.eq` r.addition.op (nth p i) (nth q i)) /\
+           length z = (max (length p) (length q))
          }) 
         (decreases length p + length q) = 
   reveal_opaque (`%is_reflexive) (is_reflexive #c); 
@@ -36,8 +37,12 @@ let rec noncompact_poly_add #c (#r: commutative_ring #c) (p q: noncompact_poly_o
     (r.addition.op (head p) (head q)) +$ (noncompact_poly_add (tail p) (tail q))
   )
 
-let nth_of_sum #c (#r: commutative_ring #c) (p q: noncompact_poly_over_ring r) (n: nat{n<max (length p) (length q)}) : Lemma (nth (noncompact_poly_add p q) n `r.eq` r.addition.op (nth p n) (nth q n)) 
-  = ()
+let nth_of_sum #c (#r: commutative_ring #c) (p q: noncompact_poly_over_ring r) (n: nat) : Lemma (nth (noncompact_poly_add p q) n `r.eq` r.addition.op (nth p n) (nth q n)) 
+  = 
+  if (n>=max (length p) (length q)) then (
+    assert (n >= length (noncompact_poly_add p q));
+    assert (nth (noncompact_poly_add p q) n == r.addition.neutral)
+  ) 
   
 
 let rec noncompact_poly_add_is_commutative #c (#r: commutative_ring #c) (p q: noncompact_poly_over_ring r) 

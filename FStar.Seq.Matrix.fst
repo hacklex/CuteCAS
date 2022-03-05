@@ -1,5 +1,5 @@
 (*
-   Copyright 2008-2018 Microsoft Research
+   Copyright 2008-2022 Microsoft Research
    
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -16,103 +16,232 @@
    Author: A. Rozanov
 *)
 
+(*
+   In this module we provide basic definitions to work with matrices via
+   seqs, and define transpose transform together with theorems that assert
+   matrix fold equality of original and transposed matrices.
+*)
+
+
 module FStar.Seq.Matrix
 
-open FStar.Algebra.CommMonoid.Equiv
+module CE = FStar.Algebra.CommMonoid.Equiv
+module CF = FStar.Algebra.CommMonoid.Fold
+
+open FStar.IntegerIntervals
 open FStar.Math.Lemmas
 open FStar.Seq.Properties
 open FStar.Seq.Permutation
 open FStar.Seq.Base
+open FStar.Mul
 
-(* Here we provide tools to treat a seq of length m*n as a 2D matrix
-   We also prove lemmas about folding such seqs, as well as lemmas
-   about treating such seqs as folds of functions over int ranges *)
- 
-(* We refine multiplication a bit to make proofs smoothier *)
-let ( *) (x y: int) : (t:int{(x>0 /\ y>0) ==> t>0}) = op_Multiply x y
-
-// A shortcut for bounded positive integers.
-type under (k: pos) = x:nat{x<k}
-type not_less_than (x: int) = (t: int{t>=x})
-type inbetween (x: int) (y: not_less_than x) = (t: int{t>=x && t<=y})
-type counter_of_range (x: int) (y: not_less_than x) = (t: nat{t<(y+1-x)})
-
-let range_count (x: int) (y: not_less_than x) : pos = (y+1)-x
-
-(* 
-   This lemma, especially when used with forall_intro, helps the prover verify
-   the index ranges of sequences that correspond to arbitrary big_sums
-*)
-let bounds_lemma (n0:int) (nk: not_less_than n0) (i: counter_of_range n0 nk) 
-  : Lemma (n0+i >= n0 /\ n0+i <= nk) = ()
-  
-(* 
-   This is a simple arithmetic fact, but the prover needs a slight
-   nudge in the right direction. By having it in a separate lemma, 
-   we stabilize the proofs of bigger lemmas using it.
-*)
 let flattened_index_is_under_flattened_size (m n: pos) (i: under m) (j: under n) 
   : Lemma ((((i*n)+j)) < m*n) = assert (i*n <= (m-1)*n)
   
-(* 
-   Returns the flattened index from 2D indices pair 
-   and the two array dimensions.
-*)
+(* Returns the flattened index from 2D indices pair 
+   and the two array dimensions. *) 
 let get_ij (m n: pos) (i:under m) (j: under n) : under (m*n) 
-  = flattened_index_is_under_flattened_size m n i j; i*n + j
-  
-(* 
-   The following two functions return the matrix indices from the 
-   flattened index and the two dimensions
-*)
+  = flattened_index_is_under_flattened_size m n i j; i*n + j 
+
+(* The following two functions return the matrix indices from the 
+   flattened index and the two dimensions *)
 let get_i (m n: pos) (ij: under (m*n)) : under m = ij / n
 let get_j (m n: pos) (ij: under (m*n)) : under n = ij % n
 
-
-// A proof that getting a 2D index back from the flattened index works correctly
+(* A proof that getting a 2D index back from the flattened 
+   index works correctly *)
 let consistency_of_i_j (m n: pos) (i: under m) (j: under n) 
   : Lemma (get_i m n (get_ij m n i j) = i /\ get_j m n (get_ij m n i j) = j) = 
-  flattened_index_is_under_flattened_size m n i j;
-  lemma_div_plus j i n;
-  lemma_mod_plus j i n
+  flattened_index_is_under_flattened_size m n i j; //speeds up the proof
+  lemma_mod_plus j i n;
+  lemma_div_plus j i n 
   
-// A proof that getting the flattened index from 2D indices works correctly
+(* A proof that getting the flattened index from 2D 
+   indices works correctly *)
 let consistency_of_ij (m n: pos) (ij: under (m*n)) 
   : Lemma (get_ij m n (get_i m n ij) (get_j m n ij) == ij) = ()
 
-// The transposition transform for the flattened index
+(* The transposition transform for the flattened index *)
 let transpose_ji (m n: pos) (ij: under (m*n)) : under (n*m) =  
   flattened_index_is_under_flattened_size n m (get_j m n ij) (get_i m n ij);
   (get_j m n ij)*m + (get_i m n ij)
 
-// Auxiliary arithmetic lemma
+(* Auxiliary arithmetic lemma *)
 let lemma_indices_transpose (m: pos) (i: under m) (j: nat) 
   : Lemma (((j*m+i)%m=i) && ((j*m+i)/m=j)) = lemma_mod_plus i j m
  
-// A proof of trasnspotition transform bijectivity
+(* A proof of trasnspotition transform bijectivity *)
 let ji_is_transpose_of_ij (m n: pos) (ij: under (m*n)) 
   : Lemma (transpose_ji n m (transpose_ji m n ij) = ij) = 
-  let i = get_i m n ij in
-  let j = get_j m n ij in
-  let ji = j*m + i in
-  flattened_index_is_under_flattened_size m n i j;
-  flattened_index_is_under_flattened_size n m j i;
-  flattened_index_is_under_flattened_size n m (get_j m n ij) (get_i m n ij);
-  let gji = transpose_ji n m ji in
-  calc (=) {
-    transpose_ji n m (transpose_ji m n ij); ={}
-    transpose_ji n m ji; ={}
-    (ji % m)*n + (ji / m); ={}
-    ((j*m + i) %m)*n + ((j*m + i)/m); ={ lemma_indices_transpose m i j }
-    i*n + j;
-  }
-
-// A proof that 2D indices are swapped with the transpotition transform  
+  lemma_indices_transpose m (get_i m n ij) (get_j m n ij)
+   
+(* A proof that 2D indices are swapped with the transpotition transform *)
 let dual_indices (m n: pos) (ij: under (m*n)) : Lemma (
      (get_j n m (transpose_ji m n ij) = get_i m n ij) /\
      (get_i n m (transpose_ji m n ij) = get_j m n ij)) 
   = consistency_of_ij m n ij;
     lemma_indices_transpose m (get_i m n ij) (get_j m n ij)  
 
-type comm_monoid c eq = Algebra.CommMonoid.Equiv.cm c eq 
+type matrix_generator c (m n: pos) = under m -> under n -> c
+ 
+type matrix c m n = z:seq c { length z = m*n }
 
+type matrix_of #c (#m #n: pos) (gen: matrix_generator c m n) = z:matrix c m n {
+  (forall (i: under m) (j: under n). index z (get_ij m n i j) == gen i j) /\ 
+  (forall (ij: under (m*n)). (index z ij) == (gen (get_i m n ij) (get_j m n ij)))  
+}
+
+(* A flattened matrix (seq) constructed from generator function
+   Notice how the domains of both indices are strictly controlled. *)
+let matrix_seq #c (#m #n: pos) (generator: matrix_generator c m n)
+  : matrix_of generator =  
+  let mn = m * n in
+  let generator_ij ij = generator (get_i m n ij) (get_j m n ij) in
+  let flat_indices = indices_seq mn in  
+  let result = map_seq generator_ij flat_indices in
+  map_seq_len generator_ij flat_indices;
+  assert (length result == length flat_indices);
+  let aux (i: under m) (j: under n) 
+    : Lemma (index (map_seq generator_ij flat_indices) (get_ij m n i j) == generator i j) 
+    = consistency_of_i_j m n i j;
+      consistency_of_ij m n (get_ij m n i j);
+      assert (generator_ij (get_ij m n i j) == generator i j);
+      map_seq_index generator_ij flat_indices (get_ij m n i j) in
+  let aux1 (ij: under mn) 
+    : Lemma (index (map_seq generator_ij flat_indices) ij == generator_ij ij) 
+    = map_seq_index generator_ij flat_indices ij in 
+  FStar.Classical.forall_intro aux1;
+  FStar.Classical.forall_intro_2 aux;
+  result
+  
+(* This auxiliary lemma establishes the decomposition of the seq-matrix 
+   into the concatenation of its first (m-1) rows and its last row (thus snoc)  *)
+let matrix_append_snoc_lemma #c #eq (#m #n: pos) (generator: matrix_generator c m n)
+  : Lemma (matrix_seq generator == (slice (matrix_seq generator) 0 ((m-1)*n))
+                                   `append`
+                                   (slice (matrix_seq generator) ((m-1)*n) (m*n))) 
+  = lemma_eq_elim (matrix_seq generator) 
+                  (append (slice (matrix_seq generator) 0 ((m-1)*n))
+                          (slice (matrix_seq generator) ((m-1)*n) (m*n)))
+
+(* This auxiliary lemma establishes the equality of the fold of the entire matrix
+   to the op of folds of (the submatrix of the first (m-1) rows) and (the last row). *) 
+#push-options "--ifuel 0 --fuel 0 --z3rlimit 5"
+let matrix_fold_snoc_lemma #c #eq 
+                           (#m: not_less_than 2) 
+                           (#n: pos) 
+                           (cm: CE.cm c eq) 
+                           (generator: matrix_generator c m n)
+  : Lemma (foldm_snoc cm (matrix_seq generator) `eq.eq` 
+    cm.mult (foldm_snoc cm (matrix_seq #c #(m-1) #n generator))
+            (foldm_snoc cm (slice (matrix_seq #c #m #n generator) ((m-1)*n) (m*n))))
+  = lemma_eq_elim (matrix_seq generator)
+                  ((matrix_seq #c #(m-1) #n generator) `append` 
+                  (slice (matrix_seq generator) ((m-1)*n) (m*n)));    
+    foldm_snoc_append cm (matrix_seq #c #(m-1) #n generator) 
+                         (slice (matrix_seq generator) ((m-1)*n) (m*n)) 
+
+(* This auxiliary lemma shows that the fold of the last line of a matrix
+   is equal to the corresponding fold of the generator function *)
+ 
+(* This lemma establishes that the fold of a matrix is equal to
+   nested Algebra.CommMonoid.Fold.fold over the matrix generator *)
+#push-options "--ifuel 0 --fuel 0 --z3refresh"
+let matrix_fold_equals_func_double_fold #c #eq 
+                                       (#m #n: pos)
+                                       (cm: CE.cm c eq)
+                                       (generator: matrix_generator c m n)
+  : Lemma (foldm_snoc cm (matrix_seq generator) `eq.eq` 
+           CF.fold cm 0 (m-1) (fun (i:under m) -> CF.fold cm 0 (n-1) (generator i)))
+  = let matrix_last_line_equals_gen_fold #c #eq 
+                                         (#m #n: pos)  
+                                         (cm: CE.cm c eq) 
+                                         (generator: matrix_generator c m n) 
+      : Lemma (foldm_snoc cm (slice (matrix_seq generator) ((m-1)*n) (m*n)) 
+              `eq.eq` CF.fold cm 0 (n-1) (generator (m-1)))
+      = lemma_eq_elim (slice (matrix_seq generator) ((m-1)*n) (m*n)) 
+                      (init n (generator (m-1))); 
+        let g : ifrom_ito 0 (n-1) -> c = generator (m-1) in 
+        CF.fold_equals_seq_foldm cm 0 (n-1) g;
+        let gen = CF.init_func_from_expr g 0 (n-1) in
+        eq.reflexivity (foldm_snoc cm (init (closed_interval_size 0 (n-1)) gen));  
+        lemma_eq_elim (slice (matrix_seq generator) ((m-1)*n) (m*n))    
+                      (init (closed_interval_size 0 (n-1)) gen); 
+        eq.symmetry (CF.fold cm 0 (n-1) (generator (m-1)))
+                    (foldm_snoc cm (init (closed_interval_size 0 (n-1)) gen)); 
+        eq.transitivity (foldm_snoc cm (slice (matrix_seq generator) ((m-1)*n) (m*n)))
+                        (foldm_snoc cm (init (closed_interval_size 0 (n-1)) gen))
+                        (CF.fold cm 0 (n-1) (generator (m-1))) in
+    let rec matrix_fold_aux #c #eq //inner lemma needed for precise generator domain control
+                               (#gen_m #gen_n: pos) //full generator domain
+                               (cm: CE.cm c eq) 
+                               (m: ifrom_ito 1 gen_m) (n: ifrom_ito 1 gen_n) //subdomain
+                               (generator: matrix_generator c gen_m gen_n)
+    : Lemma (ensures foldm_snoc cm (matrix_seq #c #m #n generator) `eq.eq` 
+                     CF.fold cm 0 (m-1) (fun (i: under m) -> CF.fold cm 0 (n-1) (generator i)))
+            (decreases m) = 
+      if m = 1 then begin
+        matrix_last_line_equals_gen_fold #c #eq #m #n cm generator; 
+        CF.fold_singleton_lemma cm 0 (fun (i:under m) -> CF.fold cm 0 (n-1) (generator i))
+      end else begin     
+        Classical.forall_intro_3 (Classical.move_requires_3 eq.transitivity);  
+        matrix_fold_aux cm (m-1) n generator;    
+        let outer_func (i: under m) = CF.fold cm 0 (n-1) (generator i) in
+        let outer_func_on_subdomain (i: under (m-1)) = CF.fold cm 0 (n-1) (generator i) in
+        CF.fold_equality cm 0 (m-2) outer_func_on_subdomain outer_func;
+        CF.fold_snoc_decomposition cm 0 (m-1) outer_func;  
+        matrix_fold_snoc_lemma #c #eq #m #n cm generator;
+        matrix_last_line_equals_gen_fold #c #eq #m #n cm generator;
+        cm.congruence (foldm_snoc cm (matrix_seq #c #(m-1) #n generator))
+                      (foldm_snoc cm (slice (matrix_seq #c #m #n generator) ((m-1)*n) (m*n)))
+                      (CF.fold cm 0 (m-2) outer_func)
+                      (CF.fold cm 0 (n-1) (generator (m-1))) 
+      end in matrix_fold_aux cm m n generator
+#pop-options 
+#pop-options 
+
+(* This function provides the transposed matrix generator, with indices swapped
+   Notice how the forall property of the result function is happily proved 
+   automatically by z3 :) *)
+let transposed_matrix_gen #c (#m:pos) (#n:pos) (generator: matrix_generator c m n) 
+  : (f: matrix_generator c n m { forall i j. f j i == generator i j }) 
+  = fun j i -> generator i j
+
+
+(* This lemma shows that the transposed matrix is 
+   a permutation of the original one *)
+let matrix_transpose_is_permutation #c (#m #n: pos) 
+                             (generator: matrix_generator c m n)
+  : Lemma (is_permutation (matrix_seq generator) 
+                          (matrix_seq (transposed_matrix_gen generator)) 
+                          (transpose_ji m n)) = 
+  let matrix_transposed_eq_lemma #c (#m #n: pos) 
+                                        (gen: matrix_generator c m n) 
+                                        (ij: under (m*n)) 
+    : Lemma (index (matrix_seq gen) ij ==
+             index (matrix_seq (transposed_matrix_gen gen)) (transpose_ji m n ij)) 
+    = () in 
+  let transpose_inequality_lemma (m n: pos) (ij: under (m*n)) (kl: under (n*m)) 
+    : Lemma (requires kl <> ij) (ensures transpose_ji m n ij <> transpose_ji m n kl) = 
+      dual_indices m n ij;
+      dual_indices m n kl in
+  Classical.forall_intro (matrix_transposed_eq_lemma generator); 
+  Classical.forall_intro_2 (Classical.move_requires_2 
+                           (transpose_inequality_lemma m n));
+  reveal_is_permutation (matrix_seq generator)
+                        (matrix_seq (transposed_matrix_gen generator))
+                        (transpose_ji m n) 
+
+(* Fold over matrix equals fold over transposed matrix *)
+let matrix_fold_equals_fold_of_transpose #c #eq 
+                                         (#m #n: pos) 
+                                         (cm: CE.cm c eq) 
+                                         (gen: matrix_generator c m n)
+  : Lemma (foldm_snoc cm (matrix_seq gen) `eq.eq`
+           foldm_snoc cm (matrix_seq (transposed_matrix_gen gen))) = 
+  let matrix_mn = matrix_seq gen in
+  let matrix_nm = matrix_seq (transposed_matrix_gen gen) in
+  matrix_transpose_is_permutation gen;
+  foldm_snoc_perm cm (matrix_seq gen)
+                     (matrix_seq (transposed_matrix_gen gen))
+                     (transpose_ji m n)

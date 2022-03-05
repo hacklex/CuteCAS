@@ -5,6 +5,7 @@ open FStar.Seq
 open FStar.Calc
 
 private module CE = FStar.Algebra.CommMonoid.Equiv
+ 
 
 [@@"opaque_to_smt"]
 let is_permutation' (#a:Type) (eq: FStar.Algebra.CommMonoid.Equiv.equiv a) (s0:seq a) (s1:seq a) (f:index_fun s0) =

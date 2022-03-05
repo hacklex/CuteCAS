@@ -168,8 +168,8 @@ let rec poly_eq_from_nth_eq #c (#r: commutative_ring #c) (p q: noncompact_poly_o
       eq_of_cons (head p) (head q) (tail p) (tail q);
       ()
     )
-
-let rec nth_eq_from_poly_eq #c (#r: commutative_ring #c) (p q: noncompact_poly_over_ring r)
+   
+let rec nth_eq_from_poly_eq_forall #c (#r: commutative_ring #c) (p q: noncompact_poly_over_ring r)
   : Lemma (requires noncompact_poly_eq p q) (ensures (forall (i: nat{i<max (length p) (length q)}). nth p i `r.eq` nth q i)) (decreases length p + length q) = 
   if length p = 0 then (
     lemma_eq_elim p empty;
@@ -182,10 +182,24 @@ let rec nth_eq_from_poly_eq #c (#r: commutative_ring #c) (p q: noncompact_poly_o
     reveal_opaque (`%is_symmetric) (is_symmetric #c);  
     ()
   ) else (  
-    nth_eq_from_poly_eq (tail p) (tail q);
+    nth_eq_from_poly_eq_forall (tail p) (tail q);
     //a little hint to the prover:
     assert (forall (i: nat{i>0 && i<max (length p) (length q)}). nth (tail p) (i-1) `r.eq` nth (tail q) (i-1))    
   )
+
+let nth_eq_from_poly_eq #c (#r: commutative_ring #c) (p q: noncompact_poly_over_ring r) (i:nat)
+  : Lemma (requires noncompact_poly_eq p q) (ensures nth p i `r.eq` nth q i) = 
+  reveal_opaque (`%is_reflexive) (is_reflexive #c);
+  nth_eq_from_poly_eq_forall p q 
+ 
+let poly_eq_trim_lemma #c (#r: commutative_ring #c) (p q: noncompact_poly_over_ring r)
+  : Lemma (requires ncpoly_eq p q /\
+                    length p > length q)
+          (ensures ncpoly_eq (slice p 0 (length q)) q) = 
+  reveal_opaque (`%is_reflexive) (is_reflexive #c);
+  nth_eq_from_poly_eq_forall p q;
+  poly_eq_from_nth_eq p (slice p 0 (length q));        
+  trans_lemma ncpoly_eq (slice p 0 (length q)) p q
 
 /// This allows to omit parentheses in (x +$ y $+ z) 
 let cat_assoc_lemma #c (#r: commutative_ring #c) (x:c) (y: noncompact_poly_over_ring r) (z: c)

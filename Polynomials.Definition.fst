@@ -2,14 +2,13 @@ module Polynomials.Definition
  
 open AlgebraTypes
   
-open FStar.Seq.Extras
 open FStar.Seq
 open FStar.Seq.Base
 open FStar.Seq.Properties
 
 /// This module contains the basic definitions for polynomials over general commutative rings
 
-#push-options "--ifuel 0 --fuel 0 --z3rlimit 1 --query_stats"
+#push-options "--ifuel 0 --fuel 0 --z3rlimit 1"
 
 /// Boolean checks whether a seq is empty (we base polynomials on seqs)
 let is_empty #c (l: seq c) : bool = length l = 0
@@ -45,7 +44,7 @@ let tail #c (#r: commutative_ring #c) (p: noncompact_poly_over_ring r)
 
 /// (liat x) is exactly (reverse (tail (reverse x))).
 /// You'll be surprised with how fast you grow addicted to the name.
-#push-options "--ifuel 0 --fuel 2 --z3rlimit 10 --query_stats"
+#push-options "--ifuel 0 --fuel 2 --z3rlimit 10"
 let liat #c (#r: commutative_ring #c) (p: noncompact_poly_over_ring r) 
   : (z:noncompact_poly_over_ring r{
       ((is_empty p) <==> (p == z)) /\ 

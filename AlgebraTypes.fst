@@ -1,6 +1,6 @@
 module AlgebraTypes
  
-#push-options "--ifuel 0 --fuel 0 --z3rlimit 1 --query_stats"
+#push-options "--ifuel 0 --fuel 0 --z3rlimit 1"
 
 type binary_op (a:Type) = a -> a -> a
 type unary_op (a:Type) = a -> a

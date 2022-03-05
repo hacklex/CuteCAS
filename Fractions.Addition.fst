@@ -4,7 +4,7 @@ open AlgebraTypes
 open Fractions.Definition
 open Fractions.Equivalence
 
-#push-options "--ifuel 0 --fuel 0 --z3rlimit 1 --query_stats"
+#push-options "--ifuel 0 --fuel 0 --z3rlimit 1"
 
 /// We declare the type of fractions_add heavily refined so that our
 /// future lemmas will not have it too rough proving stuff

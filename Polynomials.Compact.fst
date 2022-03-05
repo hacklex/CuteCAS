@@ -2,7 +2,6 @@ module Polynomials.Compact
  
 open AlgebraTypes
   
-open FStar.Seq.Extras
 open FStar.Seq
 open FStar.Seq.Base
 open FStar.Seq.Properties
@@ -11,14 +10,14 @@ open Polynomials.Definition
 open Polynomials.Equivalence
 
 
-#push-options "--ifuel 0 --fuel 2 --z3rlimit 10 --query_stats"
+#push-options "--ifuel 0 --fuel 2 --z3rlimit 10"
  
 let is_compact_poly #c (#r: commutative_ring #c) (p: noncompact_poly_over_ring r) : bool = length p=0 || not(is_zero r (last p))
 
 type poly_over_ring #coefficient_type (coefficient_ring: commutative_ring #coefficient_type) = 
   p: noncompact_poly_over_ring coefficient_ring { is_compact_poly p }
   
-#push-options "--ifuel 0 --fuel 2 --z3rlimit 10 --query_stats"
+#push-options "--ifuel 0 --fuel 2 --z3rlimit 10"
 let rec poly_compact #c (#r: commutative_ring #c) (p: noncompact_poly_over_ring r) : Tot(z:poly_over_ring r{
     noncompact_poly_eq p z /\ // is logically equal to the input
     length z <= length p /\ // can't be longer than the input
@@ -94,7 +93,7 @@ let poly_eq_its_compact #c (#r: commutative_ring #c) (p: noncompact_poly_over_ri
 let transitivity x y z : Lemma (requires x==y /\ y==z) (ensures x==z) = ()
 let transitivity_4 x y z w : Lemma (requires x==y /\ y==z /\ z==w) (ensures x==w) = ()
 
-#push-options "--ifuel 0 --fuel 1 --z3rlimit 10 --query_stats"
+#push-options "--ifuel 0 --fuel 1 --z3rlimit 10"
 let rec poly_compact_of_nonzero_cons_lemma #c (#r: commutative_ring #c) (h: c{not(is_zero r h)}) (t: noncompact_poly_over_ring r)
   : Lemma (ensures poly_compact (h +$ t) == h +$ poly_compact t) (decreases length t) =
     let pc = poly_compact #c #r in  

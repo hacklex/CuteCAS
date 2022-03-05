@@ -5,7 +5,7 @@ open FStar.Seq.Base
 open FStar.Seq.Properties
 open Polynomials.Definition
 
-#push-options "--ifuel 0 --fuel 2 --z3rlimit 10 --query_stats"
+#push-options "--ifuel 0 --fuel 2 --z3rlimit 10"
 
 /// This looks less ugly than reveal_opaque.
 /// Also, this adds just one fact, thus reducing resource usage.

@@ -1,6 +1,5 @@
 module Polynomials.Addition
-  
-open FStar.Seq.Extras
+
 open FStar.Seq
 open FStar.Seq.Base
 open FStar.Seq.Properties
@@ -51,7 +50,7 @@ let rec noncompact_poly_add_is_commutative #c (#r: commutative_ring #c) (p q: no
   if is_nonempty p && is_nonempty q then comm_lemma r.eq r.addition.op (head p) (head q);
   if is_empty p && is_empty q then () else noncompact_poly_add_is_commutative (tail p) (tail q) 
  
-#push-options "--ifuel 0 --fuel 1 --z3rlimit 5 --query_stats"
+#push-options "--ifuel 0 --fuel 1 --z3rlimit 5"
 let rec noncompact_poly_add_is_associative #c (#r: commutative_ring #c) (p q w: noncompact_poly_over_ring r) 
   : Lemma (ensures (noncompact_poly_add p (noncompact_poly_add q w)) `ncpoly_eq` (noncompact_poly_add (noncompact_poly_add p q) w))
           (decreases %[length p;length q;length w]) =  
@@ -85,7 +84,7 @@ let rec poly_nil_is_zero #c (#r: commutative_ring #c) (p: noncompact_poly_over_r
   Classical.forall_intro_3 (ncpoly_eq_is_transitive_lemma #c #r);
   if is_nonempty p then poly_nil_is_zero #c #r (tail p)
  
-#push-options "--ifuel 0 --fuel 1 --z3rlimit 10 --query_stats"
+#push-options "--ifuel 0 --fuel 1 --z3rlimit 10"
 let rec poly_add_respects_poly_eq #c (#r: commutative_ring #c) 
                                      (x y: noncompact_poly_over_ring r) 
                                      (z: noncompact_poly_over_ring r{noncompact_poly_eq y z})

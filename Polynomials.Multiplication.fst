@@ -90,7 +90,8 @@ let poly_mul_monomial_matrix_gen #c (#r: commutative_ring #c)
                                  (i: under (length x)) (j: under (length y))  
   = monomial r ((index x i) `r.multiplication.op` (index y j)) (i+j)
 
-let poly_mul_mgen #c (#r: commutative_ring #c) (x y: (t:noncompact_poly_over_ring r{length t > 0}))
+let poly_mul_mgen #c (#r: commutative_ring #c) (x: noncompact_poly_over_ring r{length x > 0})
+                                               (y: noncompact_poly_over_ring r{length y > 0})
   : matrix_generator (noncompact_poly_over_ring r) (length x) (length y) = 
   poly_mul_monomial_matrix_gen x y
 
@@ -194,6 +195,7 @@ let poly_mul_is_commutative #c (#r: commutative_ring #c)
                                    (foldm_snoc cm coef_yx)
   end
 
+#push-options "--z3rlimit 11 --fuel 0 --ifuel 0"
 let sum_of_monomials_of_same_degree_zeros_lemma #c (r: commutative_ring #c) (x y: c) (deg:nat)
   : Lemma (forall (i: nat{i<deg}). nth (noncompact_poly_add (monomial r x deg) (monomial r y deg)) i `r.eq` r.addition.neutral) = 
   let sum_monomial = monomial r (r.addition.op x y) deg in
@@ -205,9 +207,11 @@ let sum_of_monomials_of_same_degree_zeros_lemma #c (r: commutative_ring #c) (x y
       neutral_lemma r.addition.op r.eq r.addition.neutral r.addition.neutral
   in
   Classical.forall_intro zeros 
+#pop-options
 
 let weird_lemma (n: nat) (p: nat->prop) : Lemma (requires (forall (i:under n). p i) /\ (p n)) (ensures (forall (i: under (n+1)). p i)) = ()
 
+#push-options "--z3rlimit 2 --fuel 0 --ifuel 0"
 let sum_of_monomials_lc #c (r: commutative_ring #c)
                            (x y:c) (deg: nat)
   : Lemma (nth (noncompact_poly_add (monomial r x deg) (monomial r y deg)) deg `r.eq` 
@@ -216,8 +220,7 @@ let sum_of_monomials_lc #c (r: commutative_ring #c)
   let monomials_sum = (noncompact_poly_add (monomial r x deg) (monomial r y deg)) in 
   assert (nth sum_monomial deg == nth monomials_sum deg);   
   assert (nth monomials_sum deg `r.eq` nth sum_monomial deg)
-
-#push-options "--z3rlimit 2 --fuel 0 --ifuel 0"
+ 
 let sum_of_monomials_nth_lemma #c (#r: commutative_ring #c) (x y:c) (deg:nat) (i:nat{i<=deg}) 
   : Lemma (nth (noncompact_poly_add (monomial r x deg) (monomial r y deg)) i `r.eq`
            nth (monomial r (r.addition.op x y) deg) i) = 
@@ -412,7 +415,7 @@ let poly_mul_congruence_equilen_aux #c (#r: commutative_ring #c)
   Classical.forall_intro aux;
   foldm_snoc_equality cm m_xz m_yz 
 
-#push-options "--ifuel 1 --fuel 1 --z3rlimit 10" 
+#push-options "--ifuel 0 --fuel 1 --z3rlimit 10" 
 let poly_mul_congruence_main_aux #c (#r: commutative_ring #c) 
                                  (x y z: noncompact_poly_over_ring r)
   : Lemma (requires ncpoly_eq x y /\ length y > 0 /\ length x > length y /\ length z > 0) 
@@ -453,7 +456,7 @@ let poly_mul_congruence_main_aux #c (#r: commutative_ring #c)
   foldm_snoc_equality cm (slice m_xz 0 (m_sml*n)) m_yz;
   trans_lemma ncpoly_eq (poly_mul x z) (foldm_snoc cm (slice m_xz 0 (m_sml*n))) (poly_mul y z)
 
-let poly_mul_congruence_lemma #c (#r: commutative_ring #c) 
+let poly_mul_congruence_lemma_left #c (#r: commutative_ring #c) 
                               (x y z: noncompact_poly_over_ring r)
   : Lemma (requires noncompact_poly_eq x y)
           (ensures poly_mul x z `noncompact_poly_eq` poly_mul y z) = 
@@ -468,63 +471,351 @@ let poly_mul_congruence_lemma #c (#r: commutative_ring #c)
   else if length x > length y then poly_mul_congruence_main_aux x y z
   else if length x = length y then poly_mul_congruence_equilen_aux x y z
   else poly_mul_congruence_main_aux y x z 
-   
 
+let poly_mul_congruence_lemma #c (#r: commutative_ring #c) (x y z w: noncompact_poly_over_ring r)
+  : Lemma (requires ncpoly_eq x z /\ ncpoly_eq y w) (ensures ncpoly_eq (poly_mul x y) (poly_mul z w)) = 
+  poly_mul_congruence_lemma_left y w z;  
+  poly_mul_congruence_lemma_left x z y;
+  poly_mul_is_commutative z y;
+  poly_mul_is_commutative w z;
+  // all that's left is three transitivity steps.
+  // In fact, F* can prove the entire lemma automatically if we just 
+  // call forall_intros on the above two lemmas, but we keep the 
+  // essential part of the proof as explicit as possible.
+  Classical.forall_intro_3 (ncpoly_eq_is_transitive_lemma #c #r)
+
+let left_distributivity #c (r:commutative_ring #c) (x y z: c)
+  : Lemma (r.multiplication.op x (r.addition.op y z) `r.eq` r.addition.op (r.multiplication.op x y) (r.multiplication.op x z)) = 
+  reveal_opaque (`%is_fully_distributive) (is_fully_distributive #c);
+  reveal_opaque (`%is_left_distributive) (is_fully_distributive #c)
+
+#push-options "--ifuel 0 --fuel 0 --z3rlimit 5"
 let poly_mul_left_distributivity #c (#r: commutative_ring #c) (x y z: noncompact_poly_over_ring r) 
   : Lemma (poly_mul x (noncompact_poly_add y z) `noncompact_poly_eq` noncompact_poly_add (poly_mul x y) (poly_mul x z)) = 
   let lhs = poly_mul x (noncompact_poly_add y z) in
-  let rhs = (noncompact_poly_add (poly_mul x y) (poly_mul x z)) in
-  let cm = poly_add_commutative_monoid r in
-  if (length x = 0) then ( 
+  let rhs = (noncompact_poly_add (poly_mul x y) (poly_mul x z)) in 
+  let (mul, add) = r.multiplication.op, r.addition.op in
+  Classical.forall_intro (ncpoly_eq_is_reflexive_lemma #c #r);
+  Classical.forall_intro_2 (ncpoly_eq_is_symmetric_lemma #c #r);
+  Classical.forall_intro_3 (ncpoly_eq_is_transitive_lemma #c #r);
+  if (length x = 0) then begin 
     lemma_eq_elim x empty; 
     ncpoly_eq_is_reflexive_lemma x;
-    poly_add_identity x;     
-    trans_lemma ncpoly_eq lhs empty rhs
-  ) else if (length y=0 && length z=0) then ncpoly_eq_is_reflexive_lemma lhs else (
-    let m = length x in
-    let lhs_gen = poly_mul_monomial_matrix_gen x (noncompact_poly_add y z) in
-    let xy_gen = poly_mul_monomial_matrix_gen x y in
-    let xz_gen = poly_mul_monomial_matrix_gen x z in 
-    let len_sum = length (noncompact_poly_add y z) in
-    assert (lhs == foldm_snoc cm (matrix_seq lhs_gen));
+    poly_add_identity x
+  end 
+  else if (length y=0 && length z=0) then ncpoly_eq_is_reflexive_lemma lhs 
+  else begin
+    let (m, n) = (length x, max (length y) (length z)) in 
+    let (yb, zb) = level_polys y z in
+    poly_mul_congruence_lemma x y x yb;
+    poly_mul_congruence_lemma x z x zb;
+    poly_add_congruence_lemma (poly_mul x y) (poly_mul x z) (poly_mul x yb) (poly_mul x zb);
+    let xybm = matrix_seq (poly_mul_monomial_matrix_gen x yb) in
+    let xzbm = matrix_seq (poly_mul_monomial_matrix_gen x zb) in
+    let lhsm = matrix_seq (poly_mul_monomial_matrix_gen x (noncompact_poly_add y z)) in
+    let aux (ij: under (m*n)) : Lemma (index lhsm ij `ncpoly_eq` noncompact_poly_add (index xybm ij) (index xzbm ij)) = 
+      let (i,j) = (get_i m n ij, get_j m n ij) in
+      let (xi, yj, zj, sumj) = (nth x i, nth yb j, nth zb j, nth (noncompact_poly_add yb zb) j) in
+      poly_add_congruence_lemma y z yb zb;
+      nth_eq_from_poly_eq (noncompact_poly_add y z) (noncompact_poly_add yb zb) j;
+      left_distributivity r xi yj zj;
+      monomials_equality_lemma r (xi `mul` (nth (noncompact_poly_add y z) j)) (xi `mul` sumj) (i+j);
+      monomials_equality_lemma r (xi `mul` sumj) ((xi `mul` yj) `add` (xi `mul` zj)) (i+j);
+      sum_of_monomials_is_monomial_of_sum #c #r (xi `mul` yj) (xi `mul` zj) (i+j);
+    () in Classical.forall_intro aux;
+    let sum_m = init (m*n) (fun (ij:under (m*n)) -> noncompact_poly_add (index xybm ij) (index xzbm ij)) in   
+    foldm_snoc_equality (poly_add_commutative_monoid r) lhsm sum_m;
+    foldm_snoc_splitting_lemma (poly_add_commutative_monoid r) xybm xzbm sum_m    
+  end
+#pop-options
+
+let poly_mul_right_distributivity #c (#r: commutative_ring #c) (x y z: noncompact_poly_over_ring r)
+  : Lemma (poly_mul (noncompact_poly_add x y) z `noncompact_poly_eq` noncompact_poly_add (poly_mul x z) (poly_mul y z)) = 
+  Classical.forall_intro_3 (ncpoly_eq_is_transitive_lemma #c #r);
+  Classical.forall_intro_2 (poly_mul_is_commutative #c #r); 
+  poly_mul_left_distributivity z x y;
+  poly_add_congruence_lemma (poly_mul z x) (poly_mul z y) (poly_mul x z) (poly_mul y z)
+
+let seq_equality_from_members #c (s1 s2: seq c) : Lemma (requires length s1=length s2 /\ (forall (i: under (length s1)). index s1 i == index s2 i))
+                                                        (ensures s1 == s2) = lemma_eq_elim s1 s2
+ 
+#push-options "--ifuel 0 --fuel 1 --z3rlimit 15"
+let rec poly_mul_fold_of_polys_lemma #c (#r: commutative_ring #c) (p: noncompact_poly_over_ring r) (s: seq (noncompact_poly_over_ring r))
+  : Lemma (ensures ncpoly_eq (poly_mul p (foldm_snoc (poly_add_commutative_monoid r) s))
+                             (foldm_snoc (poly_add_commutative_monoid r) (init (length s) (fun i -> poly_mul p (index s i))))) 
+          (decreases length s) =
+  if length s = 0 then ()
+  else begin
+    lemma_eq_elim (init (length s) (fun (i: under (length s)) -> poly_mul p (index s i)))
+                  (init (length s) (fun i -> poly_mul p (index s i)));
+
+    let (liat, last) = un_snoc s in
+    let cm = poly_add_commutative_monoid r in
+    let lhs = poly_mul p (foldm_snoc cm s) in
+    let rhseq_fun (n:nat{n<=length s}) (i: under n) = poly_mul p (index s i) in  
+    let rhs = foldm_snoc cm (init (length s) (rhseq_fun (length s))) in
+    let rhseq = init (length s) (rhseq_fun (length s)) in
+    poly_mul_fold_of_polys_lemma p liat;
+    poly_mul_left_distributivity p last (foldm_snoc cm liat);    
+    assert (lhs `ncpoly_eq` ((poly_mul p last) `noncompact_poly_add`
+                            (poly_mul p (foldm_snoc cm liat))));
+    assert (forall (i: under (length liat)). index s i == index liat i);
+    lemma_eq_elim (init (length liat) (fun (i:under(length liat))-> poly_mul p (index liat i)))
+                  (init (length liat) (fun i-> poly_mul p (index s i)));
+    lemma_eq_elim (init (length liat) (rhseq_fun (length liat)))
+                  (init (length liat) (fun i-> poly_mul p (index liat i)));
+    assert (poly_mul p (foldm_snoc cm liat) `ncpoly_eq` foldm_snoc cm (init (length liat) (rhseq_fun (length liat)))); 
     
-   // assert (
-//    assert (CF.fold cm 0 (len_sum-1) (gen i)
-    admit();
+    assert (poly_mul p (foldm_snoc cm liat) `ncpoly_eq` foldm_snoc cm (init (length liat) (rhseq_fun (length liat)))); 
+    lemma_eq_elim (Seq.Properties.snoc (init (length liat) (rhseq_fun (length liat))) (poly_mul p last)) rhseq;
+    lemma_eq_elim (init (length liat) (rhseq_fun (length liat)))
+                  (init (length liat) (fun (i: under (length liat))-> poly_mul p (index liat i)));
+    let (rh_subseq, rh_last) = un_snoc rhseq in 
+    assert (poly_mul p (foldm_snoc cm liat) `ncpoly_eq` foldm_snoc cm (init (length liat) (rhseq_fun (length liat))));
+    lemma_eq_elim rh_subseq (init (length liat) (rhseq_fun (length liat)));
+    assert (poly_mul p (foldm_snoc cm liat) `ncpoly_eq` foldm_snoc cm rh_subseq);
+    assert (foldm_snoc cm rhseq == (poly_mul p last `noncompact_poly_add` (foldm_snoc cm rh_subseq)));
+    ncpoly_eq_is_reflexive_lemma (poly_mul p last);
+    poly_add_congruence_lemma (poly_mul p last) (poly_mul p (foldm_snoc cm liat)) (poly_mul p last) (foldm_snoc cm rh_subseq);
+    trans_lemma ncpoly_eq lhs
+                          ((poly_mul p last) `noncompact_poly_add` (poly_mul p (foldm_snoc cm liat)))
+                          ((poly_mul p last) `noncompact_poly_add` (foldm_snoc cm rh_subseq)); 
+    ()
+  end
 
-    //let aux_fold_decomposition (i: under (length x)) : Lemma (noncompact_poly_eq
-      
-  ()
+let poly_mul_fold_seq_lemma #c (#r: commutative_ring #c) (p: noncompact_poly_over_ring r) 
+                            (s: seq (noncompact_poly_over_ring r))
+                            (result: seq (noncompact_poly_over_ring r){length result=length s})
+  : Lemma (requires forall (i: under (length s)). index result i `ncpoly_eq` poly_mul p (index s i))
+          (ensures ncpoly_eq (poly_mul p (foldm_snoc (poly_add_commutative_monoid r) s))
+                             (foldm_snoc (poly_add_commutative_monoid r) result))  
+  = Classical.forall_intro (ncpoly_eq_is_reflexive_lemma #c #r);
+    Classical.forall_intro_2 (ncpoly_eq_is_symmetric_lemma #c #r);
+    Classical.forall_intro_3 (ncpoly_eq_is_transitive_lemma #c #r);
+    poly_mul_fold_of_polys_lemma p s;
+    let cm = poly_add_commutative_monoid r in
+    let func = fun i -> poly_mul p (index s i) in
+    assert (ncpoly_eq (poly_mul p (foldm_snoc cm s)) (foldm_snoc cm (init (length s) func)));  
+    foldm_snoc_equality cm (init (length s) func) result;
+    trans_lemma ncpoly_eq (poly_mul p (foldm_snoc cm s))
+                          (foldm_snoc cm (init (length s) func))
+                          (foldm_snoc cm result) 
+#pop-options
+
+let nth_as_monomial #c (#r: commutative_ring #c) (p: noncompact_poly_over_ring r) (n: nat{n<length p})
+  : t:noncompact_poly_over_ring r{t==monomial r (nth p n) n} = monomial r (nth p n) n
+
+let rec poly_equals_lc_monomial_plus_liat #c (#r: commutative_ring #c) (p: noncompact_poly_over_ring r{length p > 0})
+  : Lemma (ensures p `ncpoly_eq` ((liat p) `noncompact_poly_add` monomial r (last p) (length p-1))) (decreases length p) = 
+  if (length p = 1) then () else
+  (
+    reveal_opaque (`%is_reflexive) (is_reflexive #c);
+    reveal_opaque (`%is_symmetric) (is_symmetric #c);
+    reveal_opaque (`%is_transitive) (is_transitive #c);
+    poly_equals_lc_monomial_plus_liat (liat p);
+    nth_of_sum (liat p) (monomial r (last p) (length p - 1)) (length p - 1) ;
+    assert (nth (liat p) (length p - 1) == r.addition.neutral);
+    neutral_lemma r.addition.op r.eq r.addition.neutral (nth p (length p - 1));
+    assert (nth (noncompact_poly_add (liat p) (monomial r (last p) (length p - 1))) (length p - 1) `r.eq` nth p (length p - 1));
+    poly_eq_from_nth_eq p (liat p `noncompact_poly_add` monomial r (last p) (length p - 1));
+    ()
   )
-  
 
-let nth_of_poly_mul_monomial #c (#r: commutative_ring #c)
-                             (x: noncompact_poly_over_ring r)
-                             (a:c) (deg: nat)
-                             (n:nat)
-  : Lemma (((n<deg) ==> (nth (poly_mul x (monomial r a deg)) n `r.eq` r.addition.neutral)) /\
-           ((n>=deg) ==> (nth (poly_mul x (monomial r a deg)) n `r.eq` r.multiplication.op a (nth x (n-deg))))) 
-  = 
-  let y = monomial r a deg in
-  
-  
-  
-  
-  admit();
-  ()
+private let init_aux_lemma #c (#r:commutative_ring #c) (p: noncompact_poly_over_ring r{length p > 0})
+  : squash (init (length p-1) (nth_as_monomial p) == init (length (liat p)) (nth_as_monomial (liat p))) = 
+  lemma_eq_elim (init (length p-1) (nth_as_monomial p)) (init (length (liat p)) (nth_as_monomial (liat p)))
 
+#push-options "--ifuel 0 --fuel 1 --z3rlimit 25"
+let rec poly_equals_sum_of_monomials #c (#r: commutative_ring #c) (p: noncompact_poly_over_ring r)
+  : Lemma (ensures p `ncpoly_eq` foldm_snoc (poly_add_commutative_monoid r) (init (length p) (nth_as_monomial p)))
+          (decreases length p) = 
+  let cm = poly_add_commutative_monoid r in
+  let mono_gen = nth_as_monomial p in
+  let n = length p in
+  let mono_seq = init n mono_gen in  
+  if (length p=0) then () else ( 
+    poly_equals_lc_monomial_plus_liat p;
+    poly_equals_sum_of_monomials (liat p);
+    let recursive_known = (init (length (liat p)) (nth_as_monomial (liat p))) in
+    let subseq = (init (length p - 1) (nth_as_monomial p)) in
+    let last_mono = monomial r (last p) (length p - 1) in
+    let (subseq, last_mono) = un_snoc mono_seq in
+    lemma_eq_elim subseq recursive_known;
+    init_aux_lemma p; //yes, we double-prove it. Speeds up the verification dramatically.
+    assert (subseq == recursive_known);
+    assert (liat p `ncpoly_eq` foldm_snoc cm recursive_known);
+    assert (liat p `ncpoly_eq` (foldm_snoc cm subseq));
+    ncpoly_eq_is_reflexive_lemma last_mono;
+    poly_add_congruence_lemma (liat p) last_mono
+                              (foldm_snoc cm subseq) last_mono;                              
+    assert (foldm_snoc cm (init (length p) (nth_as_monomial p)) == last_mono `noncompact_poly_add` foldm_snoc cm subseq); 
+    trans_lemma ncpoly_eq p (liat p `noncompact_poly_add` last_mono)
+                           ((foldm_snoc cm subseq) `noncompact_poly_add` last_mono);
+    assert (p `ncpoly_eq` ((foldm_snoc cm subseq) `noncompact_poly_add` last_mono));
+    cm.commutativity (foldm_snoc cm subseq) last_mono;
+    assert (foldm_snoc cm mono_seq == last_mono `noncompact_poly_add` (foldm_snoc cm subseq));
+    trans_lemma ncpoly_eq p ((foldm_snoc cm subseq) `noncompact_poly_add` last_mono)
+                            (foldm_snoc cm mono_seq); 
+    ()
+  )
+#pop-options
 
+let last_ij_lemma (m n: pos) (ij: under (m*n)) 
+  : Lemma (requires get_i m n ij == (m-1) /\ get_j m n ij == (n-1)) 
+          (ensures ij = ((m*n)-1)) = () 
+          
+let ij_is_last_lemma (m n: pos) (ij: under (m*n)) 
+  : Lemma (requires ij = ((m*n)-1)) 
+          (ensures get_i m n ij = (m-1) /\ get_j m n ij = (n-1)) = () 
+          
+let aux_ij_index (m n: nat)  (ij: under ((m+1)*(n+1) - 1)) : Lemma (get_i (m+1) (n+1) ij < (m) \/ get_j (m+1) (n+1) ij < (n)) 
+  = Classical.move_requires (last_ij_lemma (m+1) (n+1)) ij
 
+let absorber_lemma_eq #a (op:binary_op a) (eq: equivalence_wrt op) (z: absorber_of op eq) (x:a)
+  : Lemma ((z `op` x) `eq` z /\ (x `op` z) `eq` z /\ z `eq` (z `op` x) /\ z `eq` (x `op` z)) = 
+  absorber_lemma op eq z x;
+  absorber_equal_is_absorber op eq z (z `op` x);
+  absorber_equal_is_absorber op eq z (x `op` z);
+  symm_lemma eq z (z `op` x);
+  symm_lemma eq z (x `op` z) 
 
-let poly_mul_monomial_distributivity #c (#r: commutative_ring #c) 
-                                     (x y: noncompact_poly_over_ring r)
-                                     (a:c) (deg: nat)
-  : Lemma (poly_mul (monomial r a deg) (noncompact_poly_add x y) `noncompact_poly_eq`
-           noncompact_poly_add (poly_mul (monomial r a deg) x) (poly_mul (monomial r a deg) y))
-  = admit()
+let length_of_un_snoc #a (s: seq a) : Lemma (requires length s > 0)
+  (ensures length (fst (un_snoc s)) == length s - 1) = ()
 
+#push-options "--ifuel 0 --fuel 1 --z3rlimit 30"
+let monomial_product_is_monomial #c (r: commutative_ring #c)
+                                (a: c) (m: nat) (b: c) (n: nat)
+  : Lemma (poly_mul (monomial r a m) (monomial r b n) `ncpoly_eq` monomial r (r.multiplication.op a b) (m+n)) = 
+  let cm = poly_add_commutative_monoid r in
+  let p = monomial r a m in
+  let q = monomial r b n in
+  let mxgen = poly_mul_mgen p q in
+  let mxseq = matrix_seq mxgen in
+  let zero = r.addition.neutral in
+  let mul = r.multiplication.op in
+  let i_of (ij: under ((m+1)*(n+1))) = get_i (m+1) (n+1) ij in
+  let j_of (ij: under ((m+1)*(n+1))) = get_j (m+1) (n+1) ij in
+  let zero_of_p (i: under m) : Lemma (index p i == r.addition.neutral) = () in
+  let zero_of_q (j: under n) : Lemma (index q j == r.addition.neutral) = () in
+  let zero_of_mx (ij: under ((m+1)*(n+1))) : Lemma (requires ij < ((m+1)*(n+1)-1)) (ensures index mxseq ij `ncpoly_eq` empty) = 
+    aux_ij_index m n ij;
+    let i = i_of ij in
+    let j = j_of ij in
+    if (i < m) then (zero_of_p i; absorber_lemma_eq mul r.eq (index p i) (index q j); monomial_zero_lemma r (mul (index p i) (index q j)) (i+j))
+    else (zero_of_q j; absorber_lemma_eq mul r.eq (index q j) (index p i); monomial_zero_lemma r (mul (index p i) (index q j)) (i+j)) in
+  let test_monomial = monomial r (mul a b) (m+n) in
+//  assert ((m+1)*(n+1)-1 < (m+1)*(n+1));
+//  assert ((m+1) >= 1);
+//  assert ((n+1) >= 1);
+  Math.Lemmas.multiplication_order_lemma (m+1) 1 (n+1);
+  assert ((m+1)*(n+1) >= 1);
+  assert ((m+1)*(n+1)-1 >= 0);
+  let last_id : under ((m+1)*(n+1)) = ((m+1)*(n+1) - 1) in
+  ij_is_last_lemma (m+1) (n+1) last_id;
+  assert (i_of last_id == m);
+  assert (index mxseq last_id == test_monomial);
+  assert (poly_mul p q == foldm_snoc cm mxseq);
+  let liat, last_mono = un_snoc mxseq in
+//  assert (last_mono == test_monomial);
+//  assert (foldm_snoc cm mxseq == noncompact_poly_add last_mono (foldm_snoc cm liat));
+//  assert (noncompact_poly_add last_mono (foldm_snoc cm liat) == noncompact_poly_add test_monomial (foldm_snoc cm liat));
+  lemma_eq_elim liat (slice mxseq 0 last_id);
+  length_of_un_snoc mxseq;
+  let wtf (ij: under (length liat)) : Lemma (index liat ij `ncpoly_eq` empty) = zero_of_mx ij in
+  Classical.forall_intro wtf;
+  Classical.forall_intro (ncpoly_eq_is_reflexive_lemma #c #r);
+  sum_of_zero_polys liat;
+  assert (poly_mul p q == noncompact_poly_add last_mono (foldm_snoc cm liat));
+  poly_add_zero_lemma last_mono (foldm_snoc cm liat);
+  trans_lemma ncpoly_eq (poly_mul p q)
+                        (noncompact_poly_add last_mono (foldm_snoc cm liat))
+                        last_mono;
+()
+#pop-options
 
+let monomial_mul_is_associative #c (#r: commutative_ring #c) (p: noncompact_poly_over_ring r)
+                                (a: c) (m: nat) (b: c) (n: nat) (d: c) (k: nat)
+  : Lemma (poly_mul (monomial r a m) (poly_mul (monomial r b n) (monomial r d k)) `ncpoly_eq`
+           poly_mul (poly_mul (monomial r a m) (monomial r b n)) (monomial r d k)) = 
+  let lhs = poly_mul (monomial r a m) (poly_mul (monomial r b n) (monomial r d k)) in
+  let rhs = poly_mul (poly_mul (monomial r a m) (monomial r b n)) (monomial r d k) in
+  let mul = r.multiplication.op in
+  monomial_product_is_monomial r b n d k;  
+  monomial_product_is_monomial r a m b n;   
+  monomial_product_is_monomial r (a `mul` b) (m+n) d k;
+  monomial_product_is_monomial r a m (b `mul` d) (n+k);  
+  ncpoly_eq_is_reflexive_lemma (monomial r a m);
+  ncpoly_eq_is_reflexive_lemma (monomial r d k);
+  poly_mul_congruence_lemma (poly_mul (monomial r a m) (monomial r b n)) (monomial r d k)
+                            (monomial r (a `mul` b) (m+n)) (monomial r d k);
+  poly_mul_congruence_lemma (monomial r a m) (poly_mul (monomial r b n) (monomial r d k))
+                            (monomial r a m) (monomial r (b `mul` d) (n+k));
+  FStar.Math.Lemmas.addition_is_associative m n k;
+  assoc_lemma3 r.eq mul a b d;
+  monomials_equality_lemma r (a `mul` (b `mul` d)) (a `mul` b `mul` d) (m+n+k);
+  trans_lemma ncpoly_eq rhs (poly_mul (monomial r (a `mul` b) (m+n)) (monomial r d k)) (monomial r ((a `mul` b) `mul` d) (m+n+k));
+  trans_lemma_5 ncpoly_eq lhs (poly_mul (monomial r a m) (monomial r (b `mul` d) (n+k))) 
+                              (monomial r (a `mul` (b `mul` d)) (m+n+k))
+                              (monomial r ((a `mul` b) `mul` d) (m+n+k)) rhs
 
+let mgen #c (#r: commutative_ring #c) (p: noncompact_poly_over_ring r{length p > 0})
+                                      (q: noncompact_poly_over_ring r{length q > 0})
+  : matrix_generator (noncompact_poly_over_ring r) (length p) (length q) = poly_mul_mgen p q
+
+#push-options "--ifuel 0 --fuel 0 --z3rlimit 20"
 let poly_mul_is_associative #c (#r: commutative_ring #c) (p q w: noncompact_poly_over_ring r)
-  : Lemma (ensures poly_mul p (poly_mul q w) `ncpoly_eq` poly_mul (poly_mul p q) w) = admit()
+  : Lemma (requires length p>0 /\ length q>0 /\ length w > 0)
+          (ensures poly_mul p (poly_mul q w) `ncpoly_eq` poly_mul (poly_mul p q) w) = 
+  Classical.forall_intro (ncpoly_eq_is_reflexive_lemma #c #r);
+  Classical.forall_intro_2 (ncpoly_eq_is_symmetric_lemma #c #r);
+  Classical.forall_intro_3 (ncpoly_eq_is_transitive_lemma #c #r);
+  let cm = poly_add_commutative_monoid r in
+  let gen_qw = poly_mul_mgen q w in
+  let mx_qw = matrix_seq gen_qw in  
+  let m = length p in 
+  let n = length q in
+  let k = length w in 
+  assert (poly_mul q w == foldm_snoc cm mx_qw);
+  poly_equals_sum_of_monomials p;
+  let p_monos = init m (nth_as_monomial p) in
+  let p_qw_seq = init m (fun i -> poly_mul (foldm_snoc cm mx_qw) (nth_as_monomial p i)) in
+  poly_mul_is_commutative (foldm_snoc cm p_monos) (foldm_snoc cm mx_qw);
+  poly_mul_fold_seq_lemma (foldm_snoc cm mx_qw) p_monos p_qw_seq;
+  poly_mul_is_commutative (foldm_snoc cm mx_qw) (foldm_snoc cm p_monos);
+  trans_lemma ncpoly_eq (poly_mul p (poly_mul q w))
+                        ((foldm_snoc cm mx_qw) `poly_mul` (foldm_snoc cm p_monos))
+                        ((foldm_snoc cm p_monos) `poly_mul` (foldm_snoc cm mx_qw));
+  let aux (i: under m) : Lemma (index p_qw_seq i `ncpoly_eq` 
+    foldm_snoc cm (init (length mx_qw) (fun jk -> poly_mul (nth_as_monomial p i) (index mx_qw jk)))) = 
+      //poly_mul_fold_seq_lemma (nth_as_monomial p i) 
+      assert (index p_qw_seq i == foldm_snoc cm mx_qw `poly_mul` nth_as_monomial p i);
+      let res = init (n*k) (fun jk -> poly_mul (nth_as_monomial p i) (index mx_qw jk)) in 
+      poly_mul_fold_seq_lemma (nth_as_monomial p i) mx_qw res;
+      admit();
+    () in
+  admit();
+(*  matrix_fold_equals_fold_of_seq_folds cm gen_qw;
+  let seq_qw = (init n (fun j -> foldm_snoc cm (init k (gen_qw j)))) in
+  assert (foldm_snoc cm mx_qw `ncpoly_eq` 
+          foldm_snoc cm seq_qw);
+  poly_mul_congruence_lemma p (poly_mul q w) p (foldm_snoc cm seq_qw); 
+  assert (poly_mul p (poly_mul q w) `ncpoly_eq` poly_mul p (foldm_snoc cm seq_qw));
+  let qw_fold : noncompact_poly_over_ring r = foldm_snoc cm seq_qw in
+  if(length qw_fold = 0) then admit() else 
+  begin
+    assert (length qw_fold > 0);
+    let p_qw_gen = mgen p qw_fold in
+    poly_mul_fold_of_polys_lemma p seq_qw;
+    assert (length seq_qw == n);
+    lemma_eq_elim (init (length seq_qw) (fun j -> poly_mul p (index seq_qw j)       ))
+                  (init (length seq_qw) (fun j -> poly_mul p (foldm_snoc cm (init k (gen_qw j)))       ));
+    
+    assert (ncpoly_eq (poly_mul p (foldm_snoc cm seq_qw))
+           (foldm_snoc cm (init (length seq_qw) (fun j -> poly_mul p (index seq_qw j)       ))));
+    admit();  
+    ()
+  end; *)
+  //assert (lhs `ncpoly_eq` rhs);
+()
+
  

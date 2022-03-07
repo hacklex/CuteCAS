@@ -178,3 +178,13 @@ let poly_add_congruence_lemma #c (#r: commutative_ring #c) (x y z w: noncompact_
   poly_add_respects_poly_eq x y w; 
   poly_add_respects_poly_eq w x z; 
   trans_lemma (=) (x+y) (x+w) (z+w)
+
+let poly_add_zero_lemma #c (#r: commutative_ring #c) (p: noncompact_poly_over_ring r) (z: noncompact_poly_over_ring r {ncpoly_eq z empty})
+  : Lemma ((ncpoly_eq p (noncompact_poly_add p z)) /\ (ncpoly_eq p (noncompact_poly_add z p))) =
+  Classical.forall_intro (ncpoly_eq_is_reflexive_lemma #c #r);
+  Classical.forall_intro_2 (ncpoly_eq_is_symmetric_lemma #c #r);
+  Classical.forall_intro_3 (ncpoly_eq_is_transitive_lemma #c #r);
+  poly_add_identity p;   
+  poly_add_congruence_lemma p empty p z;
+  poly_add_congruence_lemma empty p z p
+  

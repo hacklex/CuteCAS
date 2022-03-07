@@ -44,7 +44,7 @@ let tail #c (#r: commutative_ring #c) (p: noncompact_poly_over_ring r)
 
 /// (liat x) is exactly (reverse (tail (reverse x))).
 /// You'll be surprised with how fast you grow addicted to the name.
-#push-options "--ifuel 0 --fuel 2 --z3rlimit 10"
+#push-options "--ifuel 1 --fuel 1 --z3rlimit 10"
 let liat #c (#r: commutative_ring #c) (p: noncompact_poly_over_ring r) 
   : (z:noncompact_poly_over_ring r{
       ((is_empty p) <==> (p == z)) /\ 
@@ -64,7 +64,8 @@ let starts_with #c (#r: commutative_ring #c)
                 (subpoly: noncompact_poly_over_ring r{length subpoly<=length poly}) 
   = slice poly 0 (length subpoly) == subpoly
 
-let nth #c (#r: commutative_ring #c) (p: noncompact_poly_over_ring r) (n: nat) : c = 
+let nth #c (#r: commutative_ring #c) (p: noncompact_poly_over_ring r) (n: nat) 
+  : (t:c{((n>=length p) ==> (t==r.addition.neutral)) /\ ((n<length p) ==> (t==index p n))}) = 
   if n >= length p then r.addition.neutral else index p n
 
 let max (x y: nat) : (t:nat{ t >= x /\ t >= y /\ (if x>y then t=x else t=y) }) = if x>y then x else y

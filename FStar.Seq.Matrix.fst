@@ -141,6 +141,67 @@ let matrix_fold_snoc_lemma #c #eq
     foldm_snoc_append cm (matrix_seq #c #(m-1) #n generator) 
                          (slice (matrix_seq generator) ((m-1)*n) (m*n)) 
 
+#push-options "--ifuel 0 --fuel 1 --z3rlimit 1"
+let foldm_snoc_last #c #eq (cm: CE.cm c eq) (s: seq c{length s > 0})
+  : Lemma (foldm_snoc cm s == cm.mult (snd (un_snoc s)) (foldm_snoc cm (fst (un_snoc s)))) 
+  = ()
+#pop-options 
+
+let rec matrix_fold_equals_fold_of_seq_folds #c #eq 
+                                         (#m #n: pos)
+                                         (cm: CE.cm c eq)
+                                         (generator: matrix_generator c m n)
+  : Lemma (ensures foldm_snoc cm (matrix_seq generator) `eq.eq`
+                   foldm_snoc cm (init m (fun i -> foldm_snoc cm (init n (generator i))))) 
+          (decreases m) =
+  let lhs_seq = matrix_seq generator in
+  let rhs_seq = init m (fun i -> foldm_snoc cm (init n (generator i))) in
+  let lhs = foldm_snoc cm (matrix_seq generator) in
+  let rhs = foldm_snoc cm rhs_seq in
+  if m=1 then (
+    foldm_snoc_singleton cm (foldm_snoc cm (init n (generator 0)));
+    lemma_eq_elim (create 1 (foldm_snoc cm (init n (generator 0))))
+                  (init m (fun i -> foldm_snoc cm (init n (generator i))));
+    eq.reflexivity (foldm_snoc cm (create 1 (foldm_snoc cm (init n (generator 0)))));
+    lemma_eq_elim (matrix_seq generator) (init n (generator 0));
+    eq.symmetry rhs lhs
+  ) 
+  else (
+    Classical.forall_intro_2 (Classical.move_requires_2 eq.symmetry);
+    matrix_fold_snoc_lemma cm generator;
+    let matrix = matrix_seq generator in
+    let subgen = (fun (i:under (m-1)) (j:under n) -> generator i j) in 
+    let submatrix = slice (matrix_seq generator) 0 ((m-1)*n) in
+    let last_row = slice (matrix_seq #c #m #n generator) ((m-1)*n) (m*n) in
+    Math.Lemmas.multiplication_order_lemma (m) (m-1) n;
+    lemma_len_slice (matrix_seq generator) ((m-1)*n) (m*n); 
+    lemma_eq_elim (matrix_seq subgen) submatrix;
+    matrix_fold_equals_fold_of_seq_folds cm subgen;
+    lemma_eq_elim last_row (init n (generator (m-1))); 
+    lemma_eq_elim (matrix_seq generator) 
+                  ((matrix_seq subgen) `append` (init n (generator (m-1))));
+    let rec_seq = init (m-1) (fun i -> foldm_snoc cm (init n (subgen i))) in
+    let rec_subseq = init (m-1) (fun i -> foldm_snoc cm (init n (generator i))) in
+    let aux_eq (i: under (m-1)) : Lemma (index rec_seq i == index rec_subseq i) = 
+      lemma_eq_elim (init n (subgen i)) (init n (generator i));
+    () in 
+    Classical.forall_intro aux_eq;
+    foldm_snoc_append cm (matrix_seq subgen) last_row;
+    lemma_eq_elim rhs_seq (snoc rec_subseq (foldm_snoc cm (init n (generator (m-1)))));
+    let liat_rhs_seq, last_rhs_seq = un_snoc rhs_seq in
+    lemma_eq_elim liat_rhs_seq rec_seq;
+    foldm_snoc_last cm rhs_seq;
+    lemma_eq_elim rec_subseq liat_rhs_seq; 
+    eq.reflexivity (foldm_snoc cm last_row);
+    cm.congruence (foldm_snoc cm (matrix_seq subgen)) (foldm_snoc cm last_row)
+                  (foldm_snoc cm liat_rhs_seq) (last_rhs_seq);
+    eq.transitivity lhs 
+                    (foldm_snoc cm (matrix_seq subgen) `cm.mult` foldm_snoc cm last_row)
+                    (foldm_snoc cm liat_rhs_seq `cm.mult` last_rhs_seq); 
+    cm.commutativity (foldm_snoc cm liat_rhs_seq) last_rhs_seq;
+    eq.transitivity lhs (foldm_snoc cm liat_rhs_seq `cm.mult` last_rhs_seq) rhs 
+  )
+
 (* This auxiliary lemma shows that the fold of the last line of a matrix
    is equal to the corresponding fold of the generator function *)
  

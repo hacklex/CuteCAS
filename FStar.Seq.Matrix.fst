@@ -201,13 +201,14 @@ let rec matrix_fold_equals_fold_of_seq_folds #c #eq
     cm.commutativity (foldm_snoc cm liat_rhs_seq) last_rhs_seq;
     eq.transitivity lhs (foldm_snoc cm liat_rhs_seq `cm.mult` last_rhs_seq) rhs 
   )
+#pop-options 
 
 (* This auxiliary lemma shows that the fold of the last line of a matrix
    is equal to the corresponding fold of the generator function *)
  
 (* This lemma establishes that the fold of a matrix is equal to
    nested Algebra.CommMonoid.Fold.fold over the matrix generator *)
-#push-options "--ifuel 0 --fuel 0 --z3refresh"
+#push-options "--ifuel 0 --fuel 0 --z3rlimit 50 --z3refresh"
 let matrix_fold_equals_func_double_fold #c #eq 
                                        (#m #n: pos)
                                        (cm: CE.cm c eq)
@@ -258,7 +259,6 @@ let matrix_fold_equals_func_double_fold #c #eq
                       (CF.fold cm 0 (m-2) outer_func)
                       (CF.fold cm 0 (n-1) (generator (m-1))) 
       end in matrix_fold_aux cm m n generator
-#pop-options 
 #pop-options 
 
 (* This function provides the transposed matrix generator, with indices swapped

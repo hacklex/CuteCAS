@@ -1,5 +1,5 @@
-rm -f *.fst.checked
-OPTIONS="--cache_checked_modules --silent"
+rm -rf obj
+OPTIONS="--cache_checked_modules --silent --cache_dir obj"
 echo AlgebraTypes
 fstar.exe AlgebraTypes.fst ${OPTIONS}
 echo Fraction Definition

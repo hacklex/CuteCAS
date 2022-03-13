@@ -1,5 +1,5 @@
 # CuteCAS
-Abstract Algebra for FStar
+Abstract Algebra for [FStar](https://www.fstar-lang.org/)
 
 # What's this?
 

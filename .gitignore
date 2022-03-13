@@ -2,4 +2,5 @@
 *.fst~
 *.fsti~
 *.fst#
+fsharp/
 Sandbox.fst

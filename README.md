@@ -1,5 +1,5 @@
 # CuteCAS
-Abstract Algebra for FStar
+Abstract Algebra for [FStar](https://www.fstar-lang.org/)
 
 # What's this?
 
@@ -40,10 +40,14 @@ framework, and the further I advance, the better my code becomes.
 
 I'd love to get the feedback on the code quality. Don't hesitate, don't pull the punches. I only aim to get better with this language :)
 
-# Why isn't polynomials module completed?
+# UPD. March 2022: Polynomial ring is completed
 
-Because I'm currently don't yet know how to prove associativity and distributivity for poly multiplication in F*. I have 
-some ideas, but no concrete plan yet. If you have a good idea of how to pull this off -- feel free to contact me either
-in F* slack chat, or here via an issue.
+Alright, I've finally pulled it. The last boss that is polynomial multiplication associativity, has been finally conquered.
+Had to carefully construct a 3D matrix from the three polynomials, assert that its fold would equal the three polynomials product
+in both multiplication orders, and apply transitivity to assert that multiplication in both orders yields equivalent results.
 
-Of course, if you offer your own proof for that via a pull request, I'd be more than happy to add it to the library :)
+More than hundred lines of the main lemma. Another hundred buried in auxiliaries. That was the largest proof I've completed so far :)
+
+# Riding to F* core
+
+It seems like the guys from F* team liked my algebra types, so these types will eventually become part of F*'s standard library.

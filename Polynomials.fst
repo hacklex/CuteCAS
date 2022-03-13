@@ -4,8 +4,7 @@ module Polynomials
 /// For short, I call a polynomial a poly, plural polys.
  
 open AlgebraTypes
-  
-open FStar.Seq.Extras
+   
 open FStar.Seq
 open FStar.Seq.Base
 open FStar.Seq.Properties
@@ -23,6 +22,8 @@ open Polynomials.Equivalence
 open Polynomials.Compact
 /// Poly addition and negation.
 open Polynomials.Addition
+open Polynomials.Monomial
+open Polynomials.Multiplication
 
 /// Poly multiplication is not finished yet.
 /// Completed steps:
@@ -33,9 +34,7 @@ open Polynomials.Addition
 /// coefficient ring is commutative.
 ///
 /// To be done:
-/// * Associativity -- I'm still at loss as to how do I handle this one... :)
-/// * Distributivity --
-/// * Inverses -- 
+/// * Ring structure construction 
 /// 
 /// Note: multiplication inverses only exist for polys if the constant coefficient is invertible
 /// and all the other nonzero coefficients are nilpotent. It's a theorem in ring theory. 

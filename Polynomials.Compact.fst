@@ -12,13 +12,13 @@ open Polynomials.Equivalence
 
 #push-options "--ifuel 0 --fuel 2 --z3rlimit 10"
  
-let is_compact_poly #c (#r: commutative_ring #c) (p: noncompact_poly_over_ring r) : bool = length p=0 || not(is_zero r (last p))
+let is_compact_poly #c (#r: commutative_ring c) (p: noncompact_poly_over_ring r) : bool = length p=0 || not(is_zero r (last p))
 
-type poly_over_ring #coefficient_type (coefficient_ring: commutative_ring #coefficient_type) = 
+type poly_over_ring #coefficient_type (coefficient_ring: commutative_ring coefficient_type) = 
   p: noncompact_poly_over_ring coefficient_ring { is_compact_poly p }
   
 #push-options "--ifuel 0 --fuel 2 --z3rlimit 10"
-let rec poly_compact #c (#r: commutative_ring #c) (p: noncompact_poly_over_ring r) : Tot(z:poly_over_ring r{
+let rec poly_compact #c (#r: commutative_ring c) (p: noncompact_poly_over_ring r) : Tot(z:poly_over_ring r{
     noncompact_poly_eq p z /\ // is logically equal to the input
     length z <= length p /\ // can't be longer than the input
     (length p>0 && is_zero r (last p) ==> length z < length p) /\ // trailing zero will be cut
@@ -54,7 +54,7 @@ let rec poly_compact #c (#r: commutative_ring #c) (p: noncompact_poly_over_ring 
 #pop-options
 
 
-let poly_compact_eliminates_cat_zero #c (#r: commutative_ring #c) (p: noncompact_poly_over_ring r) (z: c{is_zero r z}) 
+let poly_compact_eliminates_cat_zero #c (#r: commutative_ring c) (p: noncompact_poly_over_ring r) (z: c{is_zero r z}) 
   : Lemma (ensures poly_compact p == poly_compact (p $+ z)) (decreases length p) = ()
   // This entire body is redundant since introducing result type refinement to poly_compact definition
   (*
@@ -70,31 +70,31 @@ let poly_compact_eliminates_cat_zero #c (#r: commutative_ring #c) (p: noncompact
     )
   ) *)
 
-type poly_over_field #c (f: field #c) = poly_over_ring f
+type poly_over_field #c (f: field c) = poly_over_ring f
 
-let poly_cons_is_again_poly #c (#r: commutative_ring #c) (h: c) (p: poly_over_ring r) 
+let poly_cons_is_again_poly #c (#r: commutative_ring c) (h: c) (p: poly_over_ring r) 
   : Lemma (requires length p > 0 \/ ~(r.eq h r.addition.neutral)) 
           (ensures is_compact_poly (cons h p)) = symm_lemma r.eq r.addition.neutral h
             
-let poly_compact_is_not_longer_than_input #c (#r: commutative_ring #c) (p: noncompact_poly_over_ring r) 
+let poly_compact_is_not_longer_than_input #c (#r: commutative_ring c) (p: noncompact_poly_over_ring r) 
   : Lemma (ensures length (poly_compact p) <= length p) 
           (decreases length p) = ()
 
-let poly_compact_does_nothing_on_poly #c (#r: commutative_ring #c) (p: poly_over_ring r) 
+let poly_compact_does_nothing_on_poly #c (#r: commutative_ring c) (p: poly_over_ring r) 
   : Lemma (ensures poly_compact p == p /\ equal (poly_compact p) p)
           (decreases length p) = ()
 
-let poly_compact_is_idempotent #c (#r: commutative_ring #c) (p: noncompact_poly_over_ring r) 
+let poly_compact_is_idempotent #c (#r: commutative_ring c) (p: noncompact_poly_over_ring r) 
   : Lemma ((poly_compact p) == (poly_compact (poly_compact p))) = ()
       
-let poly_eq_its_compact #c (#r: commutative_ring #c) (p: noncompact_poly_over_ring r) 
+let poly_eq_its_compact #c (#r: commutative_ring c) (p: noncompact_poly_over_ring r) 
   : Lemma (ensures noncompact_poly_eq p (poly_compact p)) = ()
    
 let transitivity x y z : Lemma (requires x==y /\ y==z) (ensures x==z) = ()
 let transitivity_4 x y z w : Lemma (requires x==y /\ y==z /\ z==w) (ensures x==w) = ()
 
 #push-options "--ifuel 0 --fuel 1 --z3rlimit 10"
-let rec poly_compact_of_nonzero_cons_lemma #c (#r: commutative_ring #c) (h: c{not(is_zero r h)}) (t: noncompact_poly_over_ring r)
+let rec poly_compact_of_nonzero_cons_lemma #c (#r: commutative_ring c) (h: c{not(is_zero r h)}) (t: noncompact_poly_over_ring r)
   : Lemma (ensures poly_compact (h +$ t) == h +$ poly_compact t) (decreases length t) =
     let pc = poly_compact #c #r in  
     if (length t=0) then () else (
@@ -127,7 +127,7 @@ let rec poly_compact_of_nonzero_cons_lemma #c (#r: commutative_ring #c) (h: c{no
     )
 
 let rec poly_compact_of_zero_cons_nonzero_lemma (#c)
-                                                (#r: commutative_ring #c) 
+                                                (#r: commutative_ring c) 
                                                 (h:c{is_zero r h}) 
                                                 (t: noncompact_poly_over_ring r{length (poly_compact t)>0})
   : Lemma (ensures poly_compact (h +$ t) == h +$ poly_compact t) (decreases length t) = 
@@ -145,29 +145,29 @@ let rec poly_compact_of_zero_cons_nonzero_lemma (#c)
     
 #pop-options 
 
-let poly_compact_of_nonzero_eq_head_cat_compact_of_tail #c (#r: commutative_ring #c) (p: noncompact_poly_over_ring r{length p>0 /\ ~(is_zero r (head p))})
+let poly_compact_of_nonzero_eq_head_cat_compact_of_tail #c (#r: commutative_ring c) (p: noncompact_poly_over_ring r{length p>0 /\ ~(is_zero r (head p))})
   : Lemma (ensures poly_compact p == head p +$ poly_compact (tail p)) = 
     poly_compact_of_nonzero_cons_lemma (head p) (tail p)
     
-let poly_compact_of_nonzero_cons_strict #c (#r: commutative_ring #c) (head: c{not(is_zero r head)}) (tail: noncompact_poly_over_ring r) 
+let poly_compact_of_nonzero_cons_strict #c (#r: commutative_ring c) (head: c{not(is_zero r head)}) (tail: noncompact_poly_over_ring r) 
   : Lemma (ensures (poly_compact (head +$ tail) == head +$ (poly_compact tail))) 
   = poly_compact_of_nonzero_cons_lemma head tail
     
-let poly_compact_of_equals_lemma #c (#r: commutative_ring #c) (p1 p2: noncompact_poly_over_ring r)
+let poly_compact_of_equals_lemma #c (#r: commutative_ring c) (p1 p2: noncompact_poly_over_ring r)
   : Lemma (requires p1 `ncpoly_eq` p2) (ensures poly_compact p1 `ncpoly_eq` poly_compact p2) 
   = trans_lemma_4 ncpoly_eq (poly_compact p1) p1 p2 (poly_compact p2)
 
-let poly_compact_of_nonzero_cons #c (#r: commutative_ring #c) (head: c{not(is_zero r head)}) (tail: noncompact_poly_over_ring r) 
+let poly_compact_of_nonzero_cons #c (#r: commutative_ring c) (head: c{not(is_zero r head)}) (tail: noncompact_poly_over_ring r) 
   : Lemma (ensures (poly_compact (head +$ tail) `ncpoly_eq` (head +$ poly_compact tail))) 
   = reveal_opaque (`%is_reflexive) (is_reflexive #c);
     assert (ncpoly_eq tail (poly_compact tail));
     eq_of_cons head head tail (poly_compact tail);
     trans_lemma ncpoly_eq (poly_compact (head +$ tail)) (head +$ tail) (head +$ poly_compact tail)
 
-//let poly_compact_of_zero_cat_poly #c (#r: commutative_ring #c) (h: c{is_zero r h}) (t: noncompact_poly_over_ring r)
+//let poly_compact_of_zero_cat_poly #c (#r: commutative_ring c) (h: c{is_zero r h}) (t: noncompact_poly_over_ring r)
 //  : Lemma (poly_compact #c #r (cons h t)
 
-let poly_compact_of_cat_lemma #c (#r: commutative_ring #c) (h: c) (t: noncompact_poly_over_ring r) 
+let poly_compact_of_cat_lemma #c (#r: commutative_ring c) (h: c) (t: noncompact_poly_over_ring r) 
   : Lemma (ensures poly_compact (cons h t) == poly_compact (cons h (poly_compact t))) 
           (decreases length t) = 
           if (is_zero r h) && length (poly_compact t) = 0 then (
@@ -178,18 +178,18 @@ let poly_compact_of_cat_lemma #c (#r: commutative_ring #c) (h: c) (t: noncompact
           else poly_compact_of_zero_cons_nonzero_lemma h t
    
  
-let eq_ignores_compact #c (#r: commutative_ring #c) (p q: noncompact_poly_over_ring r) 
+let eq_ignores_compact #c (#r: commutative_ring c) (p q: noncompact_poly_over_ring r) 
   : Lemma (requires noncompact_poly_eq p q) 
           (ensures noncompact_poly_eq (poly_compact p) q) = 
   Classical.forall_intro_2 (ncpoly_eq_is_symmetric_lemma #c #r);
   Classical.forall_intro_3 (ncpoly_eq_is_transitive_lemma #c #r) 
 
 
-let poly_tail_is_poly #c (#r: commutative_ring #c) (p: poly_over_ring r{length p > 0}) 
+let poly_tail_is_poly #c (#r: commutative_ring c) (p: poly_over_ring r{length p > 0}) 
   : Lemma (is_compact_poly (tail p) ) = ()
  
-let poly_compact_of_zeros_is_nil #c (#r: commutative_ring #c) (p:noncompact_poly_over_ring r{noncompact_poly_eq p empty})
+let poly_compact_of_zeros_is_nil #c (#r: commutative_ring c) (p:noncompact_poly_over_ring r{noncompact_poly_eq p empty})
   : Lemma (ensures poly_compact p == empty) = ()
 
-let poly_eq_nil_means_compact_is_nil #c (#r: commutative_ring #c) (p: noncompact_poly_over_ring r{noncompact_poly_eq p empty}) 
+let poly_eq_nil_means_compact_is_nil #c (#r: commutative_ring c) (p: noncompact_poly_over_ring r{noncompact_poly_eq p empty}) 
   : Lemma (poly_compact p == empty) = ()

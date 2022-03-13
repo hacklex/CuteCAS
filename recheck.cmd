@@ -28,3 +28,13 @@ echo Poly Compact
 fstar Polynomials.Compact.fst --cache_checked_modules --silent
 echo Poly Addition
 fstar Polynomials.Addition.fst --cache_checked_modules --silent
+echo Poly Monomials
+fstar Polynomials.Monomial.fst --cache_checked_modules --silent
+echo Poly Multiplication
+fstar Polynomials.Multiplication.fst --cache_checked_modules --silent
+echo Poly Ring
+fstar Polynomials.fst --cache_checked_modules --silent
+echo RefinementEquality utility module
+fstar RefinementEquality.fst --cache_checked_modules --silent
+echo --- Recheck successful! ---
+pause

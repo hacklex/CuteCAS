@@ -1,6 +1,6 @@
 module AlgebraTypes
  
-#push-options "--ifuel 0 --fuel 0 --z3rlimit 1 --query_stats"
+#push-options "--ifuel 0 --fuel 0 --z3rlimit 1"
 
 type binary_op (a:Type) = a -> a -> a
 type unary_op (a:Type) = a -> a
@@ -37,11 +37,19 @@ let trans_lemma (#a:Type) (eq: equivalence_relation a) (x y z:a)
     reveal_opaque (`%is_symmetric) (is_symmetric #a)
 
 let trans_lemma_4 (#a:Type) (eq: equivalence_relation a) (x:a)
-                                                                 (y:a{eq x y \/ eq y x})
-                                                                 (z:a{eq y z \/ eq z y})
-                                                                 (w:a{eq z w \/ eq w z})
+                                                         (y:a{eq x y \/ eq y x})
+                                                         (z:a{eq y z \/ eq z y})
+                                                         (w:a{eq z w \/ eq w z})
   : Lemma (x `eq` w /\ w `eq` x) = reveal_opaque (`%is_transitive) (is_transitive #a);
                                   reveal_opaque (`%is_symmetric) (is_symmetric #a)
+
+let trans_lemma_5 (#a:Type) (eq: equivalence_relation a) (x:a)
+                                                         (y:a{eq x y \/ eq y x})
+                                                         (z:a{eq y z \/ eq z y})
+                                                         (w:a{eq z w \/ eq w z})
+                                                         (v:a{eq w v \/ eq v w})
+  : Lemma (x `eq` v /\ v `eq` x) = reveal_opaque (`%is_transitive) (is_transitive #a);
+                                  reveal_opaque (`%is_symmetric) (is_symmetric #a)                                                        
 
 let symm_lemma (#a:Type) (eq:equivalence_relation a) (x:a) (y:a) : Lemma (x `eq` y == y `eq` x) = reveal_opaque (`%is_symmetric) (is_symmetric #a) 
 
@@ -428,7 +436,6 @@ let assoc_lemma4 (#a:Type) (eq: equivalence_relation a) (op: binary_op a{is_asso
     //assert (((x `op` y) `op` z) `eq` (x `op` (y `op` z)));
     //equivalence_wrt_operation_lemma   #a #op eq ((x `op` y) `op` z) (x `op` (y `op` z)) w
     //assert ((((x `op` y) `op` z) `op` w) `eq` (((x `op` (y `op` z)) `op` w)));
-
  
 /// This one is used to assert commutativity, works with both add and mul.
 /// Used when revealing is_commutative opaque wastes too much rlimit.
@@ -722,7 +729,7 @@ let absorber_for_invertible_operation_is_nonsense (#a:Type) (op: binary_op a) (e
     (* assert (yzz' `eq` zz');           *)           (** 5. But as zz' is the absorber, yzz' = zz'!                   *)
     absorber_equal_is_absorber op eq zz' yzz';        (** 6. Being equal to the absorber zz', yzz' is the absorber     *)
     neutral_lemma op eq zz' y;                        (** 7. But, as an equal of y, yzz' can't be an absorber!         *) 
-    nonabsorber_equal_is_nonabsorber op eq y yzz';    (**    So, we got the contradiction here!                        *) 
+    nonabsorber_equal_is_nonabsorber op eq y yzz';    (**    So, we have a contradiction here!                         *) 
 //  assert (~(is_absorber_of yzz' op eq)); 
 //  assert (is_absorber_of yzz' op eq);               (**    Deleting the last two asserts gave* 10x proof slowdown!   *)
 //  * The slowdowns were noticed BEFORE the introduction of opaques. 

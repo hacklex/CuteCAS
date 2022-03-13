@@ -6,7 +6,7 @@ open Fractions.Equivalence
 open Fractions.Addition
 open Fractions.Multiplication
 
-#push-options "--ifuel 0 --fuel 0 --z3rlimit 1 --query_stats"
+#push-options "--ifuel 0 --fuel 0 --z3rlimit 1"
 
 /// Here, we construct the field of fractions for an arbitrary integral domain.
 /// We utilize the algebraic structures of (+) and (*) defined in Fractions.Addition

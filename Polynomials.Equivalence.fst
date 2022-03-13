@@ -5,7 +5,7 @@ open FStar.Seq.Base
 open FStar.Seq.Properties
 open Polynomials.Definition
 
-#push-options "--ifuel 0 --fuel 2 --z3rlimit 10 --query_stats"
+#push-options "--ifuel 0 --fuel 2 --z3rlimit 10"
 
 /// This looks less ugly than reveal_opaque.
 /// Also, this adds just one fact, thus reducing resource usage.
@@ -32,35 +32,8 @@ let rec noncompact_poly_eq #c (#r: commutative_ring #c) (p q: noncompact_poly_ov
   else if length p = 0 then is_zero r (head q) && noncompact_poly_eq p (tail q)
   else is_zero r (head p) && noncompact_poly_eq (tail p) q       
 
-/// for cases when a_i == b_i, not just r.eq
-let rec seq_equal_means_poly_equal #c (#r: commutative_ring #c) (p q: noncompact_poly_over_ring r)
-  : Lemma (requires equal p q) (ensures noncompact_poly_eq p q) (decreases length q) = 
-  if length p>0 && length q>0 then (equals_self r (head p); seq_equal_means_poly_equal (tail p) (tail q))
+let nth_of_cons #c (#r: commutative_ring #c) (h: c) (t: noncompact_poly_over_ring r) : Lemma (forall (i: nat{i<length t}). nth t i == nth (h +$ t) (i+1)) = ()
 
-/// polys consisting of zeros are all equal to empty polynomial
-let rec poly_of_zeros_equals_empty #c (#r: commutative_ring #c) (p: noncompact_poly_over_ring r{for_all (fun coef -> is_zero r coef) p}) 
-  : Lemma (ensures noncompact_poly_eq p empty) (decreases length p) = if length p > 0 then poly_of_zeros_equals_empty (tail p)
-
-/// Polys equal to empty are either empty or only contain zeros.
-let rec poly_eq_empty_means_all_zeros #c (#r: commutative_ring #c) (p: noncompact_poly_over_ring r)
-  : Lemma (requires noncompact_poly_eq p empty) (ensures length p=0 \/ (length p>0 /\ noncompact_poly_eq (tail p) empty /\ is_zero r (head p))) (decreases length p) = 
-  if length p > 0 then poly_eq_empty_means_all_zeros (tail p) 
-
-/// rewrote the condition of the above lemma a bit
-let rec poly_eq_empty_means_all_zeros2 #c (#r: commutative_ring #c) (p: noncompact_poly_over_ring r)
-  : Lemma (requires noncompact_poly_eq p empty) (ensures length p=0 \/ (forall (i:nat{i < length p}). is_zero r (index p i))) (decreases length p) = 
-  if length p > 0 then (
-    assert (is_zero r (last p));
-    assert (is_zero r (index p (length p - 1)));
-    poly_eq_empty_means_all_zeros2 (tail p);
-    assert (forall (i:nat{i<length (tail p) - 1}). is_zero r (index (tail p) i));
-    assert (equal (slice p 1 (length p)) (tail p)); 
-    assert (forall (i:nat{i>0 && i<length p}). (index p i) == (index (tail p) (i-1)));
-    assert (forall (i:nat{i>0 && i<length p}). is_zero r (index p i));
-    assert (is_zero r (index p 0));
-    assert (forall (i:nat{i<length p}). is_zero r (index p i));    
-    ()
-  )
 
 /// for any poly x, it is true that (x = x)
 let rec ncpoly_eq_is_reflexive_lemma #c (#r: commutative_ring #c) (p: noncompact_poly_over_ring r) 
@@ -95,6 +68,40 @@ let rec ncpoly_eq_is_transitive_lemma #c (#r: commutative_ring #c) (p q w: nonco
   else if length p>0 && length q>0 && length w=0 then ncpoly_eq_is_transitive_lemma (tail p) (tail q) w
   else if length p>0 && length q>0 && length w>0 then ncpoly_eq_is_transitive_lemma (tail p) (tail q) (tail w)
 #pop-options
+
+
+/// for cases when a_i == b_i, not just r.eq
+let rec seq_equal_means_poly_equal #c (#r: commutative_ring #c) (p q: noncompact_poly_over_ring r)
+  : Lemma (requires equal p q) (ensures noncompact_poly_eq p q) (decreases length q) = 
+  if length p>0 && length q>0 then (equals_self r (head p); seq_equal_means_poly_equal (tail p) (tail q))
+
+/// polys consisting of zeros are all equal to empty polynomial
+let rec poly_of_zeros_equals_empty #c (#r: commutative_ring #c) (p: noncompact_poly_over_ring r{for_all (fun coef -> is_zero r coef) p}) 
+  : Lemma (ensures noncompact_poly_eq p empty) (decreases length p) = if length p > 0 then poly_of_zeros_equals_empty (tail p)
+
+/// Polys equal to empty are either empty or only contain zeros.
+let rec poly_eq_empty_means_all_zeros #c (#r: commutative_ring #c) (p: noncompact_poly_over_ring r)
+  : Lemma (requires noncompact_poly_eq p empty) (ensures length p=0 \/ (length p>0 /\ noncompact_poly_eq (tail p) empty /\ is_zero r (head p))) (decreases length p) = 
+  if length p > 0 then poly_eq_empty_means_all_zeros (tail p) 
+
+
+
+/// rewrote the condition of the above lemma a bit
+let rec poly_eq_empty_means_all_zeros2 #c (#r: commutative_ring #c) (p: noncompact_poly_over_ring r)
+  : Lemma (requires noncompact_poly_eq p empty) (ensures length p=0 \/ (forall (i:nat{i < length p}). is_zero r (index p i))) (decreases length p) = 
+  if length p > 0 then (
+    assert (is_zero r (last p));
+    assert (is_zero r (index p (length p - 1)));
+    poly_eq_empty_means_all_zeros2 (tail p);
+    assert (forall (i:nat{i<length (tail p) - 1}). is_zero r (index (tail p) i));
+    assert (equal (slice p 1 (length p)) (tail p)); 
+    assert (forall (i:nat{i>0 && i<length p}). (index p i) == (index (tail p) (i-1)));
+    assert (forall (i:nat{i>0 && i<length p}). is_zero r (index p i));
+    assert (is_zero r (index p 0));
+    assert (forall (i:nat{i<length p}). is_zero r (index p i));    
+    ()
+  )
+
 /// strongly typed poly equality as equivalence relation
 let ncpoly_eq #c (#r: commutative_ring #c) : equivalence_relation (noncompact_poly_over_ring r) = 
   reveal_opaque (`%is_symmetric) (is_symmetric #(noncompact_poly_over_ring r));    
@@ -122,7 +129,78 @@ let eq_of_cons #c (#r: commutative_ring #c) (h1 h2: c) (p q: noncompact_poly_ove
                             p 
                             q 
                             (tail (h2 +$ q)) //4-transitivity of eq a=b=c=d ==> a=d 
+
+let rec poly_eq_from_nth_eq #c (#r: commutative_ring #c) (p q: noncompact_poly_over_ring r) 
+  : Lemma (requires (forall (i: nat{i<max (length p) (length q)}). nth p i `r.eq` nth q i))
+          (ensures noncompact_poly_eq p q)
+          (decreases length p + length q)= 
+    if length p = 0 then (
+      assert (forall (i: nat{i<length q}). nth p i == r.addition.neutral);
+      // assert (forall (i: nat{i<max (length p) (length q)}). nth q i `r.eq` r.addition.neutral);
+      assert (for_all (fun coef -> is_zero r coef) q);
+      lemma_eq_elim p empty;
+      poly_of_zeros_equals_empty q; 
+      ncpoly_eq_is_symmetric_lemma p q;
+      ()
+    ) else if length q = 0 then (       
+      assert (forall (i: nat{i<max (length p) (length q)}). nth p i `r.eq` r.addition.neutral);
+      assert (max (length p) (length q) == length p);
+      assert (forall (i: nat{i<length p}). nth p i `r.eq` r.addition.neutral);
+      reveal_opaque (`%is_symmetric) (is_symmetric #c);  
+      assert (for_all (fun coef -> is_zero r coef) p); 
+      lemma_eq_elim q empty;
+      poly_of_zeros_equals_empty p; 
+      ncpoly_eq_is_symmetric_lemma p q;
+      ()
+    ) else (
+      assert (forall (i: nat{i<max (length p) (length q)}). nth p i `r.eq` nth q i);
+      reveal_opaque (`%is_symmetric) (is_symmetric #c);  
+      reveal_opaque (`%is_reflexive) (is_reflexive #c);  
+      reveal_opaque (`%is_transitive) (is_transitive #c);  
+      assert (forall (i: nat{i<max  (length p) (length q)}). nth p i `r.eq` nth q i);
+      nth_of_cons (head p) (tail p);
+      assert (forall (i: nat{i>0 && i<max  (length p) (length q)}). nth (tail p) (i-1) `r.eq` nth q i);
+      assert (forall (i: nat{i>0 && i<max  (length p) (length q)}). nth q i `r.eq` nth (tail q) (i-1));
+      assert (forall (i: nat{i>0 && i<max  (length p) (length q)}). nth (tail q) (i-1) `r.eq` nth (tail q) (i-1));            
+      poly_eq_from_nth_eq (tail p) (tail q);      
+      assert (r.eq (head p) (nth p 0));
+      assert (head p `r.eq` head q);
+      eq_of_cons (head p) (head q) (tail p) (tail q);
+      ()
+    )
+   
+let rec nth_eq_from_poly_eq_forall #c (#r: commutative_ring #c) (p q: noncompact_poly_over_ring r)
+  : Lemma (requires noncompact_poly_eq p q) (ensures (forall (i: nat{i<max (length p) (length q)}). nth p i `r.eq` nth q i)) (decreases length p + length q) = 
+  if length p = 0 then (
+    lemma_eq_elim p empty;
+    ncpoly_eq_is_symmetric_lemma p q;
+    poly_eq_empty_means_all_zeros2 q;
+    ()
+  ) else if length q = 0 then (
+    lemma_eq_elim q empty;
+    poly_eq_empty_means_all_zeros2 p;
+    reveal_opaque (`%is_symmetric) (is_symmetric #c);  
+    ()
+  ) else (  
+    nth_eq_from_poly_eq_forall (tail p) (tail q);
+    //a little hint to the prover:
+    assert (forall (i: nat{i>0 && i<max (length p) (length q)}). nth (tail p) (i-1) `r.eq` nth (tail q) (i-1))    
+  )
+
+let nth_eq_from_poly_eq #c (#r: commutative_ring #c) (p q: noncompact_poly_over_ring r) (i:nat)
+  : Lemma (requires noncompact_poly_eq p q) (ensures nth p i `r.eq` nth q i) = 
+  reveal_opaque (`%is_reflexive) (is_reflexive #c);
+  nth_eq_from_poly_eq_forall p q 
  
+let poly_eq_trim_lemma #c (#r: commutative_ring #c) (p q: noncompact_poly_over_ring r)
+  : Lemma (requires ncpoly_eq p q /\
+                    length p > length q)
+          (ensures ncpoly_eq (slice p 0 (length q)) q) = 
+  reveal_opaque (`%is_reflexive) (is_reflexive #c);
+  nth_eq_from_poly_eq_forall p q;
+  poly_eq_from_nth_eq p (slice p 0 (length q));        
+  trans_lemma ncpoly_eq (slice p 0 (length q)) p q
+
 /// This allows to omit parentheses in (x +$ y $+ z) 
 let cat_assoc_lemma #c (#r: commutative_ring #c) (x:c) (y: noncompact_poly_over_ring r) (z: c)
   : Lemma ((x +$ y) $+ z == x +$ (y $+ z) /\ x +$ (y $+ z) == (x +$ y) $+ z) 

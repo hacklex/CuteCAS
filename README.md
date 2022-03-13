@@ -40,10 +40,14 @@ framework, and the further I advance, the better my code becomes.
 
 I'd love to get the feedback on the code quality. Don't hesitate, don't pull the punches. I only aim to get better with this language :)
 
-# How to do something
+# UPD. March 2022: Polynomial ring is completed
 
-```
-fstar --codegen FSharp IntRingExample.fst --odir fsharp
-```
+Alright, I've finally pulled it. The last boss that is polynomial multiplication associativity, has been finally conquered.
+Had to carefully construct a 3D matrix from the three polynomials, assert that its fold would equal the three polynomials product
+in both multiplication orders, and apply transitivity to assert that multiplication in both orders yields equivalent results.
 
-Play with sandbox
+More than hundred lines of the main lemma. Another hundred buried in auxiliaries. That was the largest proof I've completed so far :)
+
+# Riding to F* core
+
+It seems like the guys from F* team liked my algebra types, so these types will eventually become part of F*'s standard library.

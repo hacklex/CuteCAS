@@ -1,6 +1,5 @@
 module Polynomials.Addition
-  
-open FStar.Seq.Extras
+
 open FStar.Seq
 open FStar.Seq.Base
 open FStar.Seq.Properties
@@ -11,14 +10,39 @@ open Polynomials.Definition
 open Polynomials.Equivalence
 open Polynomials.Compact
 
+let max (x y: nat) : (t:nat{ t >= x /\ t >= y /\ (if x>y then t=x else t=y) }) = if x>y then x else y
+
+let nth_of_cons #c (#r: commutative_ring #c) (h: c) (t: noncompact_poly_over_ring r) : Lemma (forall (i: nat{i<length t}). nth t i == nth (h +$ t) (i+1)) = ()
+
 let rec noncompact_poly_add #c (#r: commutative_ring #c) (p q: noncompact_poly_over_ring r) 
   : Tot (z:noncompact_poly_over_ring r {
-           (length p=length q /\ length z=length p) ==> (forall (i:nat{i<length p}). index z i == r.addition.op (index p i) (index q i)) }) 
+           ((length p=length q /\ length z=length p) ==> (forall (i:nat{i<length p}). index z i == r.addition.op (index p i) (index q i))) /\
+           (forall (i: nat{i < max (length p) (length q) }). nth z i `r.eq` r.addition.op (nth p i) (nth q i)) /\
+           length z = (max (length p) (length q))
+         }) 
         (decreases length p + length q) = 
+  reveal_opaque (`%is_reflexive) (is_reflexive #c); 
   if is_empty p && is_empty q then empty
   else if is_nonempty p && is_empty q then p
   else if is_empty p && is_nonempty q then q
-  else (r.addition.op (head p) (head q)) +$ (noncompact_poly_add (tail p) (tail q))
+  else (  
+    let tail_add = noncompact_poly_add (tail p) (tail q) in
+    let sum = (r.addition.op (head p) (head q)) +$ tail_add in
+    //assert (nth sum 0 `r.eq` r.addition.op (nth p 0) (nth q 0));    
+    //assert (forall (i: nat{i>0 && i<max (length p) (length q)}). nth sum i == nth tail_add (i-1));
+    assert (forall (i: nat{i>0 && i<max (length p) (length q)}). nth sum i `r.eq` r.addition.op (nth (tail p) (i-1)) (nth (tail q) (i-1)));
+    //assert (forall (i: nat{i>0 && i<max (length p) (length q)}). nth sum i `r.eq` r.addition.op (nth p i) (nth q i));
+    //assert (forall (i: nat{ i<max (length p) (length q)}). nth sum i `r.eq` r.addition.op (nth p i) (nth q i));
+    (r.addition.op (head p) (head q)) +$ (noncompact_poly_add (tail p) (tail q))
+  )
+
+let nth_of_sum #c (#r: commutative_ring #c) (p q: noncompact_poly_over_ring r) (n: nat) : Lemma (nth (noncompact_poly_add p q) n `r.eq` r.addition.op (nth p n) (nth q n)) 
+  = 
+  if (n>=max (length p) (length q)) then (
+    assert (n >= length (noncompact_poly_add p q));
+    assert (nth (noncompact_poly_add p q) n == r.addition.neutral)
+  ) 
+  
 
 let rec noncompact_poly_add_is_commutative #c (#r: commutative_ring #c) (p q: noncompact_poly_over_ring r) 
   : Lemma (ensures (noncompact_poly_add p q) `noncompact_poly_eq` (noncompact_poly_add q p)) (decreases length p + length q) = 
@@ -26,7 +50,7 @@ let rec noncompact_poly_add_is_commutative #c (#r: commutative_ring #c) (p q: no
   if is_nonempty p && is_nonempty q then comm_lemma r.eq r.addition.op (head p) (head q);
   if is_empty p && is_empty q then () else noncompact_poly_add_is_commutative (tail p) (tail q) 
  
-#push-options "--ifuel 0 --fuel 1 --z3rlimit 5 --query_stats"
+#push-options "--ifuel 0 --fuel 1 --z3rlimit 5"
 let rec noncompact_poly_add_is_associative #c (#r: commutative_ring #c) (p q w: noncompact_poly_over_ring r) 
   : Lemma (ensures (noncompact_poly_add p (noncompact_poly_add q w)) `ncpoly_eq` (noncompact_poly_add (noncompact_poly_add p q) w))
           (decreases %[length p;length q;length w]) =  
@@ -60,7 +84,7 @@ let rec poly_nil_is_zero #c (#r: commutative_ring #c) (p: noncompact_poly_over_r
   Classical.forall_intro_3 (ncpoly_eq_is_transitive_lemma #c #r);
   if is_nonempty p then poly_nil_is_zero #c #r (tail p)
  
-#push-options "--ifuel 0 --fuel 1 --z3rlimit 10 --query_stats"
+#push-options "--ifuel 0 --fuel 1 --z3rlimit 10"
 let rec poly_add_respects_poly_eq #c (#r: commutative_ring #c) 
                                      (x y: noncompact_poly_over_ring r) 
                                      (z: noncompact_poly_over_ring r{noncompact_poly_eq y z})
@@ -154,3 +178,13 @@ let poly_add_congruence_lemma #c (#r: commutative_ring #c) (x y z w: noncompact_
   poly_add_respects_poly_eq x y w; 
   poly_add_respects_poly_eq w x z; 
   trans_lemma (=) (x+y) (x+w) (z+w)
+
+let poly_add_zero_lemma #c (#r: commutative_ring #c) (p: noncompact_poly_over_ring r) (z: noncompact_poly_over_ring r {ncpoly_eq z empty})
+  : Lemma ((ncpoly_eq p (noncompact_poly_add p z)) /\ (ncpoly_eq p (noncompact_poly_add z p))) =
+  Classical.forall_intro (ncpoly_eq_is_reflexive_lemma #c #r);
+  Classical.forall_intro_2 (ncpoly_eq_is_symmetric_lemma #c #r);
+  Classical.forall_intro_3 (ncpoly_eq_is_transitive_lemma #c #r);
+  poly_add_identity p;   
+  poly_add_congruence_lemma p empty p z;
+  poly_add_congruence_lemma empty p z p
+  

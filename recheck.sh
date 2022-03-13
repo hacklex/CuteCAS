@@ -28,3 +28,12 @@ echo Poly Compact
 fstar.exe Polynomials.Compact.fst ${OPTIONS}
 echo Poly Addition
 fstar.exe Polynomials.Addition.fst ${OPTIONS}
+echo Poly Monomials
+fstar Polynomials.Monomial.fst ${OPTIONS}
+echo Poly Multiplication
+fstar Polynomials.Multiplication.fst ${OPTIONS}
+echo Poly Ring
+fstar Polynomials.fst ${OPTIONS}
+echo RefinementEquality utility module
+fstar RefinementEquality.fst ${OPTIONS}
+echo --- Recheck successful! ---

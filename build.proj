@@ -1,0 +1,32 @@
+<Project DefaultTaret="Build">
+    <PropertyGroup>
+        <IntermediateOutputPath>obj</IntermediateOutputPath>
+        <!-- implement discovery -->
+        <FStarExecutable>fstar.exe</FStarExecutable>
+        <FStarOptions>--silent</FStarOptions>
+    </PropertyGroup>
+    <ItemGroup>
+        <Compile Include="AlgebraTypes.fst" />
+        <Compile Include="Fractions.Definition.fst" />
+        <Compile Include="Fractions.Equivalence.fst" />
+        <Compile Include="Fractions.Addition.fst" />
+        <Compile Include="Fractions.Multiplication.fst" />
+        <Compile Include="Fractions.fst" />
+        <Compile Include="FStar.IntegerIntervals.fst" />
+        <Compile Include="FStar.Algebra.CommMonoid.Fold.fst" />
+        <Compile Include="FStar.Seq.Matrix.fst" />
+        <Compile Include="FStar.Algebra.CommMonoid.Fold.Nested.fst" />
+        <Compile Include="Polynomials.Definition.fst" />
+        <Compile Include="Polynomials.Equivalence.fst" />
+        <Compile Include="Polynomials.Compact.fst" />
+        <Compile Include="Polynomials.Addition.fst" />
+        <Compile Include="Polynomials.Monomial.fst" />
+        <Compile Include="Polynomials.Multiplication.fst" />
+        <Compile Include="Polynomials.fst" />
+        <Compile Include="RefinementEquality.fst" />
+    </ItemGroup>
+
+    <Target Name="Build">
+        <Exec Command="&quot;$(FStarExecutable)&quot; %(Compile.Identity) --cache_checked_modules $(FStarOptions) --cache_dir $(IntermediateOutputPath)" />
+    </Target>
+</Project>

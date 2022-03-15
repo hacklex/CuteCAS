@@ -3,6 +3,7 @@
 *.fsti~
 *.fst#
 fsharp/
+bin/
 obj/
 Sandbox.fst
 .ionide/

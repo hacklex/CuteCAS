@@ -1,4 +1,4 @@
-<Project DefaultTaret="Build">
+<Project DefaultTargets="Build">
     <PropertyGroup>
         <IntermediateOutputPath>obj</IntermediateOutputPath>
         <!-- implement discovery -->
@@ -26,7 +26,11 @@
         <Compile Include="RefinementEquality.fst" />
     </ItemGroup>
 
-    <Target Name="Build">
+    <Target Name="Restore">
         <Exec Command="&quot;$(FStarExecutable)&quot; %(Compile.Identity) --cache_checked_modules $(FStarOptions) --cache_dir $(IntermediateOutputPath)" />
+    </Target>
+
+    <Target Name="Build">
+        <Exec Command="&quot;$(FStarExecutable)&quot; %(Compile.Identity) --codegen FSharp --odir  $(IntermediateOutputPath)/fsharp --cache_dir $(IntermediateOutputPath)" />
     </Target>
 </Project>

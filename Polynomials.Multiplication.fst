@@ -9,7 +9,7 @@ open AlgebraTypes
 open FStar.Seq
 open FStar.Mul
 open FStar.Seq.Base
-open FStar.Seq.Matrix
+open FStar.Matrix
 open FStar.Seq.Properties
 open FStar.Seq.Permutation
 open FStar.IntegerIntervals
@@ -61,7 +61,10 @@ let poly_mul_gen_transpose_lemma #c (#r: commutative_ring c)
   : Lemma (poly_mul_monomial_matrix_gen x y i j `noncompact_poly_eq` poly_mul_monomial_matrix_gen y x j i) 
   = monomial_equality_lemma r ((index x i) `r.multiplication.op` (index y j))
                               ((index y j) `r.multiplication.op` (index x i)) (i+j)
-                             
+
+let matrix_seq #c #m #r (generator: matrix_generator c m r) = 
+  seq_of_matrix (Matrix.init generator)
+
 let poly_mul #c (#r: commutative_ring c) (x y: noncompact_poly_over_ring r) : noncompact_poly_over_ring r = 
   if (is_empty x) then x
   else if (is_empty y) then y else 
@@ -137,6 +140,9 @@ let poly_mul_is_commutative #c (#r: commutative_ring c)
     symm_lemma noncompact_poly_eq (index coef_yx ji) (index trans_xy ji) in
   matrix_fold_equals_fold_of_transpose cm (poly_mul_monomial_matrix_gen x y); 
   Classical.forall_intro aux;
+  Classical.forall_intro (ncpoly_eq_is_reflexive_lemma #c #r);
+  Classical.forall_intro_2 (ncpoly_eq_is_symmetric_lemma #c #r);
+  Classical.forall_intro_3 (ncpoly_eq_is_transitive_lemma  #c #r);
   poly_sum_equality coef_yx trans_xy;
   trans_lemma noncompact_poly_eq (foldm_snoc cm coef_xy) 
                                  (foldm_snoc cm trans_xy) 
@@ -190,6 +196,7 @@ let foldm_snoc_splitting_lemma #c #eq (cm: CE.cm c eq)
           (ensures eq.eq (foldm_snoc cm s1 `cm.mult` foldm_snoc cm s2)
                          (foldm_snoc cm s3)) =    
     let n = (length s1) in
+    let init = FStar.Seq.Base.init in
     if (n=0) then (
       //assert_norm (foldm_snoc cm s1 == cm.unit);
       //assert_norm (foldm_snoc cm s2 == cm.unit);
@@ -461,6 +468,7 @@ let poly_mul_left_distributivity #c (#r: commutative_ring c) (x y z: noncompact_
   end 
   else if (length y=0 && length z=0) then ncpoly_eq_is_reflexive_lemma (poly_mul x (noncompact_poly_add y z))
   else  
+  let init = FStar.Seq.Base.init in
   let lhs = poly_mul x (noncompact_poly_add y z) in
   let rhs = (noncompact_poly_add (poly_mul x y) (poly_mul x z)) in 
   let mul = r.multiplication.op in
@@ -468,6 +476,7 @@ let poly_mul_left_distributivity #c (#r: commutative_ring c) (x y z: noncompact_
   let add = r.addition.op in
   let m, n = length x, max (length y) (length z) in 
   let yb, zb = level_polys y z in
+  Classical.forall_intro (ncpoly_eq_is_reflexive_lemma #c #r);
   Classical.forall_intro_2 (ncpoly_eq_is_symmetric_lemma #c #r);
   Classical.forall_intro_3 (ncpoly_eq_is_transitive_lemma #c #r);
   poly_mul_congruence_lemma x y x yb;
@@ -490,6 +499,14 @@ let poly_mul_left_distributivity #c (#r: commutative_ring c) (x y z: noncompact_
   let sum_m = init (m*n) (fun (ij:under (m*n)) -> noncompact_poly_add (index xybm ij) (index xzbm ij)) in 
   foldm_snoc_equality_from_lemma (poly_add_commutative_monoid r) lhsm sum_m aux;
   foldm_snoc_splitting_lemma (poly_add_commutative_monoid r) xybm xzbm sum_m;
+  assert (lhs == foldm_snoc cm lhsm);
+  assert (lhs `ncpoly_eq` foldm_snoc cm sum_m);
+  assert (foldm_snoc cm sum_m `ncpoly_eq` noncompact_poly_add (foldm_snoc cm xybm) (foldm_snoc cm xzbm));
+  assert (rhs `ncpoly_eq` noncompact_poly_add (foldm_snoc cm xybm) (foldm_snoc cm xzbm));
+  trans_lemma_4 ncpoly_eq lhs
+                          (foldm_snoc cm sum_m)
+                          (noncompact_poly_add (foldm_snoc cm xybm) (foldm_snoc cm xzbm))
+                          rhs;
   ()
 #pop-options
 
@@ -502,9 +519,10 @@ let poly_mul_right_distributivity #c (#r: commutative_ring c) (x y z: noncompact
 
 let rec poly_mul_fold_of_polys_lemma #c (#r: commutative_ring c) (p: noncompact_poly_over_ring r) (s: seq (noncompact_poly_over_ring r))
   : Lemma (ensures ncpoly_eq (poly_mul p (foldm_snoc (poly_add_commutative_monoid r) s))
-                             (foldm_snoc (poly_add_commutative_monoid r) (init (length s) (fun i -> poly_mul p (index s i))))) 
+                             (foldm_snoc (poly_add_commutative_monoid r) (FStar.Seq.Base.init (length s) (fun i -> poly_mul p (index s i))))) 
           (decreases length s) =
   if length s = 0 then () else
+  let init = FStar.Seq.Base.init in
   let liat, last = un_snoc s in 
   let cm = poly_add_commutative_monoid r in
   let lhs = poly_mul p (foldm_snoc cm s) in
@@ -534,6 +552,7 @@ let poly_mul_fold_seq_lemma_aux #c (#r: commutative_ring c) (p: noncompact_poly_
   Classical.forall_intro_3 (ncpoly_eq_is_transitive_lemma #c #r);
   let cm = poly_add_commutative_monoid r in
   let func = fun i -> poly_mul p (index s i) in
+  let init = FStar.Seq.Base.init in
   poly_mul_fold_of_polys_lemma p s;
   foldm_snoc_equality cm (init (length s) func) result
 
@@ -565,20 +584,23 @@ let poly_equals_lc_monomial_plus_liat #c (#r: commutative_ring c) (p: noncompact
   poly_eq_from_nth_eq p rhs 
 
 private let init_aux_lemma #c (#r:commutative_ring c) (p: noncompact_poly_over_ring r{length p > 0})
-  : squash (init (length p-1) (nth_as_monomial p) == init (length (liat p)) (nth_as_monomial (liat p))) = 
-  lemma_eq_elim (init (length p-1) (nth_as_monomial p)) (init (length (liat p)) (nth_as_monomial (liat p)))
+  : squash (FStar.Seq.Base.init (length p-1) (nth_as_monomial p) == 
+            FStar.Seq.Base.init (length (liat p)) (nth_as_monomial (liat p))) = 
+  lemma_eq_elim (FStar.Seq.Base.init (length p-1) (nth_as_monomial p)) 
+                (FStar.Seq.Base.init (length (liat p)) (nth_as_monomial (liat p)))
  
 #push-options "--fuel 1 --z3rlimit 15 --ifuel 0"
 #restart-solver
 let rec poly_equals_sum_of_monomials #c (#r: commutative_ring c) (p: noncompact_poly_over_ring r)
-  : Lemma (ensures p `ncpoly_eq` foldm_snoc (poly_add_commutative_monoid r) (init (length p) (nth_as_monomial p)))
+  : Lemma (ensures p `ncpoly_eq` foldm_snoc (poly_add_commutative_monoid r) 
+                                 (FStar.Seq.Base.init (length p) (nth_as_monomial p)))
           (decreases length p) = 
   if (length p=0) then () else 
   let cm = poly_add_commutative_monoid r in
   let n = length p in
   let mono_gen = nth_as_monomial p in
-  let mono_seq = init n mono_gen in  
-  let recursive_known = (init (length (liat p)) (nth_as_monomial (liat p))) in
+  let mono_seq = FStar.Seq.Base.init n mono_gen in  
+  let recursive_known = (FStar.Seq.Base.init (length (liat p)) (nth_as_monomial (liat p))) in
   let subseq, last_mono = un_snoc mono_seq in 
   Classical.forall_intro_2 (ncpoly_eq_is_symmetric_lemma #c #r);
   Classical.forall_intro_3 (ncpoly_eq_is_transitive_lemma #c #r);
@@ -705,6 +727,7 @@ let poly_mul_is_associative #c (#r: commutative_ring c) (p q w: noncompact_poly_
   let m = length p in 
   let n = length q in
   let h = length w in  
+  let init = FStar.Seq.Base.init in
   let p_monos = init m (nth_as_monomial p) in
 
   let qw_p_seq = init m (fun i -> poly_mul (foldm_snoc cm mx_qw) (nth_as_monomial p i)) in   
@@ -797,6 +820,7 @@ let poly_mul_unit #c (r: commutative_ring c) : (noncompact_poly_over_ring r) = c
 let poly_mul_identity_aux #c (#r: commutative_ring c) (x: noncompact_poly_over_ring r)
   : Lemma (poly_mul x (poly_mul_unit r) `ncpoly_eq` x) = 
   if length x = 0 then ncpoly_eq_is_reflexive_lemma x else 
+  let init = FStar.Seq.Base.init in
   let one = poly_mul_unit r in
   let cm = poly_add_commutative_monoid r in
   let m,n = length x, length one in

@@ -572,6 +572,8 @@ let poly_mul_fold_seq_lemma #c (#r: commutative_ring c) (p: noncompact_poly_over
 let nth_as_monomial #c (#r: commutative_ring c) (p: noncompact_poly_over_ring r) (n: nat{n<length p})
   : t:noncompact_poly_over_ring r{t==monomial r (nth p n) n} = monomial r (nth p n) n
 
+#push-options "--fuel 0 --z3rlimit 15 --ifuel 0"
+#restart-solver
 let poly_equals_lc_monomial_plus_liat #c (#r: commutative_ring c) (p: noncompact_poly_over_ring r)
   : Lemma (requires length p>0) 
           (ensures p `ncpoly_eq` (liat p `noncompact_poly_add` monomial r (last p) (length p-1))) = 
@@ -582,6 +584,7 @@ let poly_equals_lc_monomial_plus_liat #c (#r: commutative_ring c) (p: noncompact
     reveal_opaque (`%is_transitive) (is_transitive #c);
     nth_of_sum p rhs i in Classical.forall_intro aux;
   poly_eq_from_nth_eq p rhs 
+#pop-options
 
 private let init_aux_lemma #c (#r:commutative_ring c) (p: noncompact_poly_over_ring r{length p > 0})
   : squash (FStar.Seq.Base.init (length p-1) (nth_as_monomial p) == 
@@ -629,7 +632,7 @@ private let length_of_un_snoc #a (s: seq a)
   : Lemma (requires length s > 0) 
           (ensures length (fst (un_snoc s)) == length s - 1) = ()
 
-#push-options "--ifuel 0 --fuel 1 --z3rlimit 30"
+#push-options "--ifuel 0 --fuel 1 --z3rlimit 50"
 #restart-solver
 let monomial_product_is_monomial #c (r: commutative_ring c)
                                 (a: c) (m: nat) (b: c) (n: nat)

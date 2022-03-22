@@ -34,10 +34,14 @@ module ML = FStar.Math.Lemmas
 open FStar.IntegerIntervals   
 open FStar.Mul
 
+(* This is similar to lambdas passed to FStar.Seq.Base.init *)
 type matrix_generator c (m n: pos) = under m -> under n -> c
 
+(* We hide the implementation details of a matrix. *)
 val matrix (c:Type u#a) (m n : pos) : Type u#a
 
+(* This lemma asserts the flattened index to be valid 
+   for the flattened matrix seq *)
 let flattened_index_is_under_flattened_size (m n: pos) (i: under m) (j: under n) 
   : Lemma ((((i*n)+j)) < m*n) = assert (i*n <= (m-1)*n)
 
@@ -85,39 +89,43 @@ let dual_indices (m n: pos) (ij: under (m*n)) : Lemma (
   = consistency_of_ij m n ij;
     indices_transpose_lemma m (get_i m n ij) (get_j m n ij)  
 
-
+(* A matrix can always be treated as a flattened seq *)
 val seq_of_matrix : (#c: Type) -> (#m:pos) -> (#n:pos) -> (mx: matrix c m n) -> 
   (s:SB.seq c {
     SB.length s=m*n /\
     (forall (ij: under (m*n)). SB.index s ij == SB.index s (get_ij m n (get_i m n ij) (get_j m n ij)))
   })
 
+(* Indexer for a matrix *)
 val ijth : (#c:Type) -> (#m:pos) -> (#n:pos) -> (mx: matrix c m n) -> (i: under m) -> (j: under n) ->
   (t:c{t == SB.index (seq_of_matrix mx) (get_ij m n i j)})
 
+(* Indexer for a matrix returns the correct value *)
 val ijth_lemma : (#c:Type) -> (#m:pos) -> (#n:pos) -> (mx: matrix c m n) -> (i: under m) -> (j: under n) ->
   Lemma (ijth mx i j == SB.index (seq_of_matrix mx) (get_ij m n i j))
-  
 
+(* A matrix can always be constructed from an m*n-sized seq *)
 val matrix_of_seq : (#c: Type) -> (m:pos) -> (n:pos) -> (s: SB.seq c{SB.length s = m*n}) -> matrix c m n
 
-
+(* A type for matrices constructed via concrete generator *)
 type matrix_of #c (#m #n: pos) (gen: matrix_generator c m n) = z:matrix c m n {
   (forall (i: under m) (j: under n). ijth z i j == gen i j) /\ 
   (forall (ij: under (m*n)). (SB.index (seq_of_matrix z) ij) == (gen (get_i m n ij) (get_j m n ij)))  
 }
 
+(* Monoid-based fold of a matrix  treated as a flat seq *)
 val foldm : (#c:Type) -> (#eq:CE.equiv c) -> (#m:pos) -> (#n:pos) -> (cm: CE.cm c eq) -> (mx:matrix c m n) -> c
 
+(* foldm_snoc of the corresponding seq is equal to foldm of the matrix *)
 val matrix_fold_equals_fold_of_seq : 
   (#c:Type) -> (#eq:CE.equiv c) -> (#m:pos) -> (#n:pos) -> (cm: CE.cm c eq) -> (mx:matrix c m n) 
   -> Lemma (ensures foldm cm mx `eq.eq` SP.foldm_snoc cm (seq_of_matrix mx)) [SMTPat(foldm cm mx)]
 
-(* A flattened matrix (seq) constructed from generator function
-   Notice how the domains of both indices are strictly controlled. *)
+(* A matrix constructed from given generator *)
 val init : (#c:Type) -> (#m:pos) -> (#n: pos) -> (generator: matrix_generator c m n) 
   -> matrix_of generator 
- 
+
+(* A matrix fold is equal to double foldm_snoc over init-generated seq of seqs *)
 val matrix_fold_equals_fold_of_seq_folds : (#c:Type) -> (#eq: CE.equiv c) -> 
                                            (#m: pos) -> (#n: pos) ->
                                            (cm: CE.cm c eq) ->
@@ -199,4 +207,14 @@ let matrix_fold_equals_fold_of_transpose #c #eq
                                         (SP.foldm_snoc cm (matrix_seq (transposed_matrix_gen gen)));
   eq.transitivity (foldm cm (init gen)) (SP.foldm_snoc cm (matrix_seq (transposed_matrix_gen gen)))
                   (foldm cm (init (transposed_matrix_gen gen))) 
-  
+
+val matrix_equiv : (#c: Type) ->
+                   (eq:  CE.equiv c) ->
+                   (m: pos) -> (n: pos) ->
+                   CE.equiv (matrix c m n)                   
+
+val matrix_add_comm_monoid : (#c:Type) -> 
+                             (#eq:CE.equiv c) -> 
+                             (add: CE.cm c eq) -> 
+                             (m:pos) -> (n: pos) -> 
+                             CE.cm (matrix c m n) (matrix_equiv eq m n)

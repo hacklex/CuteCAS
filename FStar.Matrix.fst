@@ -811,19 +811,7 @@ let matrix_mul_is_associative #c #eq #m #n #k #p (add: CE.cm c eq)
 let matrix_mul_unit #c #eq m (add: CE.cm c eq) 
                               (mul: CE.cm c eq{is_fully_distributive mul add /\ is_absorber add.unit mul}) 
   : matrix c m m = init (fun i j -> if i=j then mul.unit else add.unit)
-
-(*
-
-let matrix_mul_ijth #c #eq #m #n #k (add: CE.cm c eq) 
-                    (mul: CE.cm c eq{is_fully_distributive mul add /\ is_absorber add.unit mul}) 
-                    (mx: matrix c m n) (my: matrix c n k) (i: under m) (h: under k)
-  : Lemma (ijth (matrix_mul add mul mx my) i h == SP.foldm_snoc add (SB.init n (fun (j:under n) -> mul.mult (ijth mx i j) (ijth my j h))))
-  = ()
-
-*)
-
-let simple_math (j:int) (m:int{j<(m-1)}) : Lemma (ensures ((j+1) < m)) = ()
-
+ 
 let absorber_lemma #c #eq (x:c) (z:c) (add: CE.cm c eq) 
                    (mul: CE.cm c eq{is_fully_distributive mul add /\ is_absorber add.unit mul})
   : Lemma (requires eq.eq z add.unit) (ensures mul.mult z x `eq.eq` add.unit) = 
@@ -834,13 +822,13 @@ let absorber_lemma #c #eq (x:c) (z:c) (add: CE.cm c eq)
                   add.unit
 
 
-#push-options "--z3rlimit 100 --fuel 1 --ifuel 0"
+(* right identity will soon get a fully similar proof *)
+#push-options "--z3rlimit 10 --fuel 1 --ifuel 0"
 #restart-solver
 let matrix_mul_left_identity #c #eq #m (add: CE.cm c eq) 
                               (mul: CE.cm c eq{is_fully_distributive mul add /\ is_absorber add.unit mul}) 
                               (mx: matrix c m m)
-  : Lemma (matrix_mul add mul mx (matrix_mul_unit m add mul) `matrix_eq_fun eq` mx) 
-  = Classical.forall_intro_2 (Classical.move_requires_2 eq.symmetry);
+  : Lemma (matrix_mul add mul mx (matrix_mul_unit m add mul) `matrix_eq_fun eq` mx) =   
   let unit = matrix_mul_unit m add mul in
   let mxu = matrix_mul add mul mx unit in
   let ( * ) = mul.mult in
@@ -848,99 +836,61 @@ let matrix_mul_left_identity #c #eq #m (add: CE.cm c eq)
   let aux (i j: under m) : Lemma (ijth mxu i j $=$ ijth mx i j) = 
     matrix_mul_ijth add mul mx unit i j;
     let gen = fun (k: under m) -> ijth mx i k * ijth unit k j in
-    let seq = SB.init m gen in      
-    let seq_id (k: under m) : Lemma (SB.index seq k == ijth mx i k * ijth unit k j) = () in
-    let rec seq_sum_is_item (k:under (m+1)) : Lemma (ensures SP.foldm_snoc add (SB.init k gen) `eq.eq`
-                                                 (if k>j then ijth mx i j else add.unit))
-                                                (decreases k) = 
+    let seq = SB.init m gen in       
+    let rec seq_sum_is_item (k:under (m+1)) 
+      : Lemma (ensures SP.foldm_snoc add (SB.init k gen) `eq.eq`
+                       (if k>j then ijth mx i j else add.unit))
+              (decreases k) = 
       if k=0 then eq.reflexivity add.unit
-      else if k<(j+1) then (
+      else if k<(j+1) then begin
         let full = SB.init k gen in
         let liat,last = SProp.un_snoc full in
         seq_sum_is_item (k-1);
-        assert ((k-1)>=0);
-        assert ((k-1)<m);
         SB.lemma_eq_elim (liat) ((SB.init (k-1) gen));
-        assert (SP.foldm_snoc add liat `eq.eq` add.unit);
-        assert (last == SB.index seq (k-1)); 
-        assert (last == ijth mx i (k-1) * ijth unit (k-1) j);
-        assert (last `eq.eq` add.unit); 
         eq.reflexivity (SP.foldm_snoc add liat);
         mul.congruence last (SP.foldm_snoc add liat) add.unit (SP.foldm_snoc add liat);
         eq.transitivity (last * SP.foldm_snoc add liat)
                         (add.unit * SP.foldm_snoc add liat)
                         (add.unit);
-        assert (eq.eq (last * SP.foldm_snoc add liat) (add.unit));
-        assert (SP.foldm_snoc add full == add.mult last (SP.foldm_snoc add liat));
         add.congruence last (SP.foldm_snoc add liat) add.unit add.unit;
         add.identity add.unit;
         eq.transitivity (SP.foldm_snoc add full)
                         (add.mult add.unit add.unit)
-                        add.unit;
-        ()
-      ) else if k=(j+1) then (
+                        add.unit 
+      end else if k=(j+1) then begin
         let full = SB.init k gen in
         let liat,last = SProp.un_snoc full in
-        assert (k-1 == j);
         seq_sum_is_item j;
         SB.lemma_eq_elim (liat) ((SB.init (k-1) gen));
-        assert (SP.foldm_snoc add liat `eq.eq` add.unit);
-        assert (last == SB.index seq (k-1)); 
-        assert (last == ijth mx i j * mul.unit);
         mul.identity (ijth mx i j);
-        assert (SP.foldm_snoc add full == add.mult last (SP.foldm_snoc add liat));
         eq.reflexivity last; 
         add.congruence last (SP.foldm_snoc add liat) last add.unit;
         add.identity last;
         add.commutativity last add.unit;
-        eq.transitivity (add.mult last add.unit) (add.mult add.unit last) last;
-        assert ((last `add.mult` add.unit) `eq.eq` last);
-        eq.transitivity (SP.foldm_snoc add full)
-                        (add.mult last add.unit)
-                        last;                         
         mul.commutativity (ijth mx i j) mul.unit;
-        eq.transitivity last
-                        (mul.unit * ijth mx i j)
-                        (ijth mx i j);
-        eq.transitivity (SP.foldm_snoc add full)
-                        last
-                        (ijth mx i j)
-      )
-      else (
+        eq.transitivity (add.mult last add.unit) (add.mult add.unit last) last;
+        eq.transitivity (SP.foldm_snoc add full) (add.mult last add.unit) last;                         
+        eq.transitivity last (mul.unit * ijth mx i j) (ijth mx i j);
+        eq.transitivity (SP.foldm_snoc add full) last (ijth mx i j)
+      end else begin
         let full = SB.init k gen in
         seq_sum_is_item (k-1);
         let liat,last = SProp.un_snoc full in
         SB.lemma_eq_elim liat (SB.init (k-1) gen);
-        assert (SP.foldm_snoc add full == add.mult last (SP.foldm_snoc add (SB.init (k-1) gen)));
-        assert (SP.foldm_snoc add (SB.init (k-1) gen) `eq.eq` (ijth mx i j));
         add.identity add.unit;
-        assert (k > j+1);
-        assert (SP.foldm_snoc add liat `eq.eq` (ijth mx i j));
-        assert (last == SB.index seq (k-1)); 
-        assert (last == ijth mx i (k-1) * ijth unit (k-1) j);
-        assert ((k-1)<> j);
-        assert (ijth unit (k-1) j == add.unit);
-        assert (last == (ijth mx i (k-1)) * add.unit);
         mul.commutativity (ijth mx i (k-1)) add.unit;
         eq.transitivity last (add.unit * ijth mx i (k-1)) add.unit;
         eq.reflexivity (SP.foldm_snoc add (SB.init (k-1) gen));
         add.congruence last (SP.foldm_snoc add (SB.init (k-1) gen)) 
                    add.unit (SP.foldm_snoc add (SB.init (k-1) gen));
-        assert (eq.eq (SP.foldm_snoc add full)
-                      (add.mult add.unit (SP.foldm_snoc add (SB.init (k-1) gen))));
         add.identity (SP.foldm_snoc add (SB.init (k-1) gen));
         eq.transitivity (SP.foldm_snoc add full)
                         (add.mult add.unit (SP.foldm_snoc add (SB.init (k-1) gen)))
                         (SP.foldm_snoc add (SB.init (k-1) gen));
         eq.transitivity (SP.foldm_snoc add full)
                         (SP.foldm_snoc add (SB.init (k-1) gen))
-                        (ijth mx i j);
-        ()
-      )
-      in seq_sum_is_item m;
-    assert (ijth mxu i j == SP.foldm_snoc add (SB.init m gen));
-    assert (SP.foldm_snoc add (SB.init m gen) `eq.eq` ijth mx i j);
-
-    () in Classical.forall_intro_2 aux;
+                        (ijth mx i j) 
+      end in seq_sum_is_item m
+    in Classical.forall_intro_2 aux;
   matrix_equiv_from_element_eq eq mxu mx
-    
+#pop-options    

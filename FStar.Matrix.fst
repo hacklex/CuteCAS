@@ -271,79 +271,9 @@ let matrix_fold_equals_func_double_fold #c #eq #m #n cm generator
     let init = SB.init #c in
     let lemma_eq_elim = SB.lemma_eq_elim #c in 
     matrix_fold_aux cm m n generator
-
-let rec eq_of_seq #c (eq:CE.equiv c) (s1 s2: SB.seq c) 
-  : Tot prop (decreases SB.length s1) = 
-  (SB.length s1 = SB.length s2 /\
-   (SB.length s1 = 0 \/ (
-    let s1s, s1l = SProp.un_snoc s1 in
-     let s2s, s2l = SProp.un_snoc s2 in
-      eq.eq s1l s2l /\ eq_of_seq eq s1s s2s)))
-
-let rec eq_of_seq_element_equality #c (eq: CE.equiv c) (s1 s2: SB.seq c)
-  : Lemma (requires eq_of_seq eq s1 s2) 
-          (ensures SB.length s1 = SB.length s2 /\ (forall (i: under (SB.length s1)). (SB.index s1 i `eq.eq` SB.index s2 i))) 
-          (decreases SB.length s1)
-  = 
-  if (SB.length s1 > 0) then 
-  let s1liat, s1last = SProp.un_snoc s1 in
-  let s2liat, s2last = SProp.un_snoc s2 in
-  eq_of_seq_element_equality eq s1liat s2liat
-
-let rec eq_of_seq_from_element_equality #c (eq: CE.equiv c) (s1 s2: SB.seq c)
-  : Lemma (requires (SB.length s1 = SB.length s2) /\ (forall (i: under (SB.length s1)). (SB.index s1 i `eq.eq` SB.index s2 i)))
-          (ensures eq_of_seq eq s1 s2)
-          (decreases SB.length s1) = 
-  if SB.length s1 = 0 then () else 
-  let s1liat, s1last = SProp.un_snoc s1 in
-  let s2liat, s2last = SProp.un_snoc s2 in  
-  eq_of_seq_from_element_equality eq s1liat s2liat
-
-let eq_of_seq_condition #c (eq: CE.equiv c) (s1 s2: SB.seq c)
-  : Lemma ((SB.length s1==SB.length s2) /\ (forall (i: under (SB.length s1)). (SB.index s1 i `eq.eq` SB.index s2 i)) <==>
-            eq_of_seq eq s1 s2) = 
-  Classical.move_requires_2 (eq_of_seq_element_equality eq) s1 s2;
-  Classical.move_requires_2 (eq_of_seq_from_element_equality eq) s1 s2
-
-let rec eq_of_seq_reflexivity #c (eq: CE.equiv c) (s: SB.seq c)
-  : Lemma (ensures eq_of_seq eq s s) (decreases SB.length s) = 
-  if SB.length s > 0 then 
-  let liat, last = SProp.un_snoc s in
-  eq_of_seq_reflexivity eq liat;
-  eq.reflexivity last
-
-let rec eq_of_seq_symmetry #c (eq: CE.equiv c) (s1 s2: SB.seq c)
-  : Lemma (requires eq_of_seq eq s1 s2) (ensures eq_of_seq eq s2 s1) (decreases SB.length s1) =  
-  if SB.length s1 > 0 then 
-  let lia1, las1 = SProp.un_snoc s1 in
-  let lia2, las2 = SProp.un_snoc s2 in
-  eq_of_seq_symmetry eq lia1 lia2;
-  eq.symmetry las1 las2
-
-let rec eq_of_seq_transitivity #c (eq: CE.equiv c) (s1 s2 s3: SB.seq c)
-  : Lemma (requires eq_of_seq eq s1 s2 /\ eq_of_seq eq s2 s3) (ensures eq_of_seq eq s1 s3) (decreases SB.length s1) =  
-  if SB.length s1 > 0 then 
-  let lia1, las1 = SProp.un_snoc s1 in
-  let lia2, las2 = SProp.un_snoc s2 in
-  let lia3, las3 = SProp.un_snoc s3 in
-  eq_of_seq_transitivity eq lia1 lia2 lia3;
-  eq.transitivity las1 las2 las3
-
-let seq_equiv #c (eq:CE.equiv c) : (CE.equiv (SB.seq c)) = 
-  CE.EQ (eq_of_seq eq) (eq_of_seq_reflexivity eq)
-                       (eq_of_seq_symmetry eq)
-                       (eq_of_seq_transitivity eq)
-
-let matrix_add_generator #c #eq (#m #n: pos) (add: CE.cm c eq) (ma mb: matrix c m n) 
-  : matrix_generator c m n = fun i j -> add.mult (ijth ma i j) (ijth mb i j)
-
-let matrix_add #c #eq (#m #n: pos) (add: CE.cm c eq) (ma mb: matrix c m n) 
-  : matrix_of (matrix_add_generator add ma mb)
-  = init (matrix_add_generator add ma mb)
-
-let matrix_add_ijth #c #eq (#m #n: pos) (add: CE.cm c eq) (ma mb: matrix c m n) (i: under m) (j: under n)
-  : Lemma (ijth (matrix_add add ma mb) i j == add.mult (ijth ma i j) (ijth mb i j)) = ()
-
+ 
+open FStar.Seq.Equiv
+  
 let matrix_eq_fun #c (#m #n: pos) (eq: CE.equiv c) (ma mb: matrix c m n) =   
   eq_of_seq eq (seq_of_matrix ma) (seq_of_matrix mb)
 
@@ -369,12 +299,6 @@ let matrix_equiv_from_element_eq #c (#m #n: pos) (eq: CE.equiv c) (ma mb: matrix
   assert (forall (ij: under (m*n)). SB.index s1 ij `eq.eq` SB.index s2 ij);  
   eq_of_seq_from_element_equality eq (seq_of_matrix ma) (seq_of_matrix mb)
 #pop-options
-
-let matrix_equiv_from_proof #c (#m #n: pos) (eq: CE.equiv c) (ma mb: matrix c m n)
-  (proof: (i:under m) -> (j:under n) -> Lemma (eq.eq (ijth ma i j) (ijth mb i j)))
-  : Lemma (matrix_eq_fun eq ma mb)
-  = Classical.forall_intro_2 proof; 
-    matrix_equiv_from_element_eq eq ma mb 
 
 let matrix_add_is_associative #c #eq #m #n (add: CE.cm c eq) (ma mb mc: matrix c m n)
   : Lemma (matrix_add add (matrix_add add ma mb) mc `(matrix_equiv eq m n).eq` 
@@ -416,29 +340,10 @@ let matrix_add_comm_monoid #c #eq (add: CE.cm c eq) (m n: pos)
           (matrix_add_is_commutative add)
           (matrix_add_congruence add)
 
-let col #c #m #n (mx: matrix c m n) (j: under n) = SB.init m (fun (i: under m) -> ijth mx i j) 
-
-let row #c #m #n (mx: matrix c m n) (i: under m) = SB.init n (fun (j: under n) -> ijth mx i j) 
-
-let seq_op_const #c #eq (cm: CE.cm c eq) (s: SB.seq c) (const: c) 
-  = SB.init (SB.length s) (fun (i: under (SB.length s)) -> cm.mult (SB.index s i) const)
+ 
+let matrix_row_col_lemma #c #m #n (mx: matrix c m n) (i: under m) (j: under n) 
+  : Lemma (ijth mx i j == SB.index (row mx i) j /\ ijth mx i j == SB.index (col mx j) i) = ()
   
-let const_op_seq #c #eq (cm: CE.cm c eq) (const: c) (s: SB.seq c)                       
-  = SB.init (SB.length s) (fun (i: under (SB.length s)) -> cm.mult const (SB.index s i))
-
-let seq_of_products #c #eq (mul: CE.cm c eq) (s: SB.seq c) (t: SB.seq c {SB.length t == SB.length s})
-  = SB.init (SB.length s) (fun (i: under (SB.length s)) -> SB.index s i `mul.mult` SB.index t i)
-
-let seq_of_products_lemma #c #eq (mul: CE.cm c eq) (s: SB.seq c) (t: SB.seq c {SB.length t == SB.length s})
-  (r: SB.seq c{SB.equal r (SB.init (SB.length s) (fun (i: under (SB.length s)) -> SB.index s i `mul.mult` SB.index t i))})
-  : Lemma (seq_of_products mul s t == r) = ()
-
-let dot #c #eq (add mul: CE.cm c eq) (s: SB.seq c) (t: SB.seq c{SB.length t == SB.length s}) 
-  = SP.foldm_snoc add (seq_of_products mul s t) 
-
-let dot_lemma #c #eq (add mul: CE.cm c eq) (s: SB.seq c) (t: SB.seq c{SB.length t == SB.length s}) 
-  : Lemma (dot add mul s t == SP.foldm_snoc add (seq_of_products mul s t)) = ()
-
 let matrix_mul_gen #c #eq #m #n #p (add mul: CE.cm c eq) 
                    (mx: matrix c m n) (my: matrix c n p) 
                    (i: under m) (k: under p)
@@ -446,21 +351,7 @@ let matrix_mul_gen #c #eq #m #n #p (add mul: CE.cm c eq)
 
 let matrix_mul #c #eq #m #n #p (add mul: CE.cm c eq) (mx: matrix c m n) (my: matrix c n p) 
   = init (matrix_mul_gen add mul mx my)
-
-let matrix_row_col_lemma #c #m #n (mx: matrix c m n) (i: under m) (j: under n) 
-  : Lemma (ijth mx i j == SB.index (row mx i) j /\ ijth mx i j == SB.index (col mx j) i) = ()
-
-let is_left_distributive #c #eq (mul add: CE.cm c eq) = 
-  forall (x y z: c). mul.mult x (add.mult y z) `eq.eq` add.mult (mul.mult x y) (mul.mult x z)
-
-let is_right_distributive #c #eq (mul add: CE.cm c eq) = 
-  forall (x y z: c). mul.mult (add.mult x y) z `eq.eq` add.mult (mul.mult x z) (mul.mult y z)
-
-let is_fully_distributive #c #eq (mul add: CE.cm c eq) = is_left_distributive mul add /\ is_right_distributive mul add
-
-let is_absorber #c #eq (z:c) (op: CE.cm c eq) = 
-  forall (x:c). op.mult z x `eq.eq` z /\ op.mult x z `eq.eq` z
-
+ 
 let seq_last_index #c (s: SB.seq c{SB.length s > 0}) : Lemma (SProp.last s == SB.index s (SB.length s - 1)) = ()
 
 let seq_fold_decomposition #c #eq (cm: CE.cm c eq) (s: SB.seq c{SB.length s > 0}) 
@@ -530,25 +421,7 @@ let matrix_mul_ijth_eq_sum_of_seq #c #eq #m #n #p (add: CE.cm c eq)
                                   (r: SB.seq c{r `SB.equal` seq_of_products mul (row mx i) (col my k)})
   : Lemma (ijth (matrix_mul add mul mx my) i k == SP.foldm_snoc add r) = ()
 
-let rec foldm_snoc_of_equal_inits #c #eq (#m: pos) (cm: CE.cm c eq) (f: (under m) -> c) (g: (under m) -> c)
-  : Lemma (requires  (forall (i: under m). f i `eq.eq` g i))
-          (ensures SP.foldm_snoc cm (SB.init m f) `eq.eq` SP.foldm_snoc cm (SB.init m g)) = 
-  if m=0 then () else 
-  if m=1 then begin
-    SP.foldm_snoc_singleton cm (f 0);
-    SP.foldm_snoc_singleton cm (g 0);
-    eq.transitivity (SP.foldm_snoc cm (SB.init m f)) (f 0) (g 0);
-    eq.symmetry (SP.foldm_snoc cm (SB.init m g)) (g 0);
-    eq.transitivity (SP.foldm_snoc cm (SB.init m f)) (g 0) (SP.foldm_snoc cm (SB.init m g))
-  end else
-  let fliat, flast = SProp.un_snoc (SB.init m f) in
-  let gliat, glast = SProp.un_snoc (SB.init m g) in  
-  foldm_snoc_of_equal_inits cm (fun (i: under (m-1)) -> f i) (fun (i: under (m-1)) -> g i);
-  SB.lemma_eq_elim (SB.init (m-1) (fun (i: under (m-1)) -> f i)) fliat;
-  SB.lemma_eq_elim (SB.init (m-1) (fun (i: under (m-1)) -> g i)) gliat;
-  cm.congruence flast (SP.foldm_snoc cm fliat)
-                glast (SP.foldm_snoc cm gliat)
-
+  
 let double_foldm_snoc_transpose_lemma #c #eq (#m #n: pos) (cm: CE.cm c eq) (f: under m -> under n -> c)
   : Lemma (SP.foldm_snoc cm (SB.init m (fun (i: under m) -> SP.foldm_snoc cm (SB.init n (fun (j: under n) -> f i j)))) `eq.eq`
            SP.foldm_snoc cm (SB.init n (fun (j: under n) -> SP.foldm_snoc cm (SB.init m (fun (i: under m) -> f i j))))) = 
@@ -600,12 +473,12 @@ let double_foldm_snoc_of_equal_generators #c #eq (#m #n: pos)
           `eq.eq`  SP.foldm_snoc cm (SB.init m (fun (i: under m) -> SP.foldm_snoc cm (SB.init n (fun (j: under n) -> g i j))))) = 
   let aux i : Lemma (SP.foldm_snoc cm (SB.init n (fun (j: under n) -> f i j)) `eq.eq`
                      SP.foldm_snoc cm (SB.init n (fun (j: under n) -> g i j))) 
-    = foldm_snoc_of_equal_inits cm (fun j -> f i j) (fun j -> g i j) in
+    = SP.foldm_snoc_of_equal_inits cm (fun j -> f i j) (fun j -> g i j) in
   Classical.forall_intro aux;
-  foldm_snoc_of_equal_inits cm (fun (i: under m) -> SP.foldm_snoc cm (SB.init n (fun (j: under n) -> f i j)))
-                               (fun (i: under m) -> SP.foldm_snoc cm (SB.init n (fun (j: under n) -> g i j)))
+  SP.foldm_snoc_of_equal_inits cm (fun (i: under m) -> SP.foldm_snoc cm (SB.init n (fun (j: under n) -> f i j)))
+                                  (fun (i: under m) -> SP.foldm_snoc cm (SB.init n (fun (j: under n) -> g i j)))
 
-#push-options "--z3rlimit 10 --ifuel 0 --fuel 0"  
+#push-options "--z3rlimit 15 --ifuel 0 --fuel 0"  
 let matrix_mul_is_associative #c #eq #m #n #p #q (add: CE.cm c eq) 
                     (mul: CE.cm c eq{is_fully_distributive mul add /\ is_absorber add.unit mul}) 
                     (mx: matrix c m n) (my: matrix c n p) (mz: matrix c p q)
@@ -635,7 +508,7 @@ let matrix_mul_is_associative #c #eq #m #n #p #q (add: CE.cm c eq)
       = foldm_snoc_distributivity_right_eq mul add (SB.init n (xy_products_init k)) (ijth mz k l) 
                                                    (SB.init n (full_init_kj k)) 
       in Classical.forall_intro xy_z_distr;
-    foldm_snoc_of_equal_inits add xy_z_products_init 
+    SP.foldm_snoc_of_equal_inits add xy_z_products_init 
                                   (fun k -> sum_j (full_init_kj k));  
     double_foldm_snoc_transpose_lemma add full_init_kj;
     eq.transitivity (ijth lhs i l) (sum_kj full_init_kj)
@@ -658,25 +531,11 @@ let matrix_mul_is_associative #c #eq #m #n #p #q (add: CE.cm c eq)
       = foldm_snoc_distributivity_left_eq mul add (ijth mx i j) (SB.init p (yz_products_init j))   
                                                                 (SB.init p (full_init_rh j)) 
       in Classical.forall_intro x_yz_distr;
-    foldm_snoc_of_equal_inits add x_yz_products_init (fun j -> sum_k (full_init_rh j));  
+    SP.foldm_snoc_of_equal_inits add x_yz_products_init (fun j -> sum_k (full_init_rh j));  
     eq.symmetry (ijth rhs i l) (sum_jk full_init_rh);
     eq.transitivity (ijth lhs i l) (sum_jk full_init_rh) (ijth rhs i l);   
   () in matrix_equiv_from_proof eq lhs rhs aux
-     
-let matrix_mul_unit #c #eq (add mul: CE.cm c eq) m
-  : matrix c m m = init (fun i j -> if i=j then mul.unit else add.unit)
  
-let absorber_lemma #c #eq x z (add: CE.cm c eq) 
-                   (mul: CE.cm c eq{ is_fully_distributive mul add /\ 
-                                     is_absorber add.unit mul })
-  : Lemma (requires eq.eq z add.unit) 
-          (ensures mul.mult z x `eq.eq` add.unit) = 
-  eq.reflexivity x; 
-  mul.congruence z x add.unit x;
-  eq.transitivity (mul.mult z x)
-                  (mul.mult add.unit x)
-                  add.unit
-
 let matrix_mul_unit_row_lemma #c #eq m (add mul: CE.cm c eq) (i: under m)
   : Lemma ((row (matrix_mul_unit add mul m) i 
              == (SB.create i add.unit) `SB.append` 
@@ -878,34 +737,7 @@ let matrix_mul_identity #c #eq #m (add: CE.cm c eq)
            matrix_mul add mul (matrix_mul_unit add mul m) mx `matrix_eq_fun eq` mx) =
   matrix_mul_left_identity add mul mx;
   matrix_mul_right_identity add mul mx
-
-let eq_of_seq_unsnoc #c (eq:CE.equiv c) (m:pos) (s1 s2: (z:SB.seq c{SB.length z==m}))
-  : Lemma (requires eq_of_seq eq s1 s2)
-          (ensures eq.eq (snd (SProp.un_snoc s1)) (snd (SProp.un_snoc s2)) /\
-                   eq_of_seq eq (fst (SProp.un_snoc s1)) (fst (SProp.un_snoc s2))) =
-  eq_of_seq_element_equality eq s1 s2;
-  eq_of_seq_from_element_equality eq (fst (SProp.un_snoc s1)) (fst (SProp.un_snoc s2))
-
-let rec foldm_snoc_equality #c #eq (add: CE.cm c eq) (s t: SB.seq c)
-  : Lemma (requires SB.length s == SB.length t /\ eq_of_seq eq s t)
-          (ensures SP.foldm_snoc add s `eq.eq` SP.foldm_snoc add t)
-          (decreases SB.length s) = 
-  if SB.length s = 0 then (
-    assert_norm (SP.foldm_snoc add s == add.unit);
-    assert_norm (SP.foldm_snoc add t == add.unit);
-    eq.reflexivity add.unit
-  ) 
-  else (
-    let sliat, slast = SProp.un_snoc s in
-    let tliat, tlast = SProp.un_snoc t in
-    eq_of_seq_unsnoc eq (SB.length s) s t;
-    foldm_snoc_equality add sliat tliat;
-    foldm_snoc_last add s;
-    foldm_snoc_last add t; 
-    add.congruence slast (SP.foldm_snoc add sliat)
-                   tlast (SP.foldm_snoc add tliat) 
-  )
-
+ 
 let dot_of_equal_sequences #c #eq (add mul: CE.cm c eq) m
                                   (p q r s: (z:SB.seq c{SB.length z == m}))
   : Lemma (requires eq_of_seq eq p r /\ eq_of_seq eq q s) 
@@ -917,7 +749,7 @@ let dot_of_equal_sequences #c #eq (add mul: CE.cm c eq) m
     = mul.congruence (SB.index p i) (SB.index q i) (SB.index r i) (SB.index s i) 
     in Classical.forall_intro aux;  
   eq_of_seq_from_element_equality eq (seq_of_products mul p q) (seq_of_products mul r s);
-  foldm_snoc_equality add (seq_of_products mul p q) (seq_of_products mul r s)  
+  SP.foldm_snoc_equality add (seq_of_products mul p q) (seq_of_products mul r s)  
 
 let matrix_mul_congruence #c #eq #m #n #p (add mul: CE.cm c eq)  
                     (mx: matrix c m n) (my: matrix c n p) 
@@ -938,58 +770,9 @@ let matrix_mul_congruence #c #eq #m #n #p (add mul: CE.cm c eq)
       mul.congruence (ijth mx i j) (ijth my j k) (ijth mz i j) (ijth mw j k) 
     in Classical.forall_intro all_eq;      
     eq_of_seq_from_element_equality eq sp_xy sp_zw;
-    foldm_snoc_equality add sp_xy sp_zw
+    SP.foldm_snoc_equality add sp_xy sp_zw
   in matrix_equiv_from_proof eq (matrix_mul add mul mx my) (matrix_mul add mul mz mw) aux
-
-#push-options "--z3rlimit 10 --fuel 1 --ifuel 1"
-let foldm_snoc_split #c #eq (add: CE.cm c eq) 
-                     (s: SB.seq c) (t: SB.seq c{SB.length s == SB.length t})
-                     (sum_seq: SB.seq c{SB.length sum_seq == SB.length s})
-                     (proof: (i: under (SB.length s)) -> Lemma ((SB.index s i `add.mult` SB.index t i)
-                       `eq.eq` (SB.index sum_seq i)
-                     ))
-  : Lemma ((SP.foldm_snoc add s `add.mult` SP.foldm_snoc add t) `eq.eq`
-           (SP.foldm_snoc add sum_seq)) =
-  if SB.length s > 0 then
-  let n = SB.length s in
-  let index_1 (i: SP.in_between 0 (n-1)) = SB.index s i in
-  let index_2 (i: SP.in_between 0 (n-1)) = SB.index t i in
-  let nk = (n-1) in
-  assert (n == SP.range_count 0 nk);
-  let index_sum = SP.func_sum add index_1 index_2 in
-  let expr1 = SP.init_func_from_expr index_1 0 nk in
-  let expr2 = SP.init_func_from_expr index_2 0 nk in
-  let expr_sum = SP.init_func_from_expr index_sum 0 nk in
-  Classical.forall_intro eq.reflexivity;
-  Classical.forall_intro_2 (Classical.move_requires_2 eq.symmetry);
-  Classical.forall_intro_3 (Classical.move_requires_3 eq.transitivity);
-  SP.foldm_snoc_split add 0 (n-1) index_1 index_2;
-  assert (SP.foldm_snoc add (SB.init n (expr_sum)) `eq.eq`
-          add.mult (SP.foldm_snoc add (SB.init n expr1)) (SP.foldm_snoc add (SB.init n expr2)));
-  SB.lemma_eq_elim s (SB.init n expr1);
-  SB.lemma_eq_elim t (SB.init n expr2);
-  Classical.forall_intro proof;
-  eq_of_seq_from_element_equality eq (SB.init n expr_sum) sum_seq;
-  foldm_snoc_equality add (SB.init n expr_sum) sum_seq ;
   
-  assert (eq.eq (SP.foldm_snoc add (SB.init n expr_sum)) 
-                (SP.foldm_snoc add sum_seq));
-  assert (SP.foldm_snoc add s == SP.foldm_snoc add (SB.init n expr1));
-  assert (SP.foldm_snoc add t == SP.foldm_snoc add (SB.init n expr2));
-  assert (add.mult (SP.foldm_snoc add s) (SP.foldm_snoc add t) `eq.eq`
-         SP.foldm_snoc add (SB.init n (expr_sum)));
-  eq.transitivity (add.mult (SP.foldm_snoc add s) (SP.foldm_snoc add t))
-                  (SP.foldm_snoc add (SB.init n (expr_sum)))
-                  (SP.foldm_snoc add sum_seq);
-()
-  else (
-    assert_norm (SP.foldm_snoc add s == add.unit);
-    assert_norm (SP.foldm_snoc add t == add.unit);
-    assert_norm (SP.foldm_snoc add sum_seq == add.unit);
-    add.identity add.unit
-  )
-#pop-options 
-
 let matrix_mul_is_left_distributive #c #eq #m #n #p (add: CE.cm c eq)
                                     (mul: CE.cm c eq{is_fully_distributive mul add /\ is_absorber add.unit mul}) 
                                     (mx: matrix c m n) (my mz: matrix c n p)
@@ -1012,12 +795,12 @@ let matrix_mul_is_left_distributive #c #eq #m #n #p (add: CE.cm c eq)
     matrix_mul_ijth_eq_sum_of_seq_for_init add mul mx myz i k init_lhs; 
     matrix_mul_ijth_eq_sum_of_seq_for_init add mul mx my i k init_xy;
     matrix_mul_ijth_eq_sum_of_seq_for_init add mul mx mz i k init_xz;    
-    foldm_snoc_split add (SB.init n init_xy) 
-                         (SB.init n init_xz) 
-                         (SB.init n init_rhs) 
-                         (fun j -> ()); 
+    SP.foldm_snoc_split_seq add (SB.init n init_xy) 
+                                (SB.init n init_xz) 
+                                (SB.init n init_rhs) 
+                                (fun j -> ()); 
     eq.symmetry  (ijth rhs i k) (sum_j init_rhs);
-    foldm_snoc_of_equal_inits add init_lhs init_rhs;
+    SP.foldm_snoc_of_equal_inits add init_lhs init_rhs;
     eq.transitivity (ijth lhs i k)
                     (sum_j init_rhs)
                     (ijth rhs i k) 
@@ -1046,12 +829,12 @@ let matrix_mul_is_right_distributive #c #eq #m #n #p (add: CE.cm c eq)
     matrix_mul_ijth_eq_sum_of_seq_for_init add mul mxy mz i k init_lhs; 
     matrix_mul_ijth_eq_sum_of_seq_for_init add mul mx mz i k init_xz;
     matrix_mul_ijth_eq_sum_of_seq_for_init add mul my mz i k init_yz;
-    foldm_snoc_split add (SB.init n init_xz) 
-                         (SB.init n init_yz) 
-                         (SB.init n init_rhs) 
-                         (fun j -> ()); 
+    SP.foldm_snoc_split_seq add (SB.init n init_xz) 
+                                (SB.init n init_yz) 
+                                (SB.init n init_rhs) 
+                                (fun j -> ()); 
     eq.symmetry (ijth rhs i k) (sum_j init_rhs); 
-    foldm_snoc_of_equal_inits add init_lhs init_rhs;
+    SP.foldm_snoc_of_equal_inits add init_lhs init_rhs;
     eq.transitivity (ijth lhs i k)
                     (sum_j init_rhs)
                     (ijth rhs i k) 

@@ -58,7 +58,7 @@ let rec fold #c #eq
   = if b = a then expr b
     else (fold cm a (b-1) expr) `cm.mult` expr b
 
-(* This lemma establishes the definitional equality of the fold 
+(* This lemma establishes the provable equality of the fold 
    given said equality for all the values from the allowed range *)
 let rec fold_equality #c #eq (cm: CE.cm c eq) 
   (a: int) (b: not_less_than a) 
@@ -136,6 +136,10 @@ let rec fold_offset_irrelevance_lemma #c #eq (cm: CE.cm c eq)
   if (mk>m0 && nk>n0) then (
       fold_offset_irrelevance_lemma cm m0 (mk-1) expr1 n0 (nk-1) expr2;
       assert (expr1 ((mk-m0)+m0) == expr2 ((nk-n0)+n0))
+  ) else if (mk=m0) then (
+    eq.reflexivity (expr1 m0);
+    assert (expr1 (0+m0) == expr2 (0+n0));
+    assert (expr1 m0 == expr2 n0)
   )
 
 (* In particular, we would often find it useful to move our domain 

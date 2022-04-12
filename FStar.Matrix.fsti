@@ -1,5 +1,5 @@
 (*
-   Copyright 2008-2022 Microsoft Research
+   Copyright 2022 Microsoft Research
    
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -148,68 +148,22 @@ val matrix_fold_equals_func_double_fold  : (#c:Type) -> (#eq: CE.equiv c) ->
   Lemma (foldm cm (init generator) `eq.eq` 
            CF.fold cm 0 (m-1) (fun (i:under m) -> CF.fold cm 0 (n-1) (generator i)))
  
-
-(* This function provides the transposed matrix generator, with indices swapped
-   Notice how the forall property of the result function is happily proved 
-   automatically by z3 :) *)
-let transposed_matrix_gen #c (#m:pos) (#n:pos) (generator: matrix_generator c m n) 
+val transposed_matrix_gen (#c:_) (#m:pos) (#n:pos) (generator: matrix_generator c m n) 
   : (f: matrix_generator c n m { forall i j. f j i == generator i j }) 
-  = fun j i -> generator i j
 
-(* This lemma shows that the transposed matrix is 
-   a permutation of the original one *)
-let matrix_transpose_is_permutation #c (#m #n: pos) 
-                             (generator: matrix_generator c m n)
+val matrix_transpose_is_permutation (#c:_) (#m #n: pos) 
+                                    (generator: matrix_generator c m n)
   : Lemma (SP.is_permutation (seq_of_matrix (init generator))
-                          (seq_of_matrix (init (transposed_matrix_gen generator)))
-                          (transpose_ji m n)) = 
-  let matrix_transposed_eq_lemma #c (#m #n: pos) 
-                                        (gen: matrix_generator c m n) 
-                                        (ij: under (m*n)) 
-    : Lemma (SB.index (seq_of_matrix (init gen)) ij ==
-             SB.index (seq_of_matrix (init (transposed_matrix_gen gen))) (transpose_ji m n ij)) 
-    = 
-      ijth_lemma (init gen) (get_i m n ij) (get_j m n ij);
-      ijth_lemma (init (transposed_matrix_gen gen)) 
-                 (get_i n m (transpose_ji m n ij)) 
-                 (get_j n m (transpose_ji m n ij));
-    () in 
-  let transpose_inequality_lemma (m n: pos) (ij: under (m*n)) (kl: under (n*m)) 
-    : Lemma (requires kl <> ij) (ensures transpose_ji m n ij <> transpose_ji m n kl) = 
-      dual_indices m n ij;
-      dual_indices m n kl in
-  Classical.forall_intro (matrix_transposed_eq_lemma generator); 
-  Classical.forall_intro_2 (Classical.move_requires_2 
-                           (transpose_inequality_lemma m n));
-  SP.reveal_is_permutation (seq_of_matrix (init generator))
-                           (seq_of_matrix (init (transposed_matrix_gen generator)))
-                           (transpose_ji m n) 
-
-(* Fold over matrix equals fold over transposed matrix *)
-let matrix_fold_equals_fold_of_transpose #c #eq 
+                             (seq_of_matrix (init (transposed_matrix_gen generator)))
+                             (transpose_ji m n))
+                             
+val matrix_fold_equals_fold_of_transpose (#c:_) (#eq:_)
                                          (#m #n: pos) 
                                          (cm: CE.cm c eq) 
                                          (gen: matrix_generator c m n)
   : Lemma (foldm cm (init gen) `eq.eq`
-           foldm cm (init (transposed_matrix_gen gen))) = 
-  let matrix_seq #c #m #n (g: matrix_generator c m n) = (seq_of_matrix (init g)) in
-  let matrix_mn = matrix_seq gen in
-  let matrix_nm = matrix_seq (transposed_matrix_gen gen) in
-  matrix_transpose_is_permutation gen;
-  SP.foldm_snoc_perm cm (matrix_seq gen)
-                     (matrix_seq (transposed_matrix_gen gen))
-                     (transpose_ji m n);
-  matrix_fold_equals_fold_of_seq cm (init gen);
-  matrix_fold_equals_fold_of_seq cm (init (transposed_matrix_gen gen));
-  eq.symmetry (foldm cm (init (transposed_matrix_gen gen))) 
-              (SP.foldm_snoc cm (matrix_seq (transposed_matrix_gen gen)));
-  eq.transitivity (foldm cm (init gen)) (SP.foldm_snoc cm (matrix_seq gen))
-                                        (SP.foldm_snoc cm (matrix_seq (transposed_matrix_gen gen)));
-  eq.transitivity (foldm cm (init gen)) (SP.foldm_snoc cm (matrix_seq (transposed_matrix_gen gen)))
-                  (foldm cm (init (transposed_matrix_gen gen))) 
-
-val matrix_eq_fun (#c:_) (#m #n: pos) (eq: CE.equiv c) (ma mb: matrix c m n) : prop
-  
+           foldm cm (init (transposed_matrix_gen gen)))
+            
 val matrix_equiv : (#c: Type) ->
                    (eq:  CE.equiv c) ->
                    (m: pos) -> (n: pos) ->
@@ -222,11 +176,11 @@ val matrix_equiv_ijth (#c:_) (#m #n: pos) (eq: CE.equiv c)
           
 val matrix_equiv_from_element_eq (#c:_) (#m #n: pos) (eq: CE.equiv c) (ma mb: matrix c m n)
   : Lemma (requires (forall (i: under m) (j: under n). ijth ma i j `eq.eq` ijth mb i j))
-          (ensures matrix_eq_fun eq ma mb)
+          (ensures (matrix_equiv eq m n).eq ma mb)
  
 let matrix_equiv_from_proof #c (#m #n: pos) (eq: CE.equiv c) (ma mb: matrix c m n)
   (proof: (i:under m) -> (j:under n) -> Lemma (eq.eq (ijth ma i j) (ijth mb i j)))
-  : Lemma (matrix_eq_fun eq ma mb)
+  : Lemma ((matrix_equiv eq m n).eq ma mb)
   = Classical.forall_intro_2 proof; 
     matrix_equiv_from_element_eq eq ma mb 
 
@@ -263,15 +217,18 @@ let const_op_seq #c #eq (cm: CE.cm c eq) (const: c) (s: SB.seq c)
 let seq_of_products #c #eq (mul: CE.cm c eq) (s: SB.seq c) (t: SB.seq c {SB.length t == SB.length s})
   = SB.init (SB.length s) (fun (i: under (SB.length s)) -> SB.index s i `mul.mult` SB.index t i)
 
-let seq_of_products_lemma #c #eq (mul: CE.cm c eq) (s: SB.seq c) (t: SB.seq c {SB.length t == SB.length s})
-  (r: SB.seq c{SB.equal r (SB.init (SB.length s) (fun (i: under (SB.length s)) -> SB.index s i `mul.mult` SB.index t i))})
-  : Lemma (seq_of_products mul s t == r) = ()
+val seq_of_products_lemma (#c:_) (#eq:_) (mul: CE.cm c eq) 
+                          (s: SB.seq c) (t: SB.seq c {SB.length t == SB.length s})
+                          (r: SB.seq c { SB.equal r (SB.init (SB.length s) 
+                                                             (fun (i: under (SB.length s)) -> 
+                                                                    SB.index s i `mul.mult` SB.index t i))})
+  : Lemma (seq_of_products mul s t == r)  
 
 let dot #c #eq (add mul: CE.cm c eq) (s: SB.seq c) (t: SB.seq c{SB.length t == SB.length s}) 
   = SP.foldm_snoc add (seq_of_products mul s t) 
 
-let dot_lemma #c #eq (add mul: CE.cm c eq) (s: SB.seq c) (t: SB.seq c{SB.length t == SB.length s}) 
-  : Lemma (dot add mul s t == SP.foldm_snoc add (seq_of_products mul s t)) = ()
+val dot_lemma (#c:_) (#eq:_) (add mul: CE.cm c eq) (s: SB.seq c) (t: SB.seq c{SB.length t == SB.length s}) 
+  : Lemma (dot add mul s t == SP.foldm_snoc add (seq_of_products mul s t)) 
  
 val matrix_mul (#c:_) (#eq:_) (#m #n #p:pos) (add mul: CE.cm c eq) (mx: matrix c m n) (my: matrix c n p)  
   : matrix c m p
@@ -310,7 +267,7 @@ val matrix_mul_ijth_eq_sum_of_seq_for_init (#c:_) (#eq:_) (#m #n #p:pos) (add mu
 val matrix_mul_is_associative (#c:_) (#eq:_) (#m #n #p #q: pos) (add: CE.cm c eq) 
   (mul: CE.cm c eq{is_fully_distributive mul add /\ is_absorber add.unit mul}) 
   (mx: matrix c m n) (my: matrix c n p) (mz: matrix c p q)
-  : Lemma (matrix_eq_fun eq ((matrix_mul add mul mx my) `matrix_mul add mul` mz)
+  : Lemma ((matrix_equiv eq m q).eq ((matrix_mul add mul mx my) `matrix_mul add mul` mz)
                             (matrix_mul add mul mx (matrix_mul add mul my mz)))
                                                        
 let matrix_mul_unit #c #eq (add mul: CE.cm c eq) m
@@ -319,34 +276,34 @@ let matrix_mul_unit #c #eq (add mul: CE.cm c eq) m
 val matrix_mul_right_identity (#c:_) (#eq:_) (#m: pos) (add: CE.cm c eq) 
                               (mul: CE.cm c eq{is_absorber add.unit mul}) 
                               (mx: matrix c m m)
-  : Lemma (matrix_mul add mul mx (matrix_mul_unit add mul m) `matrix_eq_fun eq` mx)
+  : Lemma (matrix_mul add mul mx (matrix_mul_unit add mul m) `(matrix_equiv eq m m).eq` mx)
   
 val matrix_mul_left_identity (#c:_) (#eq:_) (#m: pos) (add: CE.cm c eq) 
                              (mul: CE.cm c eq{is_absorber add.unit mul}) 
                              (mx: matrix c m m)
-  : Lemma (matrix_mul add mul (matrix_mul_unit add mul m) mx `matrix_eq_fun eq` mx)
+  : Lemma (matrix_mul add mul (matrix_mul_unit add mul m) mx `(matrix_equiv eq m m).eq` mx)
   
 val matrix_mul_identity (#c:_) (#eq:_) (#m: pos) (add: CE.cm c eq) 
                         (mul: CE.cm c eq{is_absorber add.unit mul}) 
                         (mx: matrix c m m)
-  : Lemma (matrix_mul add mul mx (matrix_mul_unit add mul m) `matrix_eq_fun eq` mx /\
-           matrix_mul add mul (matrix_mul_unit add mul m) mx `matrix_eq_fun eq` mx)
+  : Lemma (matrix_mul add mul mx (matrix_mul_unit add mul m) `(matrix_equiv eq m m).eq` mx /\
+           matrix_mul add mul (matrix_mul_unit add mul m) mx `(matrix_equiv eq m m).eq` mx)
 
 val matrix_mul_congruence (#c:_) (#eq:_) (#m #n #p:pos) (add mul: CE.cm c eq)  
                           (mx: matrix c m n) (my: matrix c n p) 
                           (mz: matrix c m n) (mw: matrix c n p)
-  : Lemma (requires matrix_eq_fun eq mx mz /\ matrix_eq_fun eq my mw)
-          (ensures matrix_eq_fun eq (matrix_mul add mul mx my) 
-                                    (matrix_mul add mul mz mw))
+  : Lemma (requires (matrix_equiv eq m n).eq mx mz /\ (matrix_equiv eq n p).eq my mw)
+          (ensures (matrix_equiv eq m p).eq (matrix_mul add mul mx my) 
+                                            (matrix_mul add mul mz mw))
 
 val matrix_mul_is_left_distributive (#c:_) (#eq:_) (#m #n #p:pos) (add: CE.cm c eq)
                                     (mul: CE.cm c eq{is_fully_distributive mul add /\ is_absorber add.unit mul}) 
                                     (mx: matrix c m n) (my mz: matrix c n p)
-  : Lemma (matrix_mul add mul mx (matrix_add add my mz) `matrix_eq_fun eq`
+  : Lemma (matrix_mul add mul mx (matrix_add add my mz) `(matrix_equiv eq m p).eq`
            matrix_add add (matrix_mul add mul mx my) (matrix_mul add mul mx mz))
             
 val matrix_mul_is_right_distributive (#c:_) (#eq:_) (#m #n #p:pos) (add: CE.cm c eq)
                                     (mul: CE.cm c eq{is_fully_distributive mul add /\ is_absorber add.unit mul}) 
                                     (mx my: matrix c m n) (mz: matrix c n p)
-  : Lemma (matrix_mul add mul (matrix_add add mx my) mz `matrix_eq_fun eq`
+  : Lemma (matrix_mul add mul (matrix_add add mx my) mz `(matrix_equiv eq m p).eq`
            matrix_add add (matrix_mul add mul mx mz) (matrix_mul add mul my mz))

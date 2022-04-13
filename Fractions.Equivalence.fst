@@ -99,17 +99,19 @@ private let fraction_equality_transitivity_lemma (#p: Type) (dom: integral_domai
     end else symm_lemma dom.eq (mul a f) (mul b e) in af_equals_be a c e b d f 
 #pop-options
 
+private let fraction_equality_transitivity_implication_lemma 
+  (#p:Type) (d: integral_domain p) (x y z: fraction d) 
+  : Lemma (fractions_are_equal x y /\ fractions_are_equal y z ==> fractions_are_equal x z) = 
+    if (fractions_are_equal x y && fractions_are_equal y z) 
+    then fraction_equality_transitivity_lemma d x y z
+
 /// This one is used to construct the equivalence_relation out of fractions_equal
 /// Otherwise we can't construct the ring, never mind the field.
 private let equality_is_transitive (#p:Type) (d: integral_domain p) 
   : Lemma (is_transitive (fractions_are_equal #p #d)) = 
-  let fraction_equality_transitivity_implication_lemma (x y z: fraction d) 
-    : Lemma (fractions_are_equal x y /\ fractions_are_equal y z ==> fractions_are_equal x z) = 
-      if (fractions_are_equal x y && fractions_are_equal y z) 
-      then fraction_equality_transitivity_lemma d x y z in
   reveal_opaque (`%is_transitive) (is_transitive #(fraction d));
-  Classical.forall_intro_3 fraction_equality_transitivity_implication_lemma
-  
+  Classical.forall_intro_3 (fraction_equality_transitivity_implication_lemma d)
+
 /// Once all the necessary lemmas are proven, we've got the equivalence_relation for fractions
 let fraction_eq (#a:Type) (#d: integral_domain a) : equivalence_relation (fraction d) = 
   equality_is_reflexive d;

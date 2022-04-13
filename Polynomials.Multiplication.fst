@@ -205,8 +205,8 @@ let foldm_snoc_splitting_lemma #c #eq (cm: CE.cm c eq)
       eq.reflexivity cm.unit 
     )
     else (
-    let expr1 = fun (i: in_between 0 (n-1)) -> index s1 i in
-    let expr2 = fun (i: in_between 0 (n-1)) -> index s2 i in
+    let expr1 = fun (i: ifrom_ito 0 (n-1)) -> index s1 i in
+    let expr2 = fun (i: ifrom_ito 0 (n-1)) -> index s2 i in
     foldm_snoc_split cm 0 (n-1) expr1 expr2;
     let sum_func_init_expr = init_func_from_expr (func_sum cm expr1 expr2) 0 (n-1) in
     let e1_init_expr = init_func_from_expr expr1 0 (n-1) in
@@ -216,9 +216,9 @@ let foldm_snoc_splitting_lemma #c #eq (cm: CE.cm c eq)
             (foldm_snoc cm (init n e1_init_expr) `cm.mult` foldm_snoc cm (init n e2_init_expr)));
     lemma_eq_elim s1 (init n e1_init_expr);
     lemma_eq_elim s2 (init n e2_init_expr);
-    assert (forall (i: in_between 0 (n-1)). sum_func_init_expr i == expr1 i `cm.mult` expr2 i);
-    assert (forall (i: in_between 0 (n-1)). sum_func_init_expr i == (index s1 i) `cm.mult` (index s2 i));
-    assert (forall (i: in_between 0 (n-1)). (index (init n sum_func_init_expr) i) == index s1 i `cm.mult` index s2 i);
+    assert (forall (i: ifrom_ito 0 (n-1)). sum_func_init_expr i == expr1 i `cm.mult` expr2 i);
+    assert (forall (i: ifrom_ito 0 (n-1)). sum_func_init_expr i == (index s1 i) `cm.mult` (index s2 i));
+    assert (forall (i: ifrom_ito 0 (n-1)). (index (init n sum_func_init_expr) i) == index s1 i `cm.mult` index s2 i);
     assert (foldm_snoc cm s1 == foldm_snoc cm (init n e1_init_expr));
     Classical.forall_intro_2 (Classical.move_requires_2 eq.symmetry);
     Classical.forall_intro_3 (Classical.move_requires_3 eq.transitivity);
@@ -823,20 +823,22 @@ let poly_mul_unit #c (r: commutative_ring c) : (noncompact_poly_over_ring r) = c
 let poly_mul_identity_aux #c (#r: commutative_ring c) (x: noncompact_poly_over_ring r)
   : Lemma (poly_mul x (poly_mul_unit r) `ncpoly_eq` x) = 
   if length x = 0 then ncpoly_eq_is_reflexive_lemma x else 
-  let init = FStar.Seq.Base.init in
   let one = poly_mul_unit r in
   let cm = poly_add_commutative_monoid r in
   let m,n = length x, length one in
   let mx = matrix_seq (poly_mul_monomial_matrix_gen x one) in
   poly_equals_sum_of_monomials x; 
-  let monos = init (length x) (nth_as_monomial x) in
+  let monos = FStar.Seq.Base.init #(noncompact_poly_over_ring r) m (nth_as_monomial x) in
   Classical.forall_intro (neutral_lemma r.multiplication.op r.multiplication.neutral);
   Classical.forall_intro_2 (ncpoly_eq_is_symmetric_lemma #c #r);
+  FStar.Seq.Base.init_index m (nth_as_monomial x);
   let aux (i: under m) : Lemma (index monos i `ncpoly_eq` index mx i) = (
     assert (index monos i == monomial r (nth x i) i);
     let j = get_j 1 (length x) i in 
-    monomial_equality_lemma r (r.multiplication.op (nth x i) r.multiplication.neutral) (nth x i) i
-  ) in foldm_snoc_equality_from_lemma cm monos mx aux;
+    monomial_equality_lemma r (r.multiplication.op (nth x i) r.multiplication.neutral) (nth x i) i;
+    symm_lemma (ncpoly_eq) (monomial r (nth x i) i) (index mx i)
+  ) in Classical.forall_intro aux;
+  foldm_snoc_equality_from_lemma  cm monos mx aux;
   poly_mul_congruence_lemma_left x (foldm_snoc cm monos) one; 
   Classical.forall_intro_3 (ncpoly_eq_is_transitive_lemma #c #r) 
  

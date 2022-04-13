@@ -1,6 +1,10 @@
 @echo off
 del obj\*.fst.checked
 SET OPTIONS=--cache_checked_modules --silent --cache_dir obj
+echo FStar.Seq.Equiv
+fstar FStar.Seq.Equiv.fst %OPTIONS%
+echo FStar.Seq.Permutation
+fstar FStar.Seq.Permutation.fst %OPTIONS%
 echo AlgebraTypes
 fstar AlgebraTypes.fst %OPTIONS%
 echo Fraction Definition
@@ -17,8 +21,8 @@ echo FStar.IntegerIntervals
 fstar FStar.IntegerIntervals.fst %OPTIONS%
 echo FStar.Algebra.CommMonoid.Fold
 fstar FStar.Algebra.CommMonoid.Fold.fst %OPTIONS%
-echo FStar.Seq.Matrix
-fstar FStar.Seq.Matrix.fst %OPTIONS%
+echo FStar.Matrix
+fstar FStar.Matrix.fst %OPTIONS%
 echo FStar.Algebra.CommMonoid.Fold.Nested
 fstar FStar.Algebra.CommMonoid.Fold.Nested.fst %OPTIONS%
 echo Poly Definitions

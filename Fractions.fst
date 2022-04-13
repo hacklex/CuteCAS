@@ -15,8 +15,17 @@ open Fractions.Multiplication
 
 /// The field of fractions has no use for unit/normal decomposition since all nonzero elements are units anyway.
 /// Still, since the algebraic structure demands it, we provide the trivial decomposition and the zero norm.
-private let fraction_unit_part (#a: Type) (#d: integral_domain a) (x: fraction d) = fraction_one d
+private let fraction_unit_part (#a: Type) (#d: integral_domain a) (x: fraction d) : units_of (fraction_mul #a #d) = fraction_one d
+
+private let fraction_unit_part_f (#a: Type) (d: integral_domain a) : (fraction d) -> units_of (fraction_mul #a #d)
+  = fraction_unit_part
+
 private let fraction_normal_part (#a: Type) (#d: integral_domain a) (x: fraction d) = x
+
+private let fraction_normal_part_f #a (d: integral_domain a) 
+  : (fraction d) -> unit_normal_of (fraction_mul #a #d) (fraction_unit_part_f d)
+  = fraction_normal_part
+
 private let fraction_norm (#a: Type) (#d: integral_domain a) (x: fraction d) 
   : (v:option nat { v == None ==> is_absorber_of x fraction_mul }) = 
   if (x.num `d.eq` d.addition.neutral) 
@@ -24,6 +33,9 @@ private let fraction_norm (#a: Type) (#d: integral_domain a) (x: fraction d)
         fraction_absorber_condition x;
         None)
   else Some 0
+
+private let fraction_norm_f (#a:Type) (d: integral_domain a) 
+  : nat_function_defined_on_non_absorbers (fraction_mul #a #d) = fraction_norm
 
 /// This is only left to demonstrate just how much better the calc approach is,
 /// when it comes to proving identities by transforming LHS all the way to RHS.
@@ -143,7 +155,7 @@ let right_distributivity (#p: Type) (#dom: integral_domain p) (x y z: fraction d
   } 
   
 private let fraction_distributivity_lemma (#p: Type) (#dom: integral_domain p) 
-  : Lemma (is_fully_distributive #(fraction dom) fraction_mul fraction_add) =  
+  : Lemma (is_fully_distributive #(fraction dom) fraction_mul (fraction_add #p #dom)) =  
   reveal_opaque (`%is_fully_distributive) (is_fully_distributive #(fraction dom) #fraction_eq); 
   reveal_opaque (`%is_left_distributive) (is_left_distributive #(fraction dom) #fraction_eq); 
   reveal_opaque (`%is_right_distributive) (is_right_distributive #(fraction dom) #fraction_eq);   
@@ -181,17 +193,35 @@ private let fraction_nonabsorbers_are_regular (#p:Type) (#d: integral_domain p)
   Classical.forall_intro_2 (Classical.move_requires_2 aux_2);
   Classical.forall_intro_2 (Classical.move_requires_2 aux_3)
 
+#push-options "--ifuel 0 --fuel 0 --z3rlimit 1"
+#restart-solver
 let fraction_field (#a:Type) (d: integral_domain a) : field (fraction d) = 
+
   fraction_distributivity_lemma #a #d;
   fraction_one_is_not_equal_to_fraction_zero #a #d;
   fraction_nonabsorbers_are_regular #a #d;
-  Classical.forall_intro (fraction_unit_cant_be_absorber #a #d);
+  Classical.forall_intro (fraction_unit_cant_be_absorber #a #d);  
   Classical.forall_intro (fraction_nonabsorber_is_unit #a #d);
+  let addition = fraction_additive_group d in
+  let multiplication = fraction_multiplicative_almost_group #a #d in
+  let eq = fraction_eq #a #d in
+  let zero = fraction_absorber d in
+  assert (zero == addition.neutral);
+  assert (addition.eq == multiplication.eq);
+  assert (congruence_condition addition.op eq);
+  assert (congruence_condition multiplication.op eq);
+  assert (eq == addition.eq);
+  assert (multiplication.op == fraction_mul #a #d);
+  assert (is_fully_distributive multiplication.op addition.op);
+  assert (is_absorber_of addition.neutral multiplication.op);  
   { 
-    addition = fraction_additive_group d;
-    multiplication = fraction_multiplicative_almost_group #a #d;
-    eq = (fraction_eq #a #d);
-    unit_part_of = fraction_unit_part #a #d;
-    normal_part_of = fraction_normal_part #a #d;
-    euclidean_norm = fraction_norm #a #d
+    addition = addition;
+    multiplication = multiplication;
+    eq = eq;
+    unit_part_of = fraction_unit_part_f d;
+    normal_part_of = fraction_normal_part_f d;
+    euclidean_norm = fraction_norm_f d
   }
+#pop-options
+#pop-options
+

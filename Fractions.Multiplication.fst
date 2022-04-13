@@ -425,6 +425,7 @@ let fraction_inv (#a:Type) (#d: integral_domain a) (x: units_of fraction_mul)
   invfrac
    
 #push-options "--z3rlimit 4"
+#restart-solver
 let fraction_inv_respects_equivalence (#p:Type) (#d: integral_domain p) (x y: units_of fraction_mul) 
   : Lemma (requires fraction_eq #p #d x y)
           (ensures (fraction_eq #p #d (fraction_inv x) (fraction_inv y) /\ fraction_eq #p #d (fraction_inv y) (fraction_inv x))) = 
@@ -512,32 +513,21 @@ let fraction_inv_respects_equivalence (#p:Type) (#d: integral_domain p) (x y: un
   assert ( ((fraction_inv x).num * (fraction_inv y).den) `eq` ((fraction_inv x).den * (fraction_inv y).num) );
   symm_lemma fraction_eq (fraction_inv y) (fraction_inv x)
 #pop-options
-  
-let fraction_multiplicative_almost_group (#a:Type) (#d: integral_domain a) : commutative_monoid (fraction d) = 
-  let aux_mul_is_comm () : Lemma (is_commutative #(fraction d) fraction_mul) = 
-    reveal_opaque (`%is_commutative) (is_commutative #(fraction d) #(fraction_eq)); 
-    Classical.forall_intro_2 (fraction_mul_is_commutative #a #d) in
-  aux_mul_is_comm();
-  let op : binary_op (fraction d) = fraction_mul in
-  let eq = fraction_eq in
-  let fme : equivalence_relation (units_of #(fraction d) fraction_mul) = 
-    reveal_opaque (`%is_reflexive) (is_reflexive #(fraction d)); 
-    reveal_opaque (`%is_reflexive) (is_reflexive #(units_of #(fraction d) fraction_mul)); 
-    reveal_opaque (`%is_symmetric) (is_symmetric #(fraction d)); 
-    reveal_opaque (`%is_symmetric) (is_symmetric #(units_of #(fraction d) fraction_mul)); 
-    reveal_opaque (`%is_transitive) (is_transitive #(fraction d)); 
-    reveal_opaque (`%is_transitive) (is_transitive #(units_of #(fraction d) fraction_mul)); 
-    fraction_eq in
-  let inv : unary_op_on_units_of op =    
-    let aux_inv_resp_eq () : Lemma (unary_congruence_condition #(units_of #(fraction d) fraction_mul) fraction_inv fraction_eq) = 
-      reveal_opaque (`%unary_congruence_condition) 
-                    (unary_congruence_condition #(units_of #(fraction d) fraction_mul)); 
-      Classical.forall_intro (fraction_nonabsorber_is_unit #a #d);
-      Classical.forall_intro_2 (Classical.move_requires_2
-         (fraction_inv_respects_equivalence #a #d));
-      () in
-    aux_inv_resp_eq();
-    fraction_inv in  
-  Mkmagma eq op inv (fraction_one d)  
+
+let fmul (#a:Type) (d: integral_domain a) : op_with_congruence (fraction_eq #a #d)
+  = fraction_mul #a #d
+ 
+#push-options "--z3rlimit 10 --fuel 0 --ifuel 0"
+let fraction_multiplicative_almost_group (#a:Type) (#d: integral_domain a) : commutative_monoid (fraction d)
+  = 
+  reveal_opaque (`%unary_congruence_condition) (unary_congruence_condition #(units_of (fmul d)));  
+  let finv (x: units_of (fmul d)) : units_of (fmul d) = fraction_inv x in 
+  let coco (x y: units_of (fmul d)) 
+    : Lemma (requires fraction_eq x y) 
+            (ensures fraction_eq (finv x) (finv y) /\ fraction_eq (finv y) (finv x)) 
+            = fraction_inv_respects_equivalence x y in
+  Classical.forall_intro_2 (Classical.move_requires_2 coco);
+  let fi : unary_op_on_units_of (fmul d) = finv in
+  Mkmagma (fraction_eq #a #d) (fmul d) finv (fraction_one d)
 
 #pop-options

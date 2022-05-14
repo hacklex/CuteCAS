@@ -20,6 +20,8 @@ instance default_equatable (t:eqtype) : equatable t = {
 
 let ( = ) (#t:Type) {|h: equatable t|} = h.eq
 
+let ( <> ) (#t:Type) {|h: equatable t|} (x y: t) = not (x=y)
+
 private let z = 4 = 5
 
 private let _ = assert (not z)

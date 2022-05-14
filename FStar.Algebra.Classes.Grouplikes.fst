@@ -249,3 +249,61 @@ let left_factor_is_right_factor_if_commutative (#t:Type)
       symmetry (c*factor) (factor*c);
       transitivity (factor*c) (c*factor) product
     end in Classical.move_requires aux_2 ()  
+ 
+let double_negation_lemma (#t:Type) {| g: add_group t |} (x:t) 
+  : Lemma (-(-x) = x) = 
+  let ha : has_add t = TC.solve in
+  let sg : add_semigroup t =  TC.solve in
+  negation (-x);
+  reflexivity x;
+  ha.congruence (-(-x) + -x) x zero x;
+  left_add_identity x;
+  sg.associativity (-(-x)) (-x) x;
+  negation x;
+  reflexivity (-(-x));
+  ha.congruence (-(-x)) (-x + x) (-(-x)) zero;
+  symmetry (-(-x) + (-x + x)) (-(-x) + zero);
+  right_add_identity (-(-x));
+  symmetry (-(-x) + zero) (-(-x));
+  transitivity (-(-x)) (-(-x) + zero) (-(-x) + (-x+x));
+  symmetry (-(-x) + (-x) + x) (-(-x) + (-x + x));
+  transitivity (-(-x)) (-(-x) + (-x+x)) (-(-x) + -x + x);
+  transitivity (-(-x)) (-(-x) + -x + x) (zero + x);
+  transitivity (-(-x)) (zero + x) x
+
+let equal_elements_have_equal_inverses (#t:Type) {| g: add_group t |} (x y:t)
+  : Lemma (requires x=y) (ensures -x = -y) = 
+  let ha : has_add t = TC.solve in
+  let sg : add_semigroup t =  TC.solve in
+  negation x; negation y;
+  reflexivity (-x);
+  reflexivity (-y);
+  ha.congruence x (-x) y (-x);
+  ha.congruence (-y) (x + -x) (-y) (y + -x);
+  ha.congruence (-y) (x + -x) (-y) zero;
+  right_add_identity (-y);
+  transitivity (-y + (x + -x)) (-y + zero) (-y);
+  symmetry (-y + (x + -x)) (-y);
+  sg.associativity (-y) y (-x);
+  symmetry (-y + y + -x) (-y + (y + -x));
+  transitivity (-y) (-y + (x + -x)) (-y + (y + -x));
+  transitivity (-y) (-y + (y + -x)) (-y + y + -x);
+  ha.congruence (-y+y) (-x) zero (-x);
+  left_add_identity (-x);
+  transitivity (-y + y + -x) (zero + -x) (-x);
+  transitivity (-y) (-y + y + -x) (-x);
+  symmetry (-y) (-x)
+   
+let equal_elements_means_equal_inverses (#t:Type) {| g: add_group t |} (x y:t) 
+  : Lemma ((x=y) == (-x = -y)) =   
+    let aux_1 (p q:t) : Lemma (requires p=q) (ensures -p = -q) =
+      equal_elements_have_equal_inverses p q in
+    let aux_2 (p q:t) : Lemma (requires -p = -q) (ensures p=q) = 
+      double_negation_lemma p;
+      double_negation_lemma q;
+      equal_elements_have_equal_inverses (-p) (-q);
+      symmetry (-(-p)) p;
+      transitivity p (-(-p)) (-(-q));
+      transitivity p (-(-q)) q in
+    if (x=y && -x <> -y) then aux_1 x y
+    else if (x <> y && -x = -y) then aux_2 x y

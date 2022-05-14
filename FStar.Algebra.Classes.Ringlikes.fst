@@ -23,7 +23,7 @@ class semiring (t:Type) = {
   right_distributivity : right_distributivity_lemma mul_monoid.mul_semigroup.has_mul.mul 
                                                   add_comm_monoid.add_monoid.add_semigroup.has_add.add;
 }
-
+ 
 instance add_cm_of_semiring (t:Type) {| r: semiring t |} = r.add_comm_monoid
 instance mul_m_of_semiring (t:Type) {| r: semiring t |} = r.mul_monoid
 
@@ -44,21 +44,12 @@ let absorber_is_two_sided_from_forall (#t:Type) {| r: semiring t |} (z1 z2:t)
 
 class ring (t:Type) = {
   [@@@TC.no_method] add_comm_group: add_comm_group t;
-  [@@@TC.no_method] semiring: (r:semiring t { r.add_comm_monoid == add_comm_group.add_comm_monoid });
+  [@@@TC.no_method] semiring: semiring t;
+  [@@@TC.no_method] add_comm_group_consistency: squash (semiring.add_comm_monoid == add_comm_group.add_comm_monoid);
 }
 
-instance add_monoid_of_semiring (t:Type) {| r: semiring t |} = r.add_comm_monoid.add_monoid
-
 instance add_comm_group_of_ring (t:Type) {| r: ring t |} = r.add_comm_group 
-
-
-instance mul_of_ring (t:Type) {| r: ring t |} = r.semiring.mul_monoid
-instance equatable_of_semiring (t:Type) {| r: semiring t |} = r.mul_monoid.mul_semigroup.has_mul.eq
-
-instance has_neg_of_ring (t:Type) {| r: ring t |} = r.add_comm_group.add_group.has_neg
-
 instance semiring_of_ring (t:Type) {| r: ring t |} = r.semiring
-
 
 let ring_add_left_cancellation (#t:Type) {| r: ring t |} (x y z: t)
   : Lemma (requires x+y=x+z) (ensures y=z) = group_cancelation_left x y z
@@ -66,99 +57,176 @@ let ring_add_left_cancellation (#t:Type) {| r: ring t |} (x y z: t)
 let ring_add_right_cancellation (#t:Type) {| r: ring t |} (x y z: t)
   : Lemma (requires y+x=z+x) (ensures y=z) = group_cancelation_right x y z
 
+open FStar.List.Tot.Base
+
+let rec trans_condition (#t:Type) {| equatable t |} (l: list t{length l > 1})
+  : bool
+  = match l with
+  | h1::tail -> match tail with  
+    | h2::Nil -> h1=h2
+    | h2::t2 -> h1=h2 && trans_condition tail
+
+let rec trans_lemma (#t:Type) {| equatable t |} (expressions: list t{length expressions > 1})
+  : Lemma (requires trans_condition expressions)
+          (ensures hd expressions = last expressions) = 
+  match expressions with
+  | h1::h2::Nil -> ()
+  | h1::h2::t2 -> trans_lemma (h2::t2);
+               transitivity h1 h2 (last t2)
+ 
+let mul_associativity #t {| sg: mul_semigroup t |} : associativity_lemma ( * ) = sg.associativity 
+let add_associativity #t {| sg: add_semigroup t |} : associativity_lemma ( + ) = sg.associativity
+let mul_congruence #t {| hm: has_mul t |} : congruence_lemma ( * ) = hm.congruence 
+let add_congruence #t {| ha: has_add t |} : congruence_lemma ( + ) = ha.congruence 
+
+let elim_equatable_laws (#t:Type) (r: ring t)
+  : Lemma ((forall (x:t). x=x) /\ (forall (x y: t). x=y <==> y=x)) = 
+  Classical.forall_intro (reflexivity #t);
+  Classical.forall_intro_2 (Classical.move_requires_2 (symmetry #t))
+
+let ring_zero_is_right_absorber (#t:Type) {| r: ring t |} (x:t)
+  : Lemma (x * zero = zero) = 
+  let (l,o): t&t = one, zero in
+  elim_equatable_laws r;
+  left_distributivity x o l; 
+  left_add_identity l;
+  right_mul_identity x;
+  mul_congruence x (o+l) x l;
+  add_congruence (x*o) (x*l) (x*o) x;
+  trans_lemma [ x; (x*l); (x*(o+l)); (x*o+x*l); (x*o+x) ];
+  add_congruence x (-x) (x*o + x) (-x);
+  negation x;
+  add_associativity (x*o) x (-x);
+  add_congruence (x*o) (x + -x) (x*o) o;
+  right_add_identity (x*o);
+  trans_lemma [ o; (x + -x); (x*o + x + -x); (x*o + (x + -x)); (x*o + o); (x*o) ]
+ 
+let ring_zero_is_left_absorber (#t:Type) {| r: ring t |} (x:t)
+  : Lemma (zero * x = zero) = 
+  let (l,o): t&t = one, zero in
+  elim_equatable_laws r;
+  right_distributivity o l x;
+  left_mul_identity x;
+  left_add_identity l;
+  mul_congruence l x (o+l) x;
+  add_congruence (o*x) (l*x) (o*x) x;
+  trans_lemma [ x; (l*x); ((o+l)*x); (o*x+l*x); (o*x+x) ];
+  add_congruence x (-x) (o*x+x) (-x);
+  negation x;
+  add_associativity (o*x) x (-x);
+  add_congruence (o*x) (x + -x) (o*x) o;
+  right_add_identity (o*x);
+  trans_lemma [ o; (x + -x); (o*x + x + -x); (o*x + (x + -x)); (o*x + o); (o*x) ]
+ 
 let ring_zero_is_absorber (#t:Type) {| r: ring t |} (x:t)
   : Lemma (zero * x = zero /\ x * zero = zero) = 
+  ring_zero_is_left_absorber x;
+  ring_zero_is_right_absorber x
+
+let transitivity_for_calc_proofs (#t:Type) (r: ring t)
+  : Lemma (forall (x y z:t). x=y /\ y=z ==> x=z) = 
+  Classical.forall_intro_3 (Classical.move_requires_3 (transitivity #t))
+
+let ring_neg_x_is_minus_one_times_x (#t:Type) {| r: ring t |} (x:t) 
+  : Lemma (-x = (-one)*x) = 
+  let (l, o) : t&t = one, zero in
+  elim_equatable_laws r;
+  transitivity_for_calc_proofs r;
+  calc (=) {
+    o; = { ring_zero_is_left_absorber x }
+    o*x; = { negation l; mul_congruence o x (l + -l) x }
+    (l + -l)*x; = { right_distributivity l (-l) x }
+    l*x + (-l)*x; = { left_mul_identity x; add_congruence (l*x) ((-l)*x) x ((-l)*x) }
+    x + (-l)*x;
+  };
+  add_congruence (-x) o (-x) (x + (-l)*x);
+  calc (=) {
+    -x; = { right_add_identity (-x) }
+    -x+o; = {}
+    -x + (x + (-l)*x); = { add_associativity (-x) x ((-l)*x) }
+    -x + x + ((-l)*x); = { negation x; add_congruence (-x+x) ((-l)*x) o ((-l)*x) }
+    o + (-l)*x; = { left_add_identity ((-l)*x) }
+    (-l)*x;
+  }
+   
+let aux_neg (#t:Type) {| r: ring t |} (x:t)
+  : Lemma (-x = (-one)*x) = 
+  let (l, o) : t&t = one, zero in 
+  elim_equatable_laws r;
+  ring_zero_is_absorber x;
+  negation l;
+  right_distributivity l (-l) x;
+  left_mul_identity x;
+  add_congruence (l*x) ((-l)*x) x ((-l)*x);
+  mul_congruence o x (l + -l) x;
+  trans_lemma [ o; 
+                (o*x); 
+                ((l + -l)*x); 
+                (l*x + (-l)*x); 
+                (x + (-l)*x) ];
+  add_congruence (-x) o (-x) (x + (-l)*x);
+  right_add_identity (-x);
+  add_associativity (-x) x ((-l)*x);
+  negation x;
+  add_congruence (-x + x) ((-l)*x) o ((-l)*x);
+  left_add_identity ((-l)*x);
+  trans_lemma [ (-x); 
+                (-x+o); 
+                (-x + (x + (-l)*x)); 
+                (-x + x + (-l)*x); 
+                (o + (-l)*x); 
+                ((-l)*x) ]
+  
+let ring_neg_one_commutes_with_everything #t {| r: ring t |} (x:t)
+  : Lemma (x*(-one) = (-one)*x) = 
   let one: t = one in
   let rr : semiring t = r.semiring in
   let ha : has_add t = TC.solve in
   let asg: add_semigroup t = TC.solve in
   let hm : has_mul t = TC.solve in 
-  left_add_identity one; 
-  left_distributivity x zero one;
-  symmetry (x*(zero+one)) (x*zero + x*one); 
-  reflexivity (x*zero);
-  reflexivity x;
-  reflexivity (-(x*one));
-  right_mul_identity x;
-  ha.congruence (x*zero) (x*one) (x*zero) x;
-  hm.congruence x (zero+one) x one;
-  transitivity (x*zero + x*one) (x*(zero+one)) (x*one);
-  ha.congruence (x*zero + x*one) (-(x*one)) (x*one) (-(x*one)); 
-  negation (x*one); 
-  asg.associativity (x*zero) (x*one) (-(x*one)); 
-  ha.congruence (x*zero) (x*one + -(x*one)) (x*zero) zero;
-  transitivity (x*zero+x*one + -(x*one)) (x*zero+(x*one + -(x*one))) (x*zero + zero);
-  right_add_identity (x*zero); 
-  transitivity (x*zero + x*one + -(x*one)) (x*zero + zero) (x*zero);
-  symmetry (x*zero + x*one + -(x*one)) (x*zero);
-  transitivity (x*zero) (x*zero + x*one + -(x*one)) (x*one + -(x*one));
-  transitivity (x*zero) (x*one + -(x*one)) zero; 
-
-  right_distributivity zero one x; 
-  hm.congruence (zero+one) x one x;
-  left_mul_identity x;
-  transitivity ((zero+one)*x) (one*x) x;
-  symmetry ((zero+one)*x) x;
-  transitivity x ((zero+one)*x) (zero*x+one*x);
-  reflexivity (zero*x);
-  ha.congruence (zero*x) (one*x) (zero*x) x;
-  transitivity x (zero*x+one*x) (zero*x + x);
-  reflexivity (-x);
-  ha.congruence x (-x) (zero*x+x) (-x); 
-  symmetry (x + -x) (zero*x + x + -x);
-  negation x; 
-  symmetry (x + -x) zero;
-  transitivity zero (x + -x) (zero*x + x + -x);
-  asg.associativity (zero*x) x (-x);
-  ha.congruence (zero*x) (x + -x) (zero*x) zero;
-  transitivity (zero*x + x + -x) (zero*x + (x + -x)) (zero*x + zero);
-  right_add_identity (zero*x);
-  transitivity (zero*x + x + -x) (zero*x + zero) (zero*x);
-  transitivity zero (zero*x + x + -x) (zero*x);
-  symmetry zero (zero*x); 
-()
-
-let double_negation_lemma (#t:Type) {| g: add_group t |} (x:t) 
-  : Lemma (-(-x) = x) = 
-  let ha : has_add t = TC.solve in
-  let sg : add_semigroup t =  TC.solve in
-  negation (-x);
-  reflexivity x;
-  ha.congruence (-(-x) + -x) x zero x;
-  left_add_identity x;
-  sg.associativity (-(-x)) (-x) x;
+  left_distributivity x (-one) one;
+  negation one;
   negation x;
-  reflexivity (-(-x));
-  ha.congruence (-(-x)) (-x + x) (-(-x)) zero;
-  symmetry (-(-x)+(-x+x)) (-(-x)+zero);
-  right_add_identity (-(-x));
-  symmetry (-(-x) + zero) (-(-x));
-  transitivity (-(-x)) (-(-x)+zero) (-(-x) + (-x+x));
-  symmetry (-(-x) + (-x) + x) (-(-x) + (-x + x));
-  transitivity (-(-x)) (-(-x) + (-x+x)) (-(-x) + (-x) + x);
-  transitivity (-(-x)) (-(-x) + (-x) + x) (zero + x);
-  transitivity (-(-x)) (zero + x) x
-
-let equal_elements_have_equal_inverses (#t:Type) {| g: add_group t |} (x y:t)
-  : Lemma (requires x=y) (ensures -x = -y) = 
-  let ha : has_add t = TC.solve in
-  let sg : add_semigroup t =  TC.solve in
-  negation x; negation y;
+  reflexivity x;
   reflexivity (-x);
-  reflexivity (-y);
-  ha.congruence x (-x) y (-x);
-  ha.congruence (-y) (x + -x) (-y) (y + -x);
-  ha.congruence (-y) (x + -x) (-y) zero;
-  right_add_identity (-y);
-  transitivity (-y + (x + -x)) (-y + zero) (-y);
-  symmetry (-y + (x + -x)) (-y);
-  sg.associativity (-y) y (-x);
-  symmetry (-y + y + -x) (-y + (y + -x));
-  transitivity (-y) (-y + (x + -x)) (-y + (y + -x));
-  transitivity (-y) (-y + (y + -x)) (-y + y + -x);
-  ha.congruence (-y+y) (-x) zero (-x);
+  hm.congruence x (-one + one) x zero;
+  right_absorption x;
+  symmetry (x*zero) zero;
+  symmetry (x*(-one + one)) (x*zero);
+  transitivity zero (x*zero) (x*(-one+one));
+  transitivity (x*(-one + one)) (x*zero) zero;
+  right_mul_identity x;
+  reflexivity (x*(-one));
+  ha.congruence (x*(-one)) (x*one) (x*(-one)) x;
+  transitivity zero (x*(-one + one)) (x*(-one) + x*one);
+  transitivity zero (x*(-one) + x*one) (x*(-one) + x);
+  ha.congruence zero (-x) (x*(-one)+x) (-x);
   left_add_identity (-x);
-  transitivity (-y + y + -x) (zero + -x) (-x);
-  transitivity (-y) (-y + y + -x) (-x);
-  symmetry (-y) (-x)
-  
+  symmetry (zero + -x) (-x);
+  transitivity (-x) (zero + -x) (x*(-one) + x + -x);
+  asg.associativity (x*(-one)) x (-x);
+  transitivity (-x) (x*(-one) + x + -x) (x*(-one) + (x + -x));
+  ha.congruence (x*(-one)) (x + -x) (x*(-one)) zero;
+  transitivity (-x) (x*(-one) + (x + -x)) (x*(-one) + zero);
+  right_add_identity (x*(-one));
+  transitivity (-x) (x*(-one) + zero) (x*(-one));
+  symmetry (-x) (x*(-one));
+  ring_neg_x_is_minus_one_times_x x;
+  transitivity (x*(-one)) (-x) ((-one)*x) 
+ 
+let ring_neg_xy_is_x_times_neg_y #t {| r: ring t |} (x y: t)
+  : Lemma (-(x*y) = x*(-y)) =  
+  ring_neg_x_is_minus_one_times_x y;
+  reflexivity x;
+  reflexivity y;
+  mul_congruence x (-y) x ((-one)*y);
+  mul_associativity x (-one) y;
+  symmetry (x * (-one) * y) (x * ((-one) * y));
+  ring_neg_one_commutes_with_everything x;
+  mul_congruence (x * (-one)) y ((-one)*x) y;
+  mul_associativity (-one) x y;
+  transitivity (x * (-one) * y) ((-one) * x * y) ((-one) * (x * y));
+  ring_neg_x_is_minus_one_times_x (x*y);
+  symmetry (-(x*y)) ((-one)*(x*y));
+  trans_lemma [ (x*(-y)); (x * ((-one)*y)); (x * (-one) * y);  ((-one) * (x*y)); (-(x*y)) ];
+  symmetry (x*(-y)) (-(x*y)) 

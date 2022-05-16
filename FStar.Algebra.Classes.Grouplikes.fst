@@ -307,3 +307,27 @@ let equal_elements_means_equal_inverses (#t:Type) {| g: add_group t |} (x y:t)
       transitivity p (-(-q)) q in
     if (x=y && -x <> -y) then aux_1 x y
     else if (x <> y && -x = -y) then aux_2 x y
+
+let mul_associativity #t {| sg: mul_semigroup t |} : associativity_lemma ( * ) = sg.associativity 
+let add_associativity #t {| sg: add_semigroup t |} : associativity_lemma ( + ) = sg.associativity
+let mul_congruence #t {| hm: has_mul t |} : congruence_lemma ( * ) = hm.congruence 
+let add_congruence #t {| ha: has_add t |} : congruence_lemma ( + ) = ha.congruence 
+
+let equality_is_zero_sum (#t:Type) {| add_group t |} (x y: t)
+  : Lemma ((x=y) <==> (x + -y = zero)) = 
+  elim_equatable_laws t;
+  transitivity_for_calc_proofs t;
+  negation y;
+  let aux_1 (x y:t) : Lemma (requires x=y) (ensures x + -y = zero) =
+    negation y;
+    add_congruence x (-y) y (-y)
+    in Classical.move_requires_2 aux_1 x y;    
+  let aux_2 (x y:t) : Lemma (requires x + -y = zero) (ensures x=y) =  
+    negation y;
+    add_congruence (x + -y) y zero y;
+    add_associativity x (-y) y;
+    add_congruence x (-y + y) x zero;
+    right_add_identity x;
+    left_add_identity y
+    in Classical.move_requires_2 aux_2 x y
+    

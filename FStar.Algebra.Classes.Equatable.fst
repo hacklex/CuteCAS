@@ -22,6 +22,34 @@ let ( = ) (#t:Type) {|h: equatable t|} = h.eq
 
 let ( <> ) (#t:Type) {|h: equatable t|} (x y: t) = not (x=y)
 
+let elim_equatable_laws (t:Type) {| equatable t |}
+  : squash ((forall (x:t). x=x) /\ (forall (x y: t). x=y <==> y=x)) = 
+  Classical.forall_intro (reflexivity #t);
+  Classical.forall_intro_2 (Classical.move_requires_2 (symmetry #t))
+
+
+open FStar.List.Tot.Base
+
+let rec trans_condition (#t:Type) {| equatable t |} (l: list t{length l > 1})
+  : bool
+  = match l with
+  | h1::tail -> match tail with  
+    | h2::Nil -> h1=h2
+    | h2::t2 -> h1=h2 && trans_condition tail
+
+let rec trans_lemma (#t:Type) {| equatable t |} (expressions: list t{length expressions > 1})
+  : Lemma (requires trans_condition expressions)
+          (ensures hd expressions = last expressions) = 
+  match expressions with
+  | h1::h2::Nil -> ()
+  | h1::h2::t2 -> trans_lemma (h2::t2);
+               transitivity h1 h2 (last t2)
+ 
+let transitivity_for_calc_proofs (t:Type) {| equatable t |}
+  : squash (forall (x y z:t). x=y /\ y=z ==> x=z) = 
+  Classical.forall_intro_3 (Classical.move_requires_3 (transitivity #t))
+
+
 private let z = 4 = 5
 
 private let _ = assert (not z)

@@ -118,7 +118,10 @@ class mul_comm_semigroup (t:Type) = {
   [@@@TC.no_method] mul_semigroup: mul_semigroup t;
   [@@@TC.no_method] mul_comm_magma : mul_comm_magma t;
   [@@@TC.no_method] consistency : squash (mul_semigroup.has_mul == mul_comm_magma.has_mul);
+  dvd: x:t -> y:t -> (p:bool{ p <==> (exists (c:t). y = c*x) });
 }
+
+let ( |: ) #t {| mul_comm_semigroup t |} (x y: t) = dvd x y
 
 instance sg_of_mul_comm_semigroup (t:Type) {| h: mul_comm_semigroup t |} = h.mul_semigroup
 instance mul_comm_magma_of_comm_sg (t:Type) {| h: mul_comm_semigroup t |} = h.mul_comm_magma
@@ -128,14 +131,14 @@ class add_comm_monoid (t:Type) = {
   [@@@TC.no_method] add_comm_semigroup: add_comm_semigroup t;
   [@@@TC.no_method] consistency : squash (add_monoid.add_semigroup == add_comm_semigroup.add_semigroup);
 }
- 
+  
 instance add_monoid_of_comm_monoid (t:Type) {| h: add_comm_monoid t |} = h.add_monoid
 instance add_comm_sg_of_comm_monoid (t:Type) {| h: add_comm_monoid t |} = h.add_comm_semigroup
  
 class mul_comm_monoid (t:Type) = {
   [@@@TC.no_method] mul_monoid: mul_monoid t;
   [@@@TC.no_method] mul_comm_semigroup: mul_comm_semigroup t;
-  [@@@TC.no_method] consistency : squash (mul_monoid.mul_semigroup == mul_comm_semigroup.mul_semigroup);
+  [@@@TC.no_method] consistency : squash (mul_monoid.mul_semigroup == mul_comm_semigroup.mul_semigroup);  
 }
  
 instance mul_monoid_of_comm_monoid (t:Type) {| h: mul_comm_monoid t |} = h.mul_monoid

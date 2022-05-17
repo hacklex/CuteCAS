@@ -24,8 +24,14 @@ class semiring (t:Type) = {
                                                   add_comm_monoid.add_monoid.add_semigroup.has_add.add;
 }
  
-instance add_cm_of_semiring (t:Type) {| r: semiring t |} = r.add_comm_monoid
-instance mul_m_of_semiring (t:Type) {| r: semiring t |} = r.mul_monoid
+instance add_cm_of_semiring (t:Type) ( r: semiring t) = r.add_comm_monoid
+instance mul_m_of_semiring (t:Type) (r: semiring t) = r.mul_monoid
+
+(*
+instance hm_r #t (r: semiring t) = r.mul_monoid.mul_semigroup.has_mul
+instance ha_r #t (r: semiring t) = r.add_comm_monoid.add_monoid.add_semigroup.has_add
+instance he_r #t (r: semiring t) = r.mul_monoid.mul_semigroup.has_mul.eq 
+*)
 
 let absorber_is_two_sided_from_lemmas #t {| r: semiring t |} (#z1 #z2: t)
   (z1_is_absorber: left_absorber_lemma r.mul_monoid.mul_semigroup.has_mul.mul z1)
@@ -48,8 +54,11 @@ class ring (t:Type) = {
   [@@@TC.no_method] add_comm_group_consistency: squash (semiring.add_comm_monoid == add_comm_group.add_comm_monoid);
 }
 
-instance add_comm_group_of_ring (t:Type) {| r: ring t |} = r.add_comm_group 
-instance semiring_of_ring (t:Type) {| r: ring t |} = r.semiring
+instance add_comm_group_of_ring (t:Type) (r: ring t) = r.add_comm_group 
+instance semiring_of_ring (t:Type) (r: ring t) = r.semiring
+
+//instance hm_rr #t (r: ring t) = r.semiring.mul_monoid.mul_semigroup.has_mul
+//instance ha_rr #t (r: ring t) = r.semiring.add_comm_monoid.add_monoid.add_semigroup.has_add
 
 let ring_add_left_cancellation (#t:Type) {| r: ring t |} (x y z: t)
   : Lemma (requires x+y=x+z) (ensures y=z) = group_cancelation_left x y z
@@ -119,7 +128,6 @@ let ring_neg_x_is_minus_one_times_x (#t:Type) {| r: ring t |} (x:t)
     (-l)*x;
   }
  
-  
 private let alternative_above_lemma (#t:Type) {| r: ring t |} (x:t)
   : Lemma (-x = (-one)*x) = 
   let (l, o) : t&t = one, zero in 
@@ -147,6 +155,10 @@ private let alternative_above_lemma (#t:Type) {| r: ring t |} (x:t)
                 (-x + x + (-l)*x); 
                 (o + (-l)*x); 
                 ((-l)*x) ]
+
+instance hm_r #t (r: semiring t) = r.mul_monoid.mul_semigroup.has_mul
+instance ha_r #t (r: semiring t) = r.add_comm_monoid.add_monoid.add_semigroup.has_add
+instance he_r #t (r: semiring t) = r.mul_monoid.mul_semigroup.has_mul.eq 
 
 let ring_neg_x_is_x_times_minus_one (#t:Type) {| r: ring t |} (x:t) 
   : Lemma (-x = x*(-one)) = 
@@ -215,14 +227,25 @@ let ring_neg_left_distributivity #t {| r: ring t |} (x y z: t)
   left_distributivity x y (-z);
   ring_neg_xy_is_x_times_neg_y x z; 
   add_congruence (x*y) (x*(-z)) (x*y) (-(x*z))
-  
+
+let elim_ring_eq_laws #t (r: ring t) : squash (
+  (forall (x:t). x=x) /\
+  (forall (x y:t). (x=y) == (y=x))
+) = elim_equatable_laws t #TC.solve
+
+let elim_ring_trans #t (r: ring t) : Lemma (forall (x y z: t). x=y /\ y=z ==> x=z)
+  = 
+  let eq : equatable t = TC.solve in
+  Classical.forall_intro_3 (Classical.move_requires_3 eq.transitivity)
+
 let ring_neg_right_distributivity #t {| r: ring t |} (x y z: t)
-  : Lemma ((x + -y) * z = x*z + -(y*z)) = 
+  : Lemma ((x + -y) * z = x*z + -(y*z)) =
   elim_equatable_laws t;
-  transitivity_for_calc_proofs t;
+  transitivity_for_calc_proofs t;   
   right_distributivity x (-y) z;
   ring_neg_xy_is_neg_x_times_y y z; 
   add_congruence (x*z) ((-y)*z) (x*z) (-(y*z)) 
+
 
 class zero_ne_one_semiring (t:Type) = {
   [@@@TC.no_method] semiring: semiring t;
@@ -272,3 +295,4 @@ class commutative_ring (t:Type) = {
 
 instance ring_of_commutative_ring (t:Type) (r: commutative_ring t) = r.ring
 instance mul_comm_monoid_of_comm_ring (t:Type) (r: commutative_ring t) = r.mul_comm_monoid
+

@@ -27,11 +27,11 @@ class semiring (t:Type) = {
 instance add_cm_of_semiring (t:Type) ( r: semiring t) = r.add_comm_monoid
 instance mul_m_of_semiring (t:Type) (r: semiring t) = r.mul_monoid
 
-(*
+
 instance hm_r #t (r: semiring t) = r.mul_monoid.mul_semigroup.has_mul
 instance ha_r #t (r: semiring t) = r.add_comm_monoid.add_monoid.add_semigroup.has_add
 instance he_r #t (r: semiring t) = r.mul_monoid.mul_semigroup.has_mul.eq 
-*)
+
 
 let absorber_is_two_sided_from_lemmas #t {| r: semiring t |} (#z1 #z2: t)
   (z1_is_absorber: left_absorber_lemma r.mul_monoid.mul_semigroup.has_mul.mul z1)
@@ -155,11 +155,7 @@ private let alternative_above_lemma (#t:Type) {| r: ring t |} (x:t)
                 (-x + x + (-l)*x); 
                 (o + (-l)*x); 
                 ((-l)*x) ]
-
-instance hm_r #t (r: semiring t) = r.mul_monoid.mul_semigroup.has_mul
-instance ha_r #t (r: semiring t) = r.add_comm_monoid.add_monoid.add_semigroup.has_add
-instance he_r #t (r: semiring t) = r.mul_monoid.mul_semigroup.has_mul.eq 
-
+ 
 let ring_neg_x_is_x_times_minus_one (#t:Type) {| r: ring t |} (x:t) 
   : Lemma (-x = x*(-one)) = 
   let (l, o) : t&t = one, zero in
@@ -312,15 +308,14 @@ let make_trivial_eq_instance #t (eq: t->t->bool)
          (ensures fun _ -> True) = 
   { eq = eq; reflexivity = (fun _ -> ()); symmetry = (fun _ _ -> ()); transitivity = (fun _ _ _ -> ()) }
 
-
-instance option_nat_eq : equatable (option nat) = 
-  make_trivial_eq_instance op_Equality
+// This one speeds up nat_norm_property below tremendously.
+instance option_nat_eq : equatable (option nat) = make_trivial_eq_instance op_Equality
   
-let _ = assert(((=) 5) == int_equatable.eq 5)
-
 let nat_norm_property (#t:Type) {| r: ring t |} (nf: nat_norm t) (x:t) 
   = (x = zero) <==> ((nf x) = None)
 
+// This one is redundant, but if I comment this, the following 
+// definitions will be really slow to verify.
 instance eq_of_mul_monoid #t (m: mul_monoid t) = m.mul_semigroup.has_mul.eq
 
 let is_unit #t {| h: mul_monoid t |} (x:t) = exists (x':t). x' * x = one
@@ -342,12 +337,15 @@ let is_prime #t {| h: mul_monoid t |} (p:t) =
 
 type units_of t {| h: mul_monoid t |} = x:t{is_unit x}
 
+// fstar-mode isn't happy with the definition, but fstar is somehow...
 let unit_product_is_unit #t {| h: mul_monoid t |} (x y: units_of t)
   : Lemma (is_unit #t (x*y)) =
   let x:t = x in
   let y:t = y in
-  let ( * ) = h.mul_semigroup.has_mul.mul in
-  let ( = ) = h.mul_semigroup.has_mul.eq.eq in
+// uncommenting these two  makes verification a lot faster 
+// let ( * ) = h.mul_semigroup.has_mul.mul in
+// let ( = ) = h.mul_semigroup.has_mul.eq.eq in
+// But even with these two, fstar takes several seconds longer than it should...
   eliminate exists (x' y':t). (x'*x=one /\ y'*y=one)
     returns is_unit (x*y) with _.  
     begin 

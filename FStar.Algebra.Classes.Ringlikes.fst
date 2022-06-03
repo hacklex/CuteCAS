@@ -296,3 +296,71 @@ class commutative_ring (t:Type) = {
 instance ring_of_commutative_ring (t:Type) (r: commutative_ring t) = r.ring
 instance mul_comm_monoid_of_comm_ring (t:Type) (r: commutative_ring t) = r.mul_comm_monoid
 
+let nat_norm (t:Type) = t -> option nat
+
+#push-options "--z3rlimit 1 --ifuel 0 --fuel 0"
+#restart-solver
+let test_nf #t (nf: nat_norm t) (z:t) (x:t)
+  = ((x==z) <==> ((nf x) == None))
+#pop-options
+
+let make_trivial_eq_instance #t (eq: t->t->bool)
+  : Pure (equatable t)
+         (requires (forall x. eq x x) /\
+                   (forall x y. eq x y <==> eq y x) /\
+                   (forall x y z. (eq x y /\ eq y z) ==> eq x z))
+         (ensures fun _ -> True) = 
+  { eq = eq; reflexivity = (fun _ -> ()); symmetry = (fun _ _ -> ()); transitivity = (fun _ _ _ -> ()) }
+
+
+instance option_nat_eq : equatable (option nat) = 
+  make_trivial_eq_instance op_Equality
+  
+let _ = assert(((=) 5) == int_equatable.eq 5)
+
+let nat_norm_property (#t:Type) {| r: ring t |} (nf: nat_norm t) (x:t) 
+  = (x = zero) <==> ((nf x) = None)
+
+instance eq_of_mul_monoid #t (m: mul_monoid t) = m.mul_semigroup.has_mul.eq
+
+let is_unit #t {| h: mul_monoid t |} (x:t) = exists (x':t). x' * x = one
+
+let is_divisor_of #t {| h: mul_monoid t |} (divisor dividend: t) 
+  = exists (quotient: t). quotient * divisor = dividend
+
+let are_associates #t {| h: mul_monoid t |} (p q: t)
+  = is_divisor_of p q /\ is_divisor_of q p
+
+let is_irreducible #t {| h: mul_monoid t |} (x:t) = 
+  (~(is_unit x)) /\
+  (forall (p q:t). ((q*p = x) ==> ((are_associates p x /\ is_unit q) \/
+                             (are_associates q x /\ is_unit p))))
+
+let is_prime #t {| h: mul_monoid t |} (p:t) = 
+  (~(is_unit p)) /\ (forall (m n:t). (is_divisor_of p (m*n) ==>
+                                (is_divisor_of p m \/ is_divisor_of p n)))
+
+type units_of t {| h: mul_monoid t |} = x:t{is_unit x}
+
+let unit_product_is_unit #t {| h: mul_monoid t |} (x y: units_of t)
+  : Lemma (is_unit #t (x*y)) =
+  let x:t = x in
+  let y:t = y in
+  let ( * ) = h.mul_semigroup.has_mul.mul in
+  let ( = ) = h.mul_semigroup.has_mul.eq.eq in
+  eliminate exists (x' y':t). (x'*x=one /\ y'*y=one)
+    returns is_unit (x*y) with _.  
+    begin 
+      elim_equatable_laws t;
+      transitivity_for_calc_proofs t;
+      calc (=) {
+        (y'*x')*(x*y); = { mul_associativity y' x' (x*y) }
+        y' * (x' * (x*y)); = { mul_associativity x' x y; 
+                               mul_congruence y' (x'*(x*y)) y' ((x'*x)*y) }
+        y' * ((x'*x)*y); = { mul_congruence (x'*x) y one y;
+                             mul_congruence y' ((x'*x)*y) y' (one*y);
+                             left_mul_identity y;
+                             mul_congruence y' (one*y) y' y }
+        one;
+      }
+    end

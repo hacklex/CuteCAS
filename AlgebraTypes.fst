@@ -510,7 +510,7 @@ let inst_divides (#a:Type) (#eq: equivalence_relation a)
 [@@"opaque_to_smt"]
 let is_unit (#a: Type) (x: a) (#eq: equivalence_relation a) (op:op_with_congruence eq) 
   = exists (y:a). (is_neutral_of (x `op` y) op /\ is_neutral_of (y `op` x) op)
-  
+ 
 /// We call the two elements associated if they divide each other
 let are_associated (#a: Type) (p: a) (q: a) (#eq: equivalence_relation a) (mul:op_with_congruence eq) 
   = (is_divisor_of mul p q) /\ (is_divisor_of mul q p) 
@@ -529,6 +529,38 @@ let is_prime (#a: Type) (p: a) (#eq: equivalence_relation a) (mul: op_with_congr
   (~(is_unit p mul)) /\ (forall (m n: a). (is_divisor_of mul p (m `mul` n)) ==> ((is_divisor_of mul p m) \/ (is_divisor_of mul p n)))
 
 type units_of (#a: Type) (#eq: equivalence_relation a) (mul: op_with_congruence eq) = x:a{is_unit x mul}
+
+let unit_product_is_unit_new #a (#eq: equivalence_relation a) 
+                             (mul: op_with_congruence eq{is_associative mul})
+                             (x y: units_of mul)
+  : Lemma (is_unit (mul x y) mul) = 
+  reveal_opaque (`%is_unit) (is_unit #a);
+  reveal_opaque (`%is_transitive) (is_transitive eq);
+  let ( * ) = mul in
+  let ( = ) = eq in
+  eliminate exists (x' y':a). (is_neutral_of (x'*x) mul /\ is_neutral_of (x*x') mul  
+                        /\ is_neutral_of (y'*y) mul /\ is_neutral_of (y*y') mul)
+  returns is_unit (x*y) mul with _.
+  begin
+    calc (=) {
+      (y'*x')*(x*y); = { assoc_lemma_3 mul y' x' (x*y) }
+      y'*(x'*(x*y)); = { assoc_lemma_3 mul x' x y;
+                         congruence_lemma_3 mul (x'*(x*y)) ((x'*x)*y) y' }
+      y'*((x'*x)*y); = { neutral_lemma mul (x'*x) y;
+                         congruence_lemma_3 mul ((x'*x)*y) y y' }
+      y'*y;
+    }; 
+    neutral_equivalent_is_neutral mul (y'*y) ((y'*x')*(x*y)); // left inverse 
+    calc (=) {
+      (x*y)*(y'*x'); = { assoc_lemma_4 mul x y y' x' }
+      x*((y*y')*x'); = { neutral_lemma mul (y*y') x';                         
+                         congruence_lemma_3 mul ((y*y')*x') x' x }
+      x*x';
+    };  
+    neutral_equivalent_is_neutral mul (x*x') ((x*y)*(y'*x')); // right inverse
+    () // has both inverses ==> is unit.
+  end
+  
 
 let unit_product_is_unit (#a:Type) (#eq: equivalence_relation a) (mul: op_with_congruence eq{is_associative mul}) (x y: units_of mul)
   : Lemma (is_unit (mul x y) mul) = 

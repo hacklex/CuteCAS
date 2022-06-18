@@ -343,8 +343,8 @@ let unit_product_is_unit #t {| h: mul_monoid t |} (x y: units_of t)
   let x:t = x in
   let y:t = y in
 // uncommenting these two  makes verification a lot faster 
-// let ( * ) = h.mul_semigroup.has_mul.mul in
-// let ( = ) = h.mul_semigroup.has_mul.eq.eq in
+  let ( * ) = h.mul_semigroup.has_mul.mul in
+  let ( = ) = h.mul_semigroup.has_mul.eq.eq in
 // But even with these two, fstar takes several seconds longer than it should...
   eliminate exists (x' y':t). (x'*x=one /\ y'*y=one)
     returns is_unit (x*y) with _.  

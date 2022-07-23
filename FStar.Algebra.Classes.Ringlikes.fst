@@ -5,36 +5,34 @@ module TC = FStar.Tactics.Typeclasses
 open FStar.Algebra.Classes.Equatable
 open FStar.Algebra.Classes.Grouplikes
  
-type left_distributivity_lemma (#t:Type) {| equatable t |} (mul add: t->t->t) = 
-  x:t -> y:t -> z:t -> Lemma (mul x (add y z) = add (mul x y) (mul x z))
+type left_distributivity_lemma (#t:Type) {| equatable t |} (mul add: t->t->t)
+  = x:t -> y:t -> z:t -> Lemma (mul x (add y z) = add (mul x y) (mul x z))
 
-type right_distributivity_lemma (#t:Type) {| equatable t |} (mul add: t->t->t) = 
-  x:t -> y:t -> z:t -> Lemma (mul (add x y) z = add (mul x z) (mul y z))
+type right_distributivity_lemma (#t:Type) {| equatable t |} (mul add: t->t->t) 
+  = x:t -> y:t -> z:t -> Lemma (mul (add x y) z = add (mul x z) (mul y z))
   
 class semiring (t:Type) = {
   [@@@TC.no_method] add_comm_monoid: add_comm_monoid t;
   [@@@TC.no_method] mul_monoid: mul_monoid t;
-  equality_consistence : squash (add_comm_monoid.add_monoid.add_semigroup.has_add.eq ==
-                                 mul_monoid.mul_semigroup.has_mul.eq);
-  left_absorption : left_absorber_lemma mul_monoid.mul_semigroup.has_mul.mul zero;
-  right_absorption : right_absorber_lemma mul_monoid.mul_semigroup.has_mul.mul zero;
-  left_distributivity : left_distributivity_lemma mul_monoid.mul_semigroup.has_mul.mul 
-                                                  add_comm_monoid.add_monoid.add_semigroup.has_add.add;
+  equality_consistence : squash (add_comm_monoid.add_monoid.add_semigroup.has_add.eq 
+                                 == mul_monoid.mul_semigroup.has_mul.eq);
+  left_absorption      : left_absorber_lemma  mul_monoid.mul_semigroup.has_mul.mul zero;
+  right_absorption     : right_absorber_lemma mul_monoid.mul_semigroup.has_mul.mul zero;
+  left_distributivity  : left_distributivity_lemma mul_monoid.mul_semigroup.has_mul.mul 
+                                                   add_comm_monoid.add_monoid.add_semigroup.has_add.add;
   right_distributivity : right_distributivity_lemma mul_monoid.mul_semigroup.has_mul.mul 
                                                   add_comm_monoid.add_monoid.add_semigroup.has_add.add;
 }
  
-instance add_cm_of_semiring (t:Type) ( r: semiring t) = r.add_comm_monoid
-instance mul_m_of_semiring (t:Type) (r: semiring t) = r.mul_monoid
-
+instance add_cm_of_semiring (t:Type) (r: semiring t) = r.add_comm_monoid
+instance mul_m_of_semiring  (t:Type) (r: semiring t) = r.mul_monoid
 
 instance hm_r #t (r: semiring t) = r.mul_monoid.mul_semigroup.has_mul
 instance ha_r #t (r: semiring t) = r.add_comm_monoid.add_monoid.add_semigroup.has_add
 instance he_r #t (r: semiring t) = r.mul_monoid.mul_semigroup.has_mul.eq 
 
-
 let absorber_is_two_sided_from_lemmas #t {| r: semiring t |} (#z1 #z2: t)
-  (z1_is_absorber: left_absorber_lemma r.mul_monoid.mul_semigroup.has_mul.mul z1)
+  (z1_is_absorber: left_absorber_lemma  r.mul_monoid.mul_semigroup.has_mul.mul z1)
   (z2_is_absorber: right_absorber_lemma r.mul_monoid.mul_semigroup.has_mul.mul z2)
   : Lemma (z1 = z2) = 
   z1_is_absorber z2;

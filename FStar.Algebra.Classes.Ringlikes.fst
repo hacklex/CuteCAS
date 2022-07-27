@@ -63,10 +63,10 @@ instance semiring_of_ring (t:Type) (r: ring t) = r.semiring
 //instance ha_rr #t (r: ring t) = r.semiring.add_comm_monoid.add_monoid.add_semigroup.has_add
 
 let ring_add_left_cancellation (#t:Type) {| r: ring t |} (x y z: t)
-  : Lemma (requires x+y=x+z) (ensures y=z) = group_cancelation_left x y z
+  : Lemma (requires x+y=x+z) (ensures y=z) = group_cancellation_left x y z
   
 let ring_add_right_cancellation (#t:Type) {| r: ring t |} (x y z: t)
-  : Lemma (requires y+x=z+x) (ensures y=z) = group_cancelation_right x y z
+  : Lemma (requires y+x=z+x) (ensures y=z) = group_cancellation_right x y z
 
 let ring_zero_is_right_absorber (#t:Type) {| r: ring t |} (x:t)
   : Lemma (x * zero = zero) = 
@@ -407,9 +407,22 @@ let principal_right_ideal_multiplier #t {|r:ring t|} (x:t) (p: principal_right_i
   : GTot(z:t{x*z = p}) = 
   IndefiniteDescription.indefinite_description_ghost t (fun q -> (x*q) = p == true) 
 
-let principal_ideal_func #t {|r:ring t|} (x:t) : GTot (ideal_func t) = 
-  let to_bool = IndefiniteDescription.strong_excluded_middle in
-  let lam = fun (p:t) -> (to_bool (exists q. q*x = p)) in
-
+open FStar.Squash
+open FStar.Classical
+ 
+let principal_ideal_func #t {|r:ring t|} (x:t) : GTot (left_ideal_func t) =   
+  let logical_condition p = exists q. (q*x) = p  in  
+  let indicator_function_property (f: (t->bool)) = forall z. f z <==> logical_condition z in  
+  let aux () : Lemma (exists (f:(t->bool)). indicator_function_property f) = 
+    let f (z:t) : (fz:bool{fz <==> logical_condition z}) = 
+      admit();
+    false in 
+//    admit(); //uncomment this and everything is fine again 0_0
+    assert (indicator_function_property f);
+  () in aux(); 
+  assert (exists f. indicator_function_property f);
+  let indicator =
+    IndefiniteDescription.indefinite_description_ghost (t->bool) (fun f -> indicator_function_property f) in
   admit();
-  lam
+  indicator
+    

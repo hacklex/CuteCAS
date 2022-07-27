@@ -185,7 +185,7 @@ instance add_group_of_comm_group (t:Type) {| h: add_comm_group t |} = h.add_grou
 instance add_comm_monoid_of_comm_group (t:Type) {| h: add_comm_group t |} = h.add_comm_monoid
 
  
-let group_cancelation_left (#t:Type) {| g: add_group t |} (x y z: t)
+let group_cancellation_left (#t:Type) {| g: add_group t |} (x y z: t)
   : Lemma (requires (x+y)=(x+z)) (ensures y=z) = 
   let ha : has_add t = TC.solve in
   let he : equatable t = TC.solve in
@@ -203,7 +203,7 @@ let group_cancelation_left (#t:Type) {| g: add_group t |} (x y z: t)
   aux y; aux z;
   he.symmetry ((-x)+(x+y)) y
 
-let group_cancelation_right (#t:Type) {| g: add_group t |} (x y z: t)
+let group_cancellation_right (#t:Type) {| g: add_group t |} (x y z: t)
   : Lemma (requires (y+x)=(z+x)) (ensures y=z) = 
   let ha : has_add t = TC.solve in
   let he : equatable t = TC.solve in

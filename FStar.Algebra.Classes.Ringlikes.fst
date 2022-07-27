@@ -10,6 +10,10 @@ type left_distributivity_lemma (#t:Type) {| equatable t |} (mul add: t->t->t) =
 
 type right_distributivity_lemma (#t:Type) {| equatable t |} (mul add: t->t->t) = 
   x:t -> y:t -> z:t -> Lemma (mul (add x y) z = add (mul x z) (mul y z))
+
+type valuation =
+  | Value of nat
+  | Nothing 
   
 class semiring (t:Type) = {
   [@@@TC.no_method] add_comm_monoid: add_comm_monoid t;
@@ -352,13 +356,62 @@ let unit_product_is_unit #t {| h: mul_monoid t |} (x y: units_of t)
       elim_equatable_laws t;
       transitivity_for_calc_proofs t;
       calc (=) {
-        (y'*x')*(x*y); = { mul_associativity y' x' (x*y) }
+        (y'*x')*(x*y);     = { mul_associativity y' x' (x*y) }
         y' * (x' * (x*y)); = { mul_associativity x' x y; 
                                mul_congruence y' (x'*(x*y)) y' ((x'*x)*y) }
-        y' * ((x'*x)*y); = { mul_congruence (x'*x) y one y;
-                             mul_congruence y' ((x'*x)*y) y' (one*y);
-                             left_mul_identity y;
-                             mul_congruence y' (one*y) y' y }
+        y' * ((x'*x)*y);   = { mul_congruence (x'*x) y one y;
+                               mul_congruence y' ((x'*x)*y) y' (one*y);
+                               left_mul_identity y;
+                               mul_congruence y' (one*y) y' y }
         one;
       }
     end
+
+let survives_addition #t {|r:ring t|} (f: t->bool) = 
+  forall (x y: (q:t{f q})). f (x + y) 
+
+let survives_rmul #t {|r:ring t|} (f:t->bool) = 
+  forall (x:t{f x}) (y:t). f (x*y)  
+
+let survives_lmul #t {|r:ring t|} (f:t->bool) = 
+  forall (x:t{f x}) (y:t). f (y*x)  
+  
+type left_ideal_func t {| r: ring t |} = 
+  (f:(t -> bool) {
+    survives_addition f /\ 
+    survives_lmul f  
+  })
+
+type right_ideal_func t {| r: ring t |} = 
+  (f:(t -> bool) {
+    survives_addition f /\ 
+    survives_rmul f  
+  })
+
+type ideal_func t {|r: ring t|} = (m:left_ideal_func t{survives_rmul m})
+
+type ideal #t {|r:ring t|} (f:ideal_func t) = x:t{f x}
+
+type left_ideal #t {|r:ring t|} (f:left_ideal_func t) = x:t{f x}
+type right_ideal #t {|r:ring t|} (f:right_ideal_func t) = x:t{f x}
+ 
+type principal_left_ideal #t {|r: ring t|} (x:t) = p:t{exists (q:t). q*x = p}
+type principal_right_ideal #t {|r: ring t|} (x:t) = p:t{exists (q:t). x*q = p}
+ 
+let eq_prop #t {| equatable t |} (x y:t) : prop = (x=y) == true
+
+let principal_left_ideal_multiplier #t {|r:ring t|} (x:t) (p:principal_left_ideal x)
+  : GTot(z:t{z*x = p}) = 
+  let condition (z:t) : prop = ((z*x) `eq_prop` p) in 
+  IndefiniteDescription.indefinite_description_ghost t condition
+
+let principal_right_ideal_multiplier #t {|r:ring t|} (x:t) (p: principal_right_ideal x) 
+  : GTot(z:t{x*z = p}) = 
+  IndefiniteDescription.indefinite_description_ghost t (fun q -> (x*q) = p == true) 
+
+let principal_ideal_func #t {|r:ring t|} (x:t) : GTot (ideal_func t) = 
+  let to_bool = IndefiniteDescription.strong_excluded_middle in
+  let lam = fun (p:t) -> (to_bool (exists q. q*x = p)) in
+
+  admit();
+  lam

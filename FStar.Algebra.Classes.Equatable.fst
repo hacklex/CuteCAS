@@ -5,8 +5,7 @@ module TC = FStar.Tactics.Typeclasses
 class equatable (t:Type) = {
   eq: t -> t -> bool;
   reflexivity : (x:t -> Lemma (eq x x));
-  symmetry: (x:t -> y:t -> Lemma (requires eq x y) 
-                               (ensures eq y x));
+  symmetry: (x:t -> y:t -> Lemma (x `eq` y <==> y `eq` x));
   transitivity: (x:t -> y:t -> z:t -> Lemma (requires eq x y /\ eq y z) 
                                          (ensures eq x z));
 } 

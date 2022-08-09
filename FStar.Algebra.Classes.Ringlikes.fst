@@ -17,20 +17,19 @@ type valuation =
   
 class semiring (t:Type) = {
   [@@@TC.no_method] add_comm_monoid: add_comm_monoid t;
-  [@@@TC.no_method] mul_monoid: mul_monoid t;
-  equality_consistence : squash (add_comm_monoid.add_monoid.add_semigroup.has_add.eq 
-                                 == mul_monoid.mul_semigroup.has_mul.eq);
-  left_absorption      : left_absorber_lemma  mul_monoid.mul_semigroup.has_mul.mul zero;
+  [@@@TC.no_method] mul_monoid: (z:mul_monoid t{ z.mul_semigroup.has_mul.eq == 
+                                                 add_comm_monoid.add_monoid.add_semigroup.has_add.eq });  
+  left_absorption      : left_absorber_lemma mul_monoid.mul_semigroup.has_mul.mul zero;
   right_absorption     : right_absorber_lemma mul_monoid.mul_semigroup.has_mul.mul zero;
-  left_distributivity  : left_distributivity_lemma mul_monoid.mul_semigroup.has_mul.mul 
-                                                   add_comm_monoid.add_monoid.add_semigroup.has_add.add;
+  left_distributivity  : left_distributivity_lemma mul_monoid.mul_semigroup.has_mul.mul add_comm_monoid.add_monoid.add_semigroup.has_add.add;
   right_distributivity : right_distributivity_lemma mul_monoid.mul_semigroup.has_mul.mul 
                                                   add_comm_monoid.add_monoid.add_semigroup.has_add.add;
+  
 }
  
 instance add_cm_of_semiring (t:Type) (r: semiring t) = r.add_comm_monoid
-instance mul_m_of_semiring  (t:Type) (r: semiring t) = r.mul_monoid
-
+instance mul_m_of_semiring  (t:Type) (r: semiring t) = r.mul_monoid <: mul_monoid t
+  
 instance hm_r #t (r: semiring t) = r.mul_monoid.mul_semigroup.has_mul
 instance ha_r #t (r: semiring t) = r.add_comm_monoid.add_monoid.add_semigroup.has_add
 instance he_r #t (r: semiring t) = r.mul_monoid.mul_semigroup.has_mul.eq 
@@ -51,12 +50,11 @@ let absorber_is_two_sided_from_forall (#t:Type) {| r: semiring t |} (z1 z2:t)
   transitivity z1 (z1*z2) z2
 
 class ring (t:Type) = {
-  [@@@TC.no_method] add_comm_group: add_comm_group t;
   [@@@TC.no_method] semiring: semiring t;
-  [@@@TC.no_method] add_comm_group_consistency: squash (semiring.add_comm_monoid == add_comm_group.add_comm_monoid);
+  [@@@TC.no_method] add_comm_group: (z:add_comm_group t{z.add_comm_monoid == semiring.add_comm_monoid});
 }
 
-instance add_comm_group_of_ring (t:Type) (r: ring t) = r.add_comm_group 
+instance add_comm_group_of_ring (t:Type) (r: ring t) = r.add_comm_group <: add_comm_group t
 instance semiring_of_ring (t:Type) (r: ring t) = r.semiring
 
 //instance hm_rr #t (r: ring t) = r.semiring.mul_monoid.mul_semigroup.has_mul
@@ -244,23 +242,20 @@ let ring_neg_right_distributivity #t {| r: ring t |} (x y z: t)
   ring_neg_xy_is_neg_x_times_y y z; 
   add_congruence (x*z) ((-y)*z) (x*z) (-(y*z)) 
 
-
 class zero_ne_one_semiring (t:Type) = {
-  [@@@TC.no_method] semiring: semiring t;
-  zero_is_not_one: squash (semiring.add_comm_monoid.add_monoid.has_zero.zero <> semiring.mul_monoid.has_one.one);
+  [@@@TC.no_method] semiring: (r:semiring t{ zero <> r.mul_monoid.has_one.one });
 }
 
-instance semiring_of_zero_ne_one (t:Type) {| r: zero_ne_one_semiring t |} = r.semiring
+instance semiring_of_zero_ne_one (t:Type) {| r: zero_ne_one_semiring t |} = r.semiring <: semiring t
 
 class domain (t:Type) = {
   [@@@TC.no_method] ring: ring t;
-  [@@@TC.no_method] zero_ne_one_semiring: zero_ne_one_semiring t;
-  [@@@TC.no_method] consistency: squash (ring.semiring == zero_ne_one_semiring.semiring);  
+  [@@@TC.no_method] zero_ne_one_semiring: r:zero_ne_one_semiring t{r.semiring == ring.semiring};
   domain_law: (x:t -> y:t -> Lemma (requires x*y = zero) (ensures (x=zero) || (y=zero)))
 }
 
 instance ring_of_domain (t:Type) {| d: domain t |} = d.ring
-instance zero_ne_one_semiring_of_domain (t:Type) {| d: domain t |} = d.zero_ne_one_semiring
+instance zero_ne_one_semiring_of_domain (t:Type) {| d: domain t |} = d.zero_ne_one_semiring <: zero_ne_one_semiring t
 
 let semiring_nonzero_product_means_nonzero_factors #t {| r: semiring t |} (x y:t)
   : Lemma (requires x*y <> zero) (ensures x <> zero /\ y <> zero) = 
@@ -287,12 +282,11 @@ let domain_pq_eq_pr_lemma #t {| d: domain t |} (p q r: t)
 
 class commutative_ring (t:Type) = {
   [@@@TC.no_method] ring: ring t;
-  [@@@TC.no_method] mul_comm_monoid: mul_comm_monoid t;
-  [@@@TC.no_method] consistency: squash (ring.semiring.mul_monoid == mul_comm_monoid.mul_monoid)
+  [@@@TC.no_method] mul_comm_monoid: (m:mul_comm_monoid t{m.mul_monoid == ring.semiring.mul_monoid});
 }
 
 instance ring_of_commutative_ring (t:Type) (r: commutative_ring t) = r.ring
-instance mul_comm_monoid_of_comm_ring (t:Type) (r: commutative_ring t) = r.mul_comm_monoid
+instance mul_comm_monoid_of_comm_ring (t:Type) (r: commutative_ring t) = r.mul_comm_monoid <: mul_comm_monoid t
 
 let nat_norm (t:Type) = t -> option nat
 
@@ -365,6 +359,29 @@ let unit_product_is_unit #t {| h: mul_monoid t |} (x y: units_of t)
       }
     end
 
+class integral_domain (t:Type) = { 
+  [@@@TC.no_method] commutative_ring: commutative_ring t;
+  [@@@TC.no_method] domain: (d:domain t{d.ring == commutative_ring.ring});
+}
+
+instance comm_ring_of_id (t:Type) (id: integral_domain t) = id.commutative_ring
+instance domain_of_id (t:Type) (id: integral_domain t) = id.domain <: domain t
+
+class division_ring (t:Type) = {
+  [@@@TC.no_method] domain: domain t; 
+  inv: (x:t{x <> zero}) -> (x':t{(x' * x = one) /\ (x * x' = one)});   
+}
+
+instance domain_of_div_ring (t:Type) (dr: division_ring t) = dr.domain
+
+class field (t:Type) = {
+  [@@@TC.no_method] division_ring: division_ring t; 
+  [@@@TC.no_method] commutative_ring: c:commutative_ring t{c.ring == division_ring.domain.ring};
+} 
+
+instance dr_of_field (t:Type) (f: field t) = f.division_ring
+instance comm_ring_of_field (t:Type) (f: field t) = f.commutative_ring <: commutative_ring t
+
 let survives_addition #t {|r:ring t|} (f: t->bool) = 
   forall (x y: (q:t{f q})). f (x + y) 
 
@@ -409,7 +426,8 @@ let principal_right_ideal_multiplier #t {|r:ring t|} (x:t) (p: principal_right_i
 
 open FStar.Squash
 open FStar.Classical
- 
+
+(*
 let principal_ideal_func #t {|r:ring t|} (x:t) : GTot (left_ideal_func t) =   
   let logical_condition p = exists q. (q*x) = p  in  
   let indicator_function_property (f: (t->bool)) = forall z. f z <==> logical_condition z in  
@@ -426,3 +444,4 @@ let principal_ideal_func #t {|r:ring t|} (x:t) : GTot (left_ideal_func t) =
   admit();
   indicator
     
+*)

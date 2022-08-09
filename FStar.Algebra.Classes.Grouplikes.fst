@@ -20,10 +20,10 @@ type left_identity_lemma #t {| equatable t |} (op: t->t->t) (zero: t) =
 type right_identity_lemma #t {| equatable t |} (op: t->t->t) (zero: t) = 
   x:t -> Lemma (op x zero = x)
  
-type left_absorber_lemma #t {| equatable t |} (op: t->t->t) (zero: t) = 
+type left_absorber_lemma #t (op: t->t->t) {| equatable t |} (zero: t) = 
   x:t -> Lemma (op zero x = zero)
   
-type right_absorber_lemma #t {| equatable t |} (op: t->t->t) (zero: t) = 
+type right_absorber_lemma #t (op: t->t->t) {| equatable t |} (zero: t) = 
   x:t -> Lemma (op x zero = zero)
 
 type inversion_lemma #t {| equatable t |} (op: t->t->t) (zero:t) (inv: t->t) = 
@@ -37,6 +37,9 @@ class has_mul (t:Type) = {
 
 instance eq_of_mul (t:Type) {| h: has_mul t |} : equatable t = h.eq 
 
+type left_mul_absorber_lemma #t {| m: has_mul t |} (zero: t) = left_absorber_lemma m.mul zero
+type right_mul_absorber_lemma #t {| m: has_mul t |} (zero: t) = right_absorber_lemma m.mul zero
+   
 let ( * ) (#t:Type) {|m: has_mul t|} = m.mul
 
 class has_add (t:Type) = {  
@@ -56,6 +59,18 @@ instance int_equatable : equatable int = {
   transitivity = (fun _ _ _ -> ());
 } 
 
+instance int_mul : has_mul int = {
+  mul = op_Multiply;
+  eq = int_equatable;
+  congruence = fun _ _ _ _ -> ()
+}
+
+instance int_add : has_add int = {
+  add = op_Addition;
+  eq = int_equatable;
+  congruence = fun _ _ _ _ -> ()
+}
+
 class mul_semigroup (t:Type) = {  
   [@@@TC.no_method] has_mul : has_mul t; 
   [@@@TC.no_method] associativity: associativity_lemma has_mul.mul;
@@ -67,30 +82,47 @@ class add_semigroup (t:Type) = {
   [@@@TC.no_method] associativity: associativity_lemma has_add.add;
 }
 
+let mul_associativity #t {| sg: mul_semigroup t |} : associativity_lemma ( * ) = sg.associativity 
+let add_associativity #t {| sg: add_semigroup t |} : associativity_lemma ( + ) = sg.associativity
+
+let mul_congruence #t {| hm: has_mul t |} : congruence_lemma ( * ) = hm.congruence 
+let add_congruence #t {| ha: has_add t |} : congruence_lemma ( + ) = ha.congruence 
+
+
 instance has_add_of_sg (t:Type) {| h: add_semigroup t |} = h.has_add
  
-class has_zero (t:Type) = { zero: t }
+class has_zero (t:Type) = { 
+  [@@@TC.no_method] eq: equatable t;
+  zero: t
+}
+
+instance eq_of_hz (t:Type) (h: has_zero t) = h.eq
 
 class add_monoid (t:Type) = {
-  [@@@TC.no_method] add_semigroup: add_semigroup t;
   [@@@TC.no_method] has_zero: has_zero t;
-  left_add_identity : left_identity_lemma add_semigroup.has_add.add zero;
+  [@@@TC.no_method] add_semigroup: (a:add_semigroup t{has_zero.eq == a.has_add.eq});
+  left_add_identity  : left_identity_lemma  add_semigroup.has_add.add zero;
   right_add_identity : right_identity_lemma add_semigroup.has_add.add zero;
 }
 
-instance sg_of_add_monoid (t:Type) {| h: add_monoid t |} = h.add_semigroup
+instance sg_of_add_monoid (t:Type) {| h: add_monoid t |} = h.add_semigroup <: add_semigroup t
 instance has_zero_of_monoid (t:Type) {| h: add_monoid t |} = h.has_zero
 
-class has_one (t:Type) = { one: t }
+class has_one (t:Type) = {
+  [@@@TC.no_method] eq: equatable t;
+  one: t 
+}
+
+instance eq_of_ho (t:Type) (h: has_one t) = h.eq
 
 class mul_monoid (t:Type) = {
-  [@@@TC.no_method] mul_semigroup: mul_semigroup t;
   [@@@TC.no_method] has_one: has_one t;
+  [@@@TC.no_method] mul_semigroup: (m:mul_semigroup t{has_one.eq == m.has_mul.eq});
   left_mul_identity : left_identity_lemma mul_semigroup.has_mul.mul one;
   right_mul_identity : right_identity_lemma mul_semigroup.has_mul.mul one;
 }
 
-instance sg_of_mul_monoid (t:Type) {| h: mul_monoid t |} = h.mul_semigroup
+instance sg_of_mul_monoid (t:Type) {| h: mul_monoid t |} = h.mul_semigroup <: mul_semigroup t
 instance has_one_of_monoid (t:Type) {| h: mul_monoid t |} = h.has_one
 
 class add_comm_magma (t:Type) = {
@@ -107,52 +139,48 @@ instance has_mul_of_comm_magma (t:Type) {| m: mul_comm_magma t |} = m.has_mul
 
 class add_comm_semigroup (t:Type) = {
   [@@@TC.no_method] add_semigroup: add_semigroup t;
-  [@@@TC.no_method] add_comm_magma : add_comm_magma t;
-  [@@@TC.no_method] consistency : squash (add_semigroup.has_add == add_comm_magma.has_add);  
+  [@@@TC.no_method] add_comm_magma : (m:add_comm_magma t{m.has_add == add_semigroup.has_add});
 }
 
 instance sg_of_add_comm_semigroup (t:Type) {| h: add_comm_semigroup t |} = h.add_semigroup
-instance add_comm_magma_of_comm_sg (t:Type) {| h: add_comm_semigroup t |} = h.add_comm_magma
+instance add_comm_magma_of_comm_sg (t:Type) {| h: add_comm_semigroup t |} = h.add_comm_magma <: add_comm_magma t
 
 class mul_comm_semigroup (t:Type) = {
   [@@@TC.no_method] mul_semigroup: mul_semigroup t;
-  [@@@TC.no_method] mul_comm_magma : mul_comm_magma t;
-  [@@@TC.no_method] consistency : squash (mul_semigroup.has_mul == mul_comm_magma.has_mul);
+  [@@@TC.no_method] mul_comm_magma : (m:mul_comm_magma t{m.has_mul == mul_semigroup.has_mul});
   dvd: x:t -> y:t -> (p:bool{ p <==> (exists (c:t). y = c*x) });
 }
 
 let ( |: ) #t {| mul_comm_semigroup t |} (x y: t) = dvd x y
 
 instance sg_of_mul_comm_semigroup (t:Type) {| h: mul_comm_semigroup t |} = h.mul_semigroup
-instance mul_comm_magma_of_comm_sg (t:Type) {| h: mul_comm_semigroup t |} = h.mul_comm_magma
+instance mul_comm_magma_of_comm_sg (t:Type) {| h: mul_comm_semigroup t |} = h.mul_comm_magma <: mul_comm_magma t
  
 class add_comm_monoid (t:Type) = {
   [@@@TC.no_method] add_monoid: add_monoid t;
-  [@@@TC.no_method] add_comm_semigroup: add_comm_semigroup t;
-  [@@@TC.no_method] consistency : squash (add_monoid.add_semigroup == add_comm_semigroup.add_semigroup);
+  [@@@TC.no_method] add_comm_semigroup: (z:add_comm_semigroup t{z.add_semigroup == add_monoid.add_semigroup});
 }
   
 instance add_monoid_of_comm_monoid (t:Type) {| h: add_comm_monoid t |} = h.add_monoid
-instance add_comm_sg_of_comm_monoid (t:Type) {| h: add_comm_monoid t |} = h.add_comm_semigroup
+instance add_comm_sg_of_comm_monoid (t:Type) {| h: add_comm_monoid t |} = h.add_comm_semigroup <: add_comm_semigroup t
  
 class mul_comm_monoid (t:Type) = {
   [@@@TC.no_method] mul_monoid: mul_monoid t;
-  [@@@TC.no_method] mul_comm_semigroup: mul_comm_semigroup t;
-  [@@@TC.no_method] consistency : squash (mul_monoid.mul_semigroup == mul_comm_semigroup.mul_semigroup);  
+  [@@@TC.no_method] mul_comm_semigroup: (z:mul_comm_semigroup t{z.mul_semigroup == mul_monoid.mul_semigroup}); 
 }
  
 instance mul_monoid_of_comm_monoid (t:Type) {| h: mul_comm_monoid t |} = h.mul_monoid
-instance mul_comm_sg_of_comm_monoid (t:Type) {| h: mul_comm_monoid t |} = h.mul_comm_semigroup
+instance mul_comm_sg_of_comm_monoid (t:Type) {| h: mul_comm_monoid t |} = h.mul_comm_semigroup <: mul_comm_semigroup t
 
 class has_neg (t:Type) = {
   neg: t -> t
 }
 
-private let old_int_minus = op_Minus
+let old_int_minus = op_Minus
 
 let op_Minus (#t:Type) {| h: has_neg t |} = h.neg
 
-private let old_int_sub = op_Subtraction
+let old_int_sub = op_Subtraction
  
 class has_sub (t:Type) = {
   sub: t -> t -> t
@@ -173,8 +201,7 @@ class add_group (t:Type) = {
 
 class add_comm_group (t:Type) = {
   [@@@TC.no_method] add_group: add_group t;
-  [@@@TC.no_method] add_comm_monoid: add_comm_monoid t;
-  [@@@TC.no_method] consistence : squash (add_group.add_monoid == add_comm_monoid.add_monoid);
+  [@@@TC.no_method] add_comm_monoid: (z:add_comm_monoid t{z.add_monoid == add_group.add_monoid});
 }
 
 instance add_monoid_of_group (t:Type) {| h: add_group t |} = h.add_monoid
@@ -182,7 +209,7 @@ instance neg_of_add_group (t:Type) {| h: add_group t |} = h.has_neg
 instance sub_of_add_group (t:Type) {| h: add_group t |} = h.has_sub
 
 instance add_group_of_comm_group (t:Type) {| h: add_comm_group t |} = h.add_group
-instance add_comm_monoid_of_comm_group (t:Type) {| h: add_comm_group t |} = h.add_comm_monoid
+instance add_comm_monoid_of_comm_group (t:Type) {| h: add_comm_group t |} = h.add_comm_monoid <: add_comm_monoid t
 
  
 let group_cancellation_left (#t:Type) {| g: add_group t |} (x y z: t)
@@ -310,11 +337,6 @@ let equal_elements_means_equal_inverses (#t:Type) {| g: add_group t |} (x y:t)
       transitivity p (-(-q)) q in
     if (x=y && -x <> -y) then aux_1 x y
     else if (x <> y && -x = -y) then aux_2 x y
-
-let mul_associativity #t {| sg: mul_semigroup t |} : associativity_lemma ( * ) = sg.associativity 
-let add_associativity #t {| sg: add_semigroup t |} : associativity_lemma ( + ) = sg.associativity
-let mul_congruence #t {| hm: has_mul t |} : congruence_lemma ( * ) = hm.congruence 
-let add_congruence #t {| ha: has_add t |} : congruence_lemma ( + ) = ha.congruence 
 
 let equality_is_zero_sum (#t:Type) {| add_group t |} (x y: t)
   : Lemma ((x=y) <==> (x + -y = zero)) = 

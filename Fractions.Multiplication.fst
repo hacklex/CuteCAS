@@ -19,7 +19,7 @@ let fraction_mul_is_commutative (#a:Type) (#d: integral_domain a) (x y: fraction
   reveal_opaque (`%is_reflexive) (is_reflexive #a); 
   reveal_opaque (`%is_commutative) (is_commutative mul);  
   reveal_opaque (`%is_absorber_of) (is_absorber_of #a); 
-  reveal_opaque (`%is_neutral_of) (is_neutral_of #a); 
+  reveal_opaque (`%is_neutral_of) (is_neutral_of #a #d.eq); 
   reveal_opaque (`%is_associative) (is_associative mul);  
   reveal_opaque (`%is_symmetric) (is_symmetric #a); 
   let xy = fraction_mul_op x y in
@@ -151,18 +151,18 @@ let fraction_mul_neutral_condition (#a:Type) (#d: integral_domain a) (x: fractio
   : Lemma (requires d.eq x.num x.den) 
           (ensures is_neutral_of x fraction_mul) = 
   Classical.forall_intro (fraction_mul_neutral_lemma x);
-  reveal_opaque (`%is_left_id_of) (is_left_id_of #(fraction d)); 
-  reveal_opaque (`%is_right_id_of) (is_right_id_of #(fraction d)); 
-  reveal_opaque (`%is_neutral_of) (is_neutral_of #(fraction d));
+  reveal_opaque (`%is_left_id_of) (is_left_id_of #(fraction d) #(fraction_eq #a #d)); 
+  reveal_opaque (`%is_right_id_of) (is_right_id_of #(fraction d) #(fraction_eq #a #d)); 
+  reveal_opaque (`%is_neutral_of) (is_neutral_of #(fraction d) #(fraction_eq #a #d));
   //The riddle of the century. Why spinoff?!
   assert_spinoff (is_neutral_of x fraction_mul)
 
 let fraction_is_mul_neutral (#a:Type) (#d: integral_domain a) 
                             (x: fraction d{d.eq x.num x.den \/ d.eq x.den x.num})
   : Lemma (is_neutral_of x fraction_mul) =  
-  reveal_opaque (`%is_left_id_of) (is_left_id_of #(fraction d)); 
-  reveal_opaque (`%is_right_id_of) (is_right_id_of #(fraction d)); 
-  reveal_opaque (`%is_neutral_of) (is_neutral_of #(fraction d)); 
+  reveal_opaque (`%is_left_id_of) (is_left_id_of #(fraction d) #(fraction_eq #a #d)); 
+  reveal_opaque (`%is_right_id_of) (is_right_id_of #(fraction d) #(fraction_eq #a #d)); 
+  reveal_opaque (`%is_neutral_of) (is_neutral_of #(fraction d) #(fraction_eq #a #d)); 
   Classical.forall_intro (fraction_mul_neutral_lemma x)  
 
 let fraction_one_is_neutral_lemma (#a:Type) 
@@ -189,7 +189,7 @@ let fraction_one (#a:Type) (d: integral_domain a)
   let one = Fraction d.multiplication.neutral d.multiplication.neutral in
   fraction_one_is_neutral_lemma one;
   reveal_opaque (`%is_reflexive) (is_reflexive #a); 
-  reveal_opaque (`%is_unit) (is_unit #(fraction d)); 
+  reveal_opaque (`%is_unit) (is_unit #(fraction d) #(fraction_eq #a #d)); 
   fraction_mul_neutral_condition (fraction_mul one one);
   one
  
@@ -288,7 +288,7 @@ let fraction_unit_and_absorber_is_nonsense (#a:Type) (#d: integral_domain a)
   : Lemma (requires is_unit x fraction_mul /\ is_absorber_of x fraction_mul) (ensures False) =   
   let ( *) = fraction_mul #a #d in
   let eq = fraction_eq #a #d in
-  reveal_opaque (`%is_unit) (is_unit #(fraction d)); 
+  reveal_opaque (`%is_unit) (is_unit #(fraction d) #(fraction_eq #a #d)); 
   let x' = IndefiniteDescription.indefinite_description_ghost 
            (units_of ( *)) 
            (fun x' -> (is_neutral_of (x * x') ( *) /\ 
@@ -369,7 +369,7 @@ let fraction_nonabsorber_is_unit (#a:Type) (#d: integral_domain a) (x: non_absor
   
   assert (ex_fun x'); 
   Classical.exists_intro ex_fun x';
-  reveal_opaque (`%is_unit) (is_unit #(fraction d)); 
+  reveal_opaque (`%is_unit) (is_unit #(fraction d) #(fraction_eq #a #d)); 
   assert_spinoff (is_unit x fraction_mul)
 #pop-options
 
@@ -388,7 +388,7 @@ let fraction_inv (#a:Type) (#d: integral_domain a) (x: units_of fraction_mul)
                    t.num `d.eq` (d.multiplication.inv (d.unit_part_of x.num) `d.multiplication.op` x.den) /\
                    t.den `d.eq` (d.normal_part_of x.num)  }) = 
   fraction_unit_cant_be_absorber x;
-  reveal_opaque (`%is_unit) (is_unit #(fraction d)); 
+  reveal_opaque (`%is_unit) (is_unit #(fraction d) #(fraction_eq #a #d)); 
   reveal_opaque (`%is_reflexive) (is_reflexive #a); 
   reveal_opaque (`%is_transitive) (is_transitive #a); 
   non_absorber_fraction_has_nonzero_numerator x;  

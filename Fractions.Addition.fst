@@ -4,7 +4,7 @@ open AlgebraTypes
 open Fractions.Definition
 open Fractions.Equivalence
 
-#push-options "--ifuel 0 --fuel 0 --z3rlimit 1"
+#push-options "--ifuel 0 --fuel 0 --z3rlimit 1 --split_queries"
 
 /// We declare the type of fractions_add heavily refined so that our
 /// future lemmas will not have it too rough proving stuff
@@ -39,16 +39,13 @@ let fraction_addition_is_commutative (#a:Type) (#d: integral_domain a)
  
 private let fraction_add_is_associative (#a:Type) (#d: integral_domain a) (x y z: fraction d) 
   : Lemma ((fraction_add_op (fraction_add_op x y) z) `fraction_eq` (fraction_add_op x (fraction_add_op y z))) = 
-   reveal_opaque (`%is_left_distributive) (is_left_distributive #a #d.eq); 
-   reveal_opaque (`%is_right_distributive) (is_right_distributive #a #d.eq); 
-   reveal_opaque (`%is_fully_distributive) (is_fully_distributive #a #d.eq); 
    //we calculate the sum of three fractions in 2 different orders,
    //and prove the results (sum_1 and sum_2) to be equal wrt. domain equality relation
    let eq = d.eq in 
    let add = d.addition.op in
    let mul = d.multiplication.op in 
    let sum_1 = fraction_add_op  (fraction_add_op x y) z in 
-   right_distributivity_lemma mul add (x.num `mul` y.den) (x.den `mul` y.num) z.den; // (ad+bc)f   
+   d.right_distributivity (x.num `mul` y.den) (x.den `mul` y.num) z.den; // (ad+bc)f   
    congruence_lemma_3 add (((x.num `mul` y.den) `add` (x.den `mul` y.num)) `mul` z.den) 
                                               (((x.num `mul` y.den) `mul` z.den) `add` ((x.den `mul` y.num) `mul` z.den)) 
                                               ((x.den `mul` y.den) `mul` z.num); //substitute (ad+bc)f + (bd)e ==> (ad)f+(bc)f+(bd)e
@@ -57,7 +54,7 @@ private let fraction_add_is_associative (#a:Type) (#d: integral_domain a) (x y z
      
    let sum_2 = fraction_add_op x (fraction_add_op y z) in  
     
-   left_distributivity_lemma mul add x.den (y.num `mul` z.den) (y.den `mul` z.num); // b(cf+de) = b(cf)+b(de)
+   d.left_distributivity x.den (y.num `mul` z.den) (y.den `mul` z.num); // b(cf+de) = b(cf)+b(de)
    congruence_lemma_3 add (x.den `mul` ((y.num `mul` z.den) `add` (y.den `mul` z.num))) // b*(cf+de)
                                               ((x.den `mul` (y.num `mul` z.den)) `add` (x.den `mul` (y.den `mul` z.num))) 
                                               (x.num `mul` (y.den `mul` z.den));   
@@ -107,11 +104,10 @@ private let fraction_addition_is_associative (#a:Type) (d: integral_domain a)
   : Lemma (forall (x y z: fraction d). (fraction_add_op x (fraction_add_op y z) `fraction_eq` fraction_add_op (fraction_add_op x y) z)) = 
   Classical.forall_intro_2 (symm_lemma (fraction_eq #a #d));
   Classical.forall_intro_3 (fraction_add_is_associative #a #d)
- 
-#push-options "--z3rlimit 3"
+  
 private let fraction_additive_neutral_lemma (#a:Type) (#d: integral_domain a) 
                                             (x: fraction d{is_neutral_of x.num d.addition.op}) (y: fraction d) 
-  : Lemma ((x `fraction_add_op` y) `fraction_eq` y /\ (y `fraction_add_op` x `fraction_eq` y)) = 
+  : Lemma ((x `fraction_add_op` y) `fraction_eq` y /\ ((y `fraction_add_op` x) `fraction_eq` y)) = 
   let mul = d.multiplication.op in
   let add = d.addition.op in  
   let eq = d.eq in
@@ -141,9 +137,8 @@ private let fraction_equivalence_respects_add (#a:Type) (d: integral_domain a)
            (e1 `fraction_add_op` x ) `fraction_eq` (e2 `fraction_add_op` x)) = 
   let mul = d.multiplication.op in
   let eq = d.eq in
-  let add = d.addition.op in   
-  ring_distributivity_lemma d;   
-  right_distributivity_lemma mul add (x.num `mul` e1.den) (x.den `mul` e1.num) (x.den `mul` e2.den);
+  let add = d.addition.op in    
+  d.right_distributivity (x.num `mul` e1.den) (x.den `mul` e1.num) (x.den `mul` e2.den);
   assert ( (((x.num `mul` e1.den) `add` (x.den `mul` e1.num)) `mul` (x.den `mul` e2.den)) `d.eq`  
            (((x.num `mul` e1.den) `mul` (x.den `mul` e2.den)) `add` ((x.den `mul` e1.num) `mul` (x.den `mul` e2.den))));
   //we will carefully transform ad into bc, as (a/b=c/d) is defined as (ad=bc)
@@ -206,7 +201,7 @@ private let fraction_equivalence_respects_add (#a:Type) (d: integral_domain a)
   trans_lemma eq left_side (((x.num `mul` e1.den) `mul` (x.den `mul` e2.den)) `add` ((x.den `mul` e1.den) `mul` (x.den `mul` e2.num)))
                            (((x.den `mul` e1.den) `mul` (x.num `mul` e2.den)) `add` ((x.den `mul` e1.den) `mul` (x.den `mul` e2.num)));
   symm_lemma eq (((x.den `mul` e1.den) `mul` (x.num `mul` e2.den)) `add` ((x.den `mul` e1.den) `mul` (x.den `mul` e2.num))) ((x.den `mul` e1.den) `mul` ((x.num `mul` e2.den) `add` (x.den `mul` e2.num)));
-  left_distributivity_lemma mul add (mul x.den e1.den) (mul x.num e2.den) (mul x.den e2.num);
+  d.left_distributivity (mul x.den e1.den) (mul x.num e2.den) (mul x.den e2.num);
   trans_lemma eq left_side (((x.den `mul` e1.den) `mul` (x.num `mul` e2.den)) `add` ((x.den `mul` e1.den) `mul` (x.den `mul` e2.num)))
                            ((x.den `mul` e1.den) `mul` ((x.num `mul` e2.den) `add` (x.den `mul` e2.num)));
   assert (fraction_eq (fraction_add_op x e1) (fraction_add_op x e2));
@@ -218,8 +213,7 @@ private let fraction_equivalence_respects_add (#a:Type) (d: integral_domain a)
   fraction_add_is_commutative x e2;
   assert (fraction_eq (fraction_add_op x e1) (fraction_add_op x e2));
   trans_lemma_4 fraction_eq (fraction_add_op e1 x) (fraction_add_op x e1) (fraction_add_op x e2) (fraction_add_op e2 x);
-() 
-#pop-options 
+()  
 
 let fraction_equivalence_respects_addition (#a:Type) (#d: integral_domain a) 
   : Lemma(congruence_condition #(fraction d) (fraction_add_op #a #d) (fraction_eq #a #d)) = 
@@ -237,13 +231,8 @@ let fraction_add (#a:Type) (#d: integral_domain a) : Pure (op_with_congruence (f
   fraction_add_op #a #d
 
 private let fraction_zero_is_neutral_lemma (#a:Type) (#d: integral_domain a) (x: fraction d{is_neutral_of x.num d.addition.op})  
-  : Lemma (is_neutral_of x (fraction_add #a #d)) =   
-  neutral_is_unique d.addition.op x.num d.addition.neutral;
-  reveal_opaque (`%is_reflexive) (is_reflexive #a); 
-  reveal_opaque (`%is_neutral_of) (is_neutral_of #(fraction d)); 
-  reveal_opaque (`%is_left_id_of) (is_left_id_of #(fraction d)); 
-  reveal_opaque (`%is_right_id_of) (is_right_id_of #(fraction d)); 
-  Classical.forall_intro (fraction_additive_neutral_lemma x)
+  : Lemma (is_neutral_of x (fraction_add #a #d)) 
+  = is_neutral_from_lemma (fraction_add #a #d) x (fraction_additive_neutral_lemma x)
 
 private let fraction_zero (#a:Type) (d: integral_domain a) 
   : (x:fraction d { is_neutral_of x (fraction_add #a #d) /\ 
@@ -257,9 +246,9 @@ private let fraction_zero (#a:Type) (d: integral_domain a)
 let fraction_additive_neutral_condition (#a:Type) (d: integral_domain a) 
                                         (x: fraction d{is_neutral_of x.num d.addition.op})
   : Lemma (is_neutral_of x (fraction_add #a #d)) = 
-  reveal_opaque (`%is_neutral_of) (is_neutral_of #(fraction d));
-  reveal_opaque (`%is_left_id_of) (is_left_id_of #(fraction d));
-  reveal_opaque (`%is_right_id_of) (is_right_id_of #(fraction d));
+  reveal_opaque (`%is_neutral_of) (is_neutral_of #(fraction d) #(fraction_eq #a #d));
+  reveal_opaque (`%is_left_id_of) (is_left_id_of #(fraction d) #(fraction_eq #a #d));
+  reveal_opaque (`%is_right_id_of) (is_right_id_of #(fraction d) #(fraction_eq #a #d));
   Classical.forall_intro (fraction_additive_neutral_lemma x) 
 
 private let fraction_neg_op (#a:Type) (#d: integral_domain a) (x: fraction d) 
@@ -306,10 +295,13 @@ private let fraction_neg_is_inverse_for_add (#a:Type) (#d: integral_domain a) (x
                  (x.den `mul` (x.num `add` neg x.num))
                  d.addition.neutral;
   neutral_equivalent_is_neutral add d.addition.neutral (fraction_add x (fraction_neg x)).num;
-  reveal_opaque (`%is_neutral_of) (is_neutral_of #(fraction d)); 
-  reveal_opaque (`%is_left_id_of) (is_left_id_of #(fraction d)); 
-  reveal_opaque (`%is_right_id_of) (is_right_id_of #(fraction d)); 
-  Classical.forall_intro (fraction_additive_neutral_lemma (x `fraction_add` fraction_neg x));
+  reveal_opaque (`%is_neutral_of) (is_neutral_of #(fraction d) #(fraction_eq #a #d)); 
+  reveal_opaque (`%is_left_id_of) (is_left_id_of #(fraction d) #(fraction_eq #a #d)); 
+  reveal_opaque (`%is_right_id_of) (is_right_id_of #(fraction d) #(fraction_eq #a #d)); 
+  is_neutral_from_lemma (fraction_add #a #d) 
+                        (fraction_add x (fraction_neg x)) 
+                        (fraction_additive_neutral_lemma (fraction_add x (fraction_neg x)));
+
   assert (is_neutral_of (fraction_add x (fraction_neg x)) (fraction_add #a #d));
   fraction_add_is_commutative x (fraction_neg x);
   assert (fraction_add x (fraction_neg x) `fraction_eq` fraction_add (fraction_neg x) x);
@@ -373,7 +365,7 @@ private let fraction_negation_lemma (#a:Type) (#d: integral_domain a) (x: fracti
   let s = x `fraction_add` x' in 
   comm_lemma mul x.den (neg x.num);
   congruence_lemma_3 add (x.den `mul` neg x.num) (neg x.num `mul` x.den) (x.num `mul` x.den); 
-  right_distributivity_lemma mul add x.num (neg x.num) x.den;
+  d.right_distributivity x.num (neg x.num) x.den;
   trans_lemma d.eq s.num ((x.num `mul` x.den) `add` (neg x.num `mul` x.den)) ((x.num `add` neg x.num) `mul` x.den);
   inverse_operation_lemma neg x.num; 
   neutral_is_unique add d.addition.neutral (x.num `add` neg x.num);
@@ -403,7 +395,7 @@ let fraction_addition_properties (#a:Type) (d: integral_domain a)
     
 let any_fraction_is_additive_unit (#a:Type) (#d: integral_domain a) (x: fraction d) 
   : Lemma (is_unit x (fraction_add #a #d)) =
-  reveal_opaque (`%is_unit) (is_unit #(fraction d));   
+  reveal_opaque (`%is_unit) (is_unit #(fraction d) #(fraction_eq #a #d));   
   fraction_neg_is_inverse_for_add x
 
 let unit_from_any_frac (#a:Type) (#d: integral_domain a) (x: fraction d) 
@@ -497,8 +489,7 @@ let fraction_neg_properties (#a:Type) (d: integral_domain a) : Lemma (
 let fraction_neg_yields_inverses_for_units_forall (#a:Type) (d: integral_domain a) : Lemma (
     yields_inverses_for_units #(fraction d) #(fraction_eq) #(fraction_add #a #d) fraction_neg_uo) =  
   fraction_neg_properties d 
-
-#push-options "--z3rlimit 5"
+ 
 let fraction_additive_group (#a:Type) (d: integral_domain a) : commutative_group (fraction d) = 
   fraction_add_all_are_units #a #d; 
   fraction_neg_yields_inverses_for_units_forall d;  
@@ -518,6 +509,5 @@ let fraction_additive_group (#a:Type) (d: integral_domain a) : commutative_group
   reveal_opaque (`%unary_congruence_condition) 
                 (unary_congruence_condition #(units_of #(fraction d) (fraction_add #a #d))); 
   Mkmagma (fraction_eq #a #d) fadd fneg zero 
-#pop-options
-#pop-options
+#pop-options 
 

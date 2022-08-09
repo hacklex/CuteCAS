@@ -42,15 +42,14 @@ private let fraction_norm_f (#a:Type) (d: integral_domain a)
 ///
 /// Notice how it takes much more resources from the prover, and is actually
 /// way less readable than the proof below. And to top it off, it is not even shorter!
-#push-options "--z3rlimit 15"
+#push-options "--z3rlimit 10"
 private let left_distributivity_nocalc (#p: Type) (#dom: integral_domain p) 
                                        (x y z: fraction dom) 
   : Lemma (fraction_eq (fraction_mul x (fraction_add y z)) (fraction_add (fraction_mul x y) (fraction_mul x z))) =
     reveal_opaque (`%is_reflexive) (is_reflexive #p); 
     reveal_opaque (`%is_symmetric) (is_symmetric #p); 
-    reveal_opaque (`%is_transitive) (is_transitive #p);    
-    reveal_opaque (`%is_fully_distributive) (is_fully_distributive dom.multiplication.op);
-    ring_distributivity_lemma dom;
+    reveal_opaque (`%is_transitive) (is_transitive #p);
+    reveal_opaque (`%is_fully_distributive) (is_fully_distributive dom.multiplication.op);     
     let ( *) = dom.multiplication.op in
     let (+) = dom.addition.op in
     let mul = dom.multiplication.op in //because ( *) is uglier than mul
@@ -76,7 +75,9 @@ private let left_distributivity_nocalc (#p: Type) (#dom: integral_domain p)
     trans_lemma eq (fraction_add (fraction_mul x y) (fraction_mul x z)).den
                    ((b*d)*(b*f))
                    (b*(b*(d*f)));
-    left_distributivity_lemma ( *) (+) b (a*(c*f)) (a*(d*e));
+                   
+    dom.left_distributivity b (a*(c*f)) (a*(d*e));
+    dom.left_distributivity a (c*f) (d*e);
     congruence_lemma_3 mul ((a*(c*f))+(a*(d*e))) (fraction_mul x (fraction_add y z)).num b;
     congruence_lemma_3 mul (b*(d*f)) (fraction_mul x (fraction_add y z)).den b;     
     fraction_equality_from_known_factor (fraction_mul x (fraction_add y z)) (fraction_add (fraction_mul x y) (fraction_mul x z)) b 
@@ -86,8 +87,9 @@ private let left_distributivity (#p: Type) (#dom: integral_domain p) (x y z: fra
   : Lemma (fraction_eq (fraction_mul x (fraction_add y z)) (fraction_add (fraction_mul x y) (fraction_mul x z))) =
     reveal_opaque (`%is_symmetric) (is_symmetric #p); 
     reveal_opaque (`%is_transitive) (is_transitive #p);    
-    reveal_opaque (`%is_fully_distributive) (is_fully_distributive dom.multiplication.op);
-    ring_distributivity_lemma dom;
+    reveal_opaque (`%is_fully_distributive) (is_fully_distributive dom.multiplication.op); 
+    Classical.forall_intro_3 dom.left_distributivity;
+    Classical.forall_intro_3 dom.right_distributivity;
     let ( *) = dom.multiplication.op in
     let (+) = dom.addition.op in
     let mul = dom.multiplication.op in //because ( *) is both uglier than mul and slower to type
@@ -193,10 +195,129 @@ private let fraction_nonabsorbers_are_regular (#p:Type) (#d: integral_domain p)
   Classical.forall_intro_2 (Classical.move_requires_2 aux_2);
   Classical.forall_intro_2 (Classical.move_requires_2 aux_3)
 
-#push-options "--ifuel 0 --fuel 0 --z3rlimit 1"
-#restart-solver
-let fraction_field (#a:Type) (d: integral_domain a) : field (fraction d) = 
+let fraction_eq_is_the_same #a (d: integral_domain a)
+  : Lemma ((fraction_multiplicative_almost_group #a #d).eq ==
+           (fraction_additive_group d).eq) = ()
 
+let fraction_ring_distr #a (d: integral_domain a) : Lemma (is_fully_distributive
+  #(fraction d)
+  #(fraction_eq #a #d)
+  ((fraction_multiplicative_almost_group #a #d).op <: (binary_op (fraction d)))
+  (((fraction_additive_group d).op) <: (binary_op (fraction d)))) =
+    reveal_opaque (`%is_fully_distributive) (is_fully_distributive #(fraction d) #fraction_eq); 
+  reveal_opaque (`%is_left_distributive) (is_left_distributive #(fraction d) #fraction_eq); 
+  reveal_opaque (`%is_right_distributive) (is_right_distributive #(fraction d) #fraction_eq);   
+  fraction_distributivity_lemma #a #d;
+  let addition = fraction_additive_group d in
+  let multiplication = fraction_multiplicative_almost_group #a #d in
+  let eq = fraction_eq #a #d in
+  ()
+
+[@@"opaque_to_smt"]
+let fraction_add_grp #a (d: integral_domain a) : commutative_group (fraction d) = 
+  fraction_additive_group d 
+
+[@@"opaque_to_smt"]
+let fraction_mul_grp #a (d: integral_domain a) : commutative_monoid (fraction d) =
+  fraction_multiplicative_almost_group #a #d
+
+[@@"opaque_to_smt"]
+let op_of #t (m: magma t) : op_with_congruence m.eq = m.op
+
+let fraction_ring_op_distr #a (d: integral_domain a)
+  : Lemma (
+      let add = op_of (fraction_add_grp d) in
+      let mul = op_of (fraction_mul_grp d) in
+      reveal_opaque (`%fraction_add_grp) (fraction_add_grp d);
+      reveal_opaque (`%fraction_mul_grp) (fraction_mul_grp d);
+      is_fully_distributive #(fraction d) #(fraction_eq #a #d) (mul <: binary_op (fraction d)) (add <: binary_op (fraction d))
+    ) = 
+    reveal_opaque (`%fraction_add_grp) (fraction_add_grp d);    
+    reveal_opaque (`%fraction_mul_grp) (fraction_mul_grp d);    
+    reveal_opaque (`%op_of) (op_of #(fraction d));
+    assert (op_of (fraction_add_grp d) == fraction_add #a #d);
+    assert (op_of (fraction_mul_grp d) == fraction_mul #a #d);
+    reveal_opaque (`%is_fully_distributive) (is_fully_distributive #(fraction d) #fraction_eq); 
+    reveal_opaque (`%is_left_distributive) (is_left_distributive #(fraction d) #fraction_eq); 
+    reveal_opaque (`%is_right_distributive) (is_right_distributive #(fraction d) #fraction_eq);  
+    fraction_distributivity_lemma #a #d;
+    ()
+
+#push-options "--ifuel 0 --fuel 0 --z3rlimit 1"
+let unit_subfunc #a (d: integral_domain a) (p: fraction d) : (u:fraction d{is_unit u (fraction_multiplicative_almost_group #a #d).op}) =
+  let up = fraction_unit_part_f d p in
+  let mg = fraction_multiplicative_almost_group #a #d in
+  let mul = mg.op in
+//  uncommenting the assertions below breaks every hell loose.
+
+//  assert (fraction_eq #a #d == mg.eq);
+//  assert (mul == fraction_mul #a #d);
+//  assert (units_of (fraction_mul #a #d) == units_of (fraction_multiplicative_almost_group #a #d).op);
+//  assert (is_unit up mul);
+//  assert (is_unit #(fraction d) #mg.eq up (fraction_multiplicative_almost_group #a #d).op);
+  up 
+  
+let fr_up_func #a (d: integral_domain a) (p: fraction d) 
+  : units_of #(fraction d) 
+             #(fraction_multiplicative_almost_group #a #d).eq 
+             (fraction_multiplicative_almost_group #a #d).op = 
+  unit_subfunc d p
+
+let typed_fr_up_func #a (d: integral_domain a) 
+  : ((fraction d) -> (units_of #(fraction d) 
+                              #(fraction_multiplicative_almost_group #a #d).eq 
+                              (fraction_multiplicative_almost_group #a #d).op)) =
+  fr_up_func d
+
+
+let normal_subfunc #a (d: integral_domain a) 
+                      (up: a -> units_of (fraction_multiplicative_almost_group #a #d).op) 
+                      (p: fraction d) 
+  : (u: fraction d{is_neutral_of (fr_up_func d u) (fraction_multiplicative_almost_group #a #d).op}) = 
+  fraction_normal_part_f d p  
+ 
+let unit_normal_of_frac #a (d: integral_domain a)  
+                      (p: fraction d) 
+  : (u: fraction d{is_unit_normal (fraction_multiplicative_almost_group #a #d).op (fr_up_func d) u  }) = 
+  fraction_normal_part_f d p  
+
+let frac_euc_norm_fun #a (d: integral_domain a) (x: fraction d) 
+  : Pure (option nat)
+         (requires True)
+         (ensures fun v -> v=None ==> is_absorber_of x (fraction_multiplicative_almost_group #a #d).op) =
+    fraction_norm_f d x
+
+let fr_eu #a (d: integral_domain a) : nat_function_defined_on_non_absorbers (fraction_multiplicative_almost_group #a #d).op = frac_euc_norm_fun d 
+#pop-options
+
+
+
+
+#push-options "--ifuel 0 --fuel 0 --z3rlimit 1"
+#restart-solver 
+let fraction_field (#a:Type) (d: integral_domain a) : field (fraction d) =  
+  fraction_one_is_not_equal_to_fraction_zero #a #d;
+  fraction_nonabsorbers_are_regular #a #d;  
+  Classical.forall_intro (fraction_unit_cant_be_absorber #a #d);  
+  Classical.forall_intro (fraction_nonabsorber_is_unit #a #d); 
+  {
+    addition = fraction_additive_group d;
+    multiplication = fraction_multiplicative_almost_group #a #d;
+    eq = fraction_eq #a #d;
+    left_distributivity = (left_distributivity #a #d);
+    right_distributivity = (right_distributivity #a #d);
+    unit_part_of = fr_up_func d ;
+    normal_part_of = unit_normal_of_frac d;
+    euclidean_norm = fr_eu d
+  }
+
+
+
+
+
+
+
+let fraction_field (#a:Type) (d: integral_domain a) : field (fraction d) =   
   fraction_distributivity_lemma #a #d;
   fraction_one_is_not_equal_to_fraction_zero #a #d;
   fraction_nonabsorbers_are_regular #a #d;
@@ -206,22 +327,24 @@ let fraction_field (#a:Type) (d: integral_domain a) : field (fraction d) =
   let multiplication = fraction_multiplicative_almost_group #a #d in
   let eq = fraction_eq #a #d in
   let zero = fraction_absorber d in
-  assert (zero == addition.neutral);
+  //
+//  assert (zero == addition.neutral);
 //  assert (addition.eq == multiplication.eq);
 //  assert (congruence_condition addition.op eq);
 //  assert (congruence_condition multiplication.op eq);
 //  assert (eq == addition.eq);
 //  assert (multiplication.op == fraction_mul #a #d);
-  assert (is_fully_distributive multiplication.op addition.op);
-  assert (is_absorber_of addition.neutral multiplication.op);  
+//  assert (is_fully_distributive multiplication.op addition.op);
+//  assert (is_absorber_of addition.neutral multiplication.op);    
   { 
     addition = addition;
     multiplication = multiplication;
     eq = eq;
-    unit_part_of = fraction_unit_part_f d;
-    normal_part_of = fraction_normal_part_f d;
-    euclidean_norm = fraction_norm_f d
+    left_distributivity = (left_distributivity #a #d);
+    right_distributivity = (right_distributivity #a #d);
+    unit_part_of = fr_up_func d;
+    normal_part_of = unit_normal_of_frac d;
+    euclidean_norm = fr_eu d
   }
-#pop-options
 #pop-options
 

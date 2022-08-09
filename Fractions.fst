@@ -317,7 +317,7 @@ let fraction_field (#a:Type) (d: integral_domain a) : field (fraction d) =
 
 
 
-let fraction_field (#a:Type) (d: integral_domain a) : field (fraction d) =   
+let fraction_field2 (#a:Type) (d: integral_domain a) : field (fraction d) =   
   fraction_distributivity_lemma #a #d;
   fraction_one_is_not_equal_to_fraction_zero #a #d;
   fraction_nonabsorbers_are_regular #a #d;
@@ -326,16 +326,15 @@ let fraction_field (#a:Type) (d: integral_domain a) : field (fraction d) =
   let addition = fraction_additive_group d in
   let multiplication = fraction_multiplicative_almost_group #a #d in
   let eq = fraction_eq #a #d in
-  let zero = fraction_absorber d in
-  //
-//  assert (zero == addition.neutral);
-//  assert (addition.eq == multiplication.eq);
-//  assert (congruence_condition addition.op eq);
-//  assert (congruence_condition multiplication.op eq);
-//  assert (eq == addition.eq);
-//  assert (multiplication.op == fraction_mul #a #d);
-//  assert (is_fully_distributive multiplication.op addition.op);
-//  assert (is_absorber_of addition.neutral multiplication.op);    
+  let zero = fraction_absorber d in  
+  assert (zero == addition.neutral);
+  assert (addition.eq == multiplication.eq);
+  assert (congruence_condition addition.op eq);
+  assert (congruence_condition multiplication.op eq);
+  assert (eq == addition.eq);
+  assert (multiplication.op == fraction_mul #a #d);
+  assert (is_fully_distributive multiplication.op addition.op);
+  assert (is_absorber_of addition.neutral multiplication.op);    
   { 
     addition = addition;
     multiplication = multiplication;

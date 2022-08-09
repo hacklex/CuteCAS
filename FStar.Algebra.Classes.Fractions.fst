@@ -105,19 +105,23 @@ let fraction_eq_is_reflexive #t (d:integral_domain t) (x: fraction d)
 
 let fraction_eq_is_transitive #t (dom:integral_domain t) (x y z: fraction dom)
   : Lemma (requires fraction_eq x y /\ fraction_eq y z) (ensures fraction_eq x z) = 
-  let (=) = (eq_of_id t).eq in
-  Classical.forall_intro (eq_of_id t).reflexivity;
-  Classical.forall_intro_3 (Classical.move_requires_3 (eq_of_id t).transitivity);
+  let (=) = (eq_of_id t).eq in // extracted for performance reasons
+  Classical.forall_intro (eq_of_id t).reflexivity; // these decrease verbosity
   Classical.forall_intro_2 (eq_of_id t).symmetry; 
+  // transitivity lemma is ill-suited for forall 
+  // (often we still need to call trans_lemma manually) --
+  // but this invocation is required by the calc block below.
+  Classical.forall_intro_3 (Classical.move_requires_3 (eq_of_id t).transitivity);
   let mul_congruence_3 (x y z:t) 
     : Lemma (requires x=y) (ensures (x*z = y*z) /\ (z*x = z*y)) 
     = mul_congruence x z y z; mul_congruence z x z y in
-  let (a,b,c,d,e,f) : (t & t & t & t & t & t) = (x.num, x.den, y.num, y.den, z.num, z.den) in
+  let (a,b,c,d,e,f) : (t & t & t & t & t & t) // type ascription to fix typeclass resolution issue
+    = (x.num, x.den, y.num, y.den, z.num, z.den) in
   let zero : t = zero in
   mul_congruence_3 (c*f) (d*e) (a*d);
   mul_congruence_3 (a*d) (b*c) (d*e);
   assert ((b*c)*(d*e) = (a*d)*(c*f));  
-  calc (=) {
+  calc (=) { // this should be an assert (f = g) by ([assoc; congr; comm]) or something of the sort
     (b*c)*(d*e); = { mul_associativity (b*c) d e }
     ((b*c)*d)*e; = { mul_associativity b c d;
                      mul_congruence_3 ((b*c)*d) (b*(c*d)) e }
@@ -125,7 +129,7 @@ let fraction_eq_is_transitive #t (dom:integral_domain t) (x y z: fraction dom)
                      mul_congruence_3 (b*(c*d)) ((c*d)*b) e;
                      mul_associativity (c*d) b e }
     (c*d)*(b*e);
-  };
+  }; // this as well could probably be simplified to an *assertion by* couple of tactic calls
   calc (=) {
     (a*d)*(c*f); = { mul_associativity a d (c*f);
                      mul_associativity d c f;
@@ -139,6 +143,7 @@ let fraction_eq_is_transitive #t (dom:integral_domain t) (x y z: fraction dom)
                      mul_congruence_3 (f*a) (a*f) (c*d) }
     (c*d)*(a*f);     
   };
+  //This one already feels like a tactic call :)
   trans_lemma [ (c*d)*(a*f); (a*d)*(c*f); (b*c)*(d*e); (c*d)*(b*e) ];
   assert ((c*d)*(a*f) = (c*d)*(b*e));
   if (c*d <> zero) then

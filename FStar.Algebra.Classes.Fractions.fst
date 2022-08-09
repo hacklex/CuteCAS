@@ -103,9 +103,21 @@ let fraction_eq_is_symmetric #t (d:integral_domain t) (x y: fraction d)
 let fraction_eq_is_reflexive #t (d:integral_domain t) (x: fraction d)
   : Lemma (fraction_eq x x) = mul_commutativity x.num x.den
 
+
+/// This lemma proves that for any three fractions x,y,z,
+///        if x=y && y=z then x=z,
+///          where (=) is the fraction_eq function
+///
+/// -- or, if we speak in terms of parent domain,
+///       if (x.num*y.den = x.den*y.num) and
+///          (y.num*z.den = y.den*z.num),
+///       then (x.num*z.den = x.den*z.num),
+/// (=) being the parent domain equivalence relation
 let fraction_eq_is_transitive #t (dom:integral_domain t) (x y z: fraction dom)
   : Lemma (requires fraction_eq x y /\ fraction_eq y z) (ensures fraction_eq x z) = 
+  
   let (=) = (eq_of_id t).eq in // extracted for performance reasons
+  
   Classical.forall_intro (eq_of_id t).reflexivity; // these decrease verbosity
   Classical.forall_intro_2 (eq_of_id t).symmetry; 
   // transitivity lemma is ill-suited for forall 
@@ -116,8 +128,11 @@ let fraction_eq_is_transitive #t (dom:integral_domain t) (x y z: fraction dom)
     : Lemma (requires x=y) (ensures (x*z = y*z) /\ (z*x = z*y)) 
     = mul_congruence x z y z; mul_congruence z x z y in
   let (a,b,c,d,e,f) : (t & t & t & t & t & t) // type ascription to fix typeclass resolution issue
-    = (x.num, x.den, y.num, y.den, z.num, z.den) in
-  let zero : t = zero in
+    = (x.num, x.den, y.num, y.den, z.num, z.den) in  
+
+  // in these terms, we're proving that (ad=bc && cf=de ==> af=be)
+
+  let zero : t = zero in // added this to eliminate type ascriptions 
   mul_congruence_3 (c*f) (d*e) (a*d);
   mul_congruence_3 (a*d) (b*c) (d*e);
   assert ((b*c)*(d*e) = (a*d)*(c*f));  

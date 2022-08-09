@@ -26,13 +26,23 @@ class semiring (t:Type) = {
                                                   add_comm_monoid.add_monoid.add_semigroup.has_add.add;
   
 }
- 
+
 instance add_cm_of_semiring (t:Type) (r: semiring t) = r.add_comm_monoid
 instance mul_m_of_semiring  (t:Type) (r: semiring t) = r.mul_monoid <: mul_monoid t
   
 instance hm_r #t (r: semiring t) = r.mul_monoid.mul_semigroup.has_mul
 instance ha_r #t (r: semiring t) = r.add_comm_monoid.add_monoid.add_semigroup.has_add
 instance he_r #t (r: semiring t) = r.mul_monoid.mul_semigroup.has_mul.eq 
+
+let absorption #t {| r: semiring t |} (z x:t)
+  : Lemma (requires z=zero) (ensures (z*x = zero) /\ (x*z = zero)) = 
+  let eq : equatable t = TC.solve in
+  Classical.forall_intro_3 (Classical.move_requires_3 eq.transitivity);
+  Classical.forall_intro eq.reflexivity;
+  mul_congruence z x zero x;
+  mul_congruence x z x zero;
+  left_absorption x;
+  right_absorption x
 
 let absorber_is_two_sided_from_lemmas #t {| r: semiring t |} (#z1 #z2: t)
   (z1_is_absorber: left_absorber_lemma  r.mul_monoid.mul_semigroup.has_mul.mul z1)
@@ -253,9 +263,68 @@ class domain (t:Type) = {
   [@@@TC.no_method] zero_ne_one_semiring: r:zero_ne_one_semiring t{r.semiring == ring.semiring};
   domain_law: (x:t -> y:t -> Lemma (requires x*y = zero) (ensures (x=zero) || (y=zero)))
 }
-
+ 
 instance ring_of_domain (t:Type) {| d: domain t |} = d.ring
 instance zero_ne_one_semiring_of_domain (t:Type) {| d: domain t |} = d.zero_ne_one_semiring <: zero_ne_one_semiring t
+
+let left_cancellation #t {| d: domain t |} (x y z: t)
+  : Lemma (requires (x*y = x*z) /\ (x<>zero)) (ensures y=z) = 
+  let teq : equatable t = TC.solve in
+  Classical.forall_intro teq.reflexivity;
+  Classical.forall_intro_2 teq.symmetry;
+  Classical.forall_intro_3 (Classical.move_requires_3 teq.transitivity);
+  add_congruence (x*y) (-(x*z)) (x*z) (-(x*z));
+  negation (x*z); 
+  ring_neg_xy_is_x_times_neg_y x z; 
+  left_distributivity x y (-z);
+  add_congruence (x*y) (x*(-z)) (x*y) (-(x*z));
+  trans_lemma [(x*(y + -z));
+               (x*y + x*(-z));
+               ((x*y) + -(x*z));
+               (x*z + -(x*z));
+               zero ];
+  domain_law x (y + -z);
+  add_congruence (y + -z) z zero z; 
+  left_add_identity z; 
+  calc (=) {
+    z;            = { left_add_identity z }
+    zero + z;     = { }    
+    y + -z + z;   = { add_associativity y (-z) z }
+    y + (-z + z); = { negation z; 
+                      add_congruence y (-z + z) y zero;
+                      right_add_identity y }
+    y;
+  }
+
+let right_cancellation #t {| d: domain t |} (x y z: t)
+  : Lemma (requires (y*x = z*x) /\ (x<>zero)) (ensures y=z) = 
+  let teq : equatable t = TC.solve in
+  Classical.forall_intro teq.reflexivity;
+  Classical.forall_intro_2 teq.symmetry;
+  Classical.forall_intro_3 (Classical.move_requires_3 teq.transitivity);
+  add_congruence (y*x) (-(z*x)) (z*x) (-(z*x));
+  negation (z*x); 
+  ring_neg_xy_is_neg_x_times_y z x;
+  right_distributivity y (-z) x;
+  add_congruence (y*x) ((-z)*x) (y*x) (-(z*x));
+  trans_lemma [((y + -z)*x);
+               (y*x + (-z)*x);
+               ((y*x) + -(z*x));
+               (z*x + -(z*x));
+               zero ];
+  domain_law (y + -z) x;
+  add_congruence (y + -z) z zero z; 
+  left_add_identity z; 
+  calc (=) {
+    z;            = { left_add_identity z }
+    zero + z;     = { }    
+    y + -z + z;   = { add_associativity y (-z) z }
+    y + (-z + z); = { negation z; 
+                      add_congruence y (-z + z) y zero;
+                      right_add_identity y }
+    y;
+  }
+
 
 let semiring_nonzero_product_means_nonzero_factors #t {| r: semiring t |} (x y:t)
   : Lemma (requires x*y <> zero) (ensures x <> zero /\ y <> zero) = 

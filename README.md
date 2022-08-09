@@ -4,6 +4,8 @@ Abstract Algebra for [FStar](https://www.fstar-lang.org/)
 # What's this?
 
 For now, just a sandbox where I play with F* and try implementing abstract algebra notions there.
+Some files here are future parts of F* core library (some are already there).
+I will eventually remove those that are already part of fstar's ulib.
 
 # What's done already?
 
@@ -11,7 +13,8 @@ For now, just a sandbox where I play with F* and try implementing abstract algeb
 * binary operations (with lemmas on commutativity, associativity, neutral elements, absorbers, inverses);
 * grouplike structures (magma -> semigroup -> monoid -> group) with separately defined commutative versions;
 * ringlike structures (ring -> domain -> euclidean domain -> skewfield -> field) with distributivity lemmas and unit/normal decomposition for euclidean domains;
-* fields of fractions
+* fields of fractions (over arbitrary integral domains)
+* commutative rings of polynomials (over arbitrary commutative rings)
 
 # What's next?
 

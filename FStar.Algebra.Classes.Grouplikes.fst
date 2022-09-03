@@ -13,7 +13,13 @@ type commutativity_lemma (#t:Type) {| equatable t |} (op: t->t->t) =
 
 type congruence_lemma (#t:Type) {| equatable t |} (op: t->t->t) = 
   x:t -> y:t -> z:t -> w:t -> Lemma (requires x=z /\ y=w) (ensures op x y = op z w)
-   
+
+type heterogenous_congruence_lemma (#a #b #c: Type) 
+                                   {| equatable a |} 
+                                   {| equatable b |} 
+                                   {| equatable c |} (op: a->b->c) =
+  x:a -> y:b -> z:a -> w:b -> Lemma (requires x=z /\ y=w) (ensures op x y = op z w)
+
 type left_identity_lemma #t {| equatable t |} (op: t->t->t) (zero: t) = 
   x:t -> Lemma (op zero x = x)
   
@@ -28,20 +34,31 @@ type right_absorber_lemma #t (op: t->t->t) {| equatable t |} (zero: t) =
 
 type inversion_lemma #t {| equatable t |} (op: t->t->t) (zero:t) (inv: t->t) = 
   x:t -> Lemma (op x (inv x) = zero /\ op (inv x) x = zero)
- 
+
+class mul_defined (a b c: Type) = {
+  mul: a -> b -> c;
+  [@@@TC.no_method] eq_a: equatable a;
+  [@@@TC.no_method] eq_b: equatable b;
+  [@@@TC.no_method] eq_c: equatable c;
+  [@@@TC.no_method] congruence: heterogenous_congruence_lemma mul;  
+}
+
+let ( * ) #a #b #c {| m: mul_defined a b c |} = m.mul
+
 class has_mul (t:Type) = { 
-  mul : t -> t -> t;
-  [@@@TC.no_method] eq: equatable t;
-  [@@@TC.no_method] congruence: congruence_lemma mul;
-} 
+  [@@@TC.no_method] mul: (z:mul_defined t t t{z.eq_a == z.eq_b /\ z.eq_b == z.eq_c })
+}
 
-instance eq_of_mul (t:Type) {| h: has_mul t |} : equatable t = h.eq 
+instance eq_of_mul (t:Type) {| h: has_mul t |} : equatable t = h.mul.eq_a
 
-type left_mul_absorber_lemma #t {| m: has_mul t |} (zero: t) = left_absorber_lemma m.mul zero
-type right_mul_absorber_lemma #t {| m: has_mul t |} (zero: t) = right_absorber_lemma m.mul zero
+let mul_congruence (#t:Type) {| m: has_mul t |} : congruence_lemma m.mul.mul = m.mul.congruence
+
+instance mul_defined_of_has_mul t (h: has_mul t) : mul_defined t t t = h.mul
+
+
+type left_mul_absorber_lemma #t {| m: has_mul t |} (zero: t) = left_absorber_lemma ( * ) zero
+type right_mul_absorber_lemma #t {| m: has_mul t |} (zero: t) = right_absorber_lemma ( * ) zero
    
-let ( * ) (#t:Type) {|m: has_mul t|} = m.mul
-
 class has_add (t:Type) = {  
   add : t -> t -> t;
   [@@@TC.no_method] eq: equatable t;
@@ -59,10 +76,16 @@ instance int_equatable : equatable int = {
   transitivity = (fun _ _ _ -> ());
 } 
 
-instance int_mul : has_mul int = {
+instance int_mul_defined : mul_defined int int int = {
   mul = op_Multiply;
-  eq = int_equatable;
+  eq_a = int_equatable;
+  eq_b = int_equatable;
+  eq_c = int_equatable;
   congruence = fun _ _ _ _ -> ()
+}
+
+instance int_mul : has_mul int = {
+  mul = int_mul_defined 
 }
 
 instance int_add : has_add int = {
@@ -73,7 +96,7 @@ instance int_add : has_add int = {
 
 class mul_semigroup (t:Type) = {  
   [@@@TC.no_method] has_mul : has_mul t; 
-  [@@@TC.no_method] associativity: associativity_lemma has_mul.mul;
+  [@@@TC.no_method] associativity: associativity_lemma has_mul.mul.mul;
 }
 instance has_mul_of_sg (t:Type) {| h: mul_semigroup t |} = h.has_mul
 
@@ -84,8 +107,7 @@ class add_semigroup (t:Type) = {
 
 let mul_associativity #t {| sg: mul_semigroup t |} : associativity_lemma ( * ) = sg.associativity 
 let add_associativity #t {| sg: add_semigroup t |} : associativity_lemma ( + ) = sg.associativity
-
-let mul_congruence #t {| hm: has_mul t |} : congruence_lemma ( * ) = hm.congruence 
+ 
 let add_congruence #t {| ha: has_add t |} : congruence_lemma ( + ) = ha.congruence 
 
 
@@ -117,9 +139,9 @@ instance eq_of_ho (t:Type) (h: has_one t) = h.eq
 
 class mul_monoid (t:Type) = {
   [@@@TC.no_method] has_one: has_one t;
-  [@@@TC.no_method] mul_semigroup: (m:mul_semigroup t{has_one.eq == m.has_mul.eq});
-  left_mul_identity : left_identity_lemma mul_semigroup.has_mul.mul one;
-  right_mul_identity : right_identity_lemma mul_semigroup.has_mul.mul one;
+  [@@@TC.no_method] mul_semigroup: (m:mul_semigroup t{has_one.eq == m.has_mul.mul.eq_a});
+  left_mul_identity : left_identity_lemma mul_semigroup.has_mul.mul.mul one;
+  right_mul_identity : right_identity_lemma mul_semigroup.has_mul.mul.mul one;
 }
 
 instance sg_of_mul_monoid (t:Type) {| h: mul_monoid t |} = h.mul_semigroup <: mul_semigroup t
@@ -131,7 +153,7 @@ class add_comm_magma (t:Type) = {
 }
 class mul_comm_magma (t:Type) = {
   [@@@TC.no_method] has_mul : has_mul t;
-  mul_commutativity: commutativity_lemma has_mul.mul; 
+  mul_commutativity: commutativity_lemma has_mul.mul.mul; 
 }
 
 instance has_add_of_comm_magma (t:Type) {| m: add_comm_magma t |} = m.has_add
@@ -249,10 +271,10 @@ let group_cancellation_right (#t:Type) {| g: add_group t |} (x y z: t)
   he.symmetry ((y+x)+(-x)) y 
 
 let is_right_factor_of (#t:Type) {| m: has_mul t |} (product factor:t) = 
-  exists c. c*factor = product
+  exists (c:t). c*factor = product
 
 let is_left_factor_of (#t:Type) {| m: has_mul t |} (product factor:t) =
-  exists c. factor*c = product
+  exists (c:t). factor*c = product
 
 let is_factor_of (#t:Type) {| m: mul_comm_magma t |} (product factor: t) = 
   is_right_factor_of product factor \/ is_left_factor_of product factor
@@ -264,10 +286,10 @@ let left_factor_is_right_factor_if_commutative (#t:Type)
   let aux_1 () : Lemma (requires is_left_factor_of product factor) 
                        (ensures is_right_factor_of product factor) =                        
     eliminate exists c. (factor*c=product)
-    returns is_right_factor_of product factor with _. 
+    returns is_right_factor_of #t product factor with _. 
     begin
       mul_commutativity factor c;
-      symmetry (factor*c) (c*factor);
+      symmetry #t (factor*c) (c*factor);
       transitivity (c*factor) (factor*c) product
     end in Classical.move_requires aux_1 ();
   let aux_2 () : Lemma (requires is_right_factor_of product factor) 
@@ -276,7 +298,7 @@ let left_factor_is_right_factor_if_commutative (#t:Type)
     returns is_left_factor_of product factor with _.  
     begin
       mul_commutativity c factor;
-      symmetry (c*factor) (factor*c);
+      symmetry #t (c*factor) (factor*c);
       transitivity (factor*c) (c*factor) product
     end in Classical.move_requires aux_2 ()  
  

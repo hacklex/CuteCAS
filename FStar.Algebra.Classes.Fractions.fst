@@ -4,9 +4,10 @@ open FStar.Algebra.Classes.Equatable
 open FStar.Algebra.Classes.Grouplikes
 open FStar.Algebra.Classes.Ringlikes
 
-module TC = FStar.Tactics.Typeclasses
+module TC = FStar.Tactics.Typeclasses 
 
-//instance semiring_of_integral_domain t {| d: integral_domain t |} = d.commutative_ring.ring.semiring
+//instance semiring_of_integral_domain t {| d: integral_domain t |} 
+//  = d.commutative_ring.ring.semiring
 
 //instance has_one_of_id t {| d: integral_domain t |} = d.commutative_ring.mul_comm_monoid.mul_monoid 
 instance eq_of_id t {| d: integral_domain t |} : equatable t 

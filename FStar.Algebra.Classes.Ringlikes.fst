@@ -401,7 +401,7 @@ let is_prime #t {| h: mul_monoid t |} (p:t) =
                                 (is_divisor_of p m \/ is_divisor_of p n)))
 
 type units_of t {| h: mul_monoid t |} = x:t{is_unit x}
-
+ 
 // fstar-mode isn't happy with the definition, but fstar is somehow...
 let unit_product_is_unit #t {| h: mul_monoid t |} (x y: units_of t)
   : Lemma (is_unit #t (x*y)) =
@@ -451,6 +451,29 @@ class field (t:Type) = {
 instance dr_of_field (t:Type) (f: field t) = f.division_ring
 instance comm_ring_of_field (t:Type) (f: field t) = f.commutative_ring <: commutative_ring t
 
+
+
+class left_module (vector: Type) 
+                  (scalar: Type) 
+                  (r: ring scalar) 
+                  (cm: add_comm_group vector) = {
+  s_mul_v: (x:scalar) -> (y: vector) -> vector;
+  s_left_associativity: (x: scalar) -> (y: scalar) -> (z: vector) -> Lemma (s_mul_v x (s_mul_v y z) = s_mul_v (x*y) z); 
+  s_left_distributivity: (x: scalar) -> (y: vector) -> (z: vector) -> Lemma (s_mul_v x (y + z) = s_mul_v x y + s_mul_v x z); 
+}
+
+
+
+
+class right_module (vector: Type) 
+                  (scalar: Type) 
+                  (r: ring scalar) 
+                  (cm: add_comm_group vector) = {
+  v_mul_s: (x:vector) -> (y: scalar) -> vector;
+  right_associativity: (x: vector) -> (y: scalar) -> (z: scalar) -> Lemma (s_mul_v x (s_mul_v y z) = s_mul_v (x*y) z);
+}
+
+
 let survives_addition #t {|r:ring t|} (f: t->bool) = 
   forall (x y: (q:t{f q})). f (x + y) 
 
@@ -492,10 +515,17 @@ let principal_left_ideal_multiplier #t {|r:ring t|} (x:t) (p:principal_left_idea
 let principal_right_ideal_multiplier #t {|r:ring t|} (x:t) (p: principal_right_ideal x) 
   : GTot(z:t{x*z = p}) = 
   IndefiniteDescription.indefinite_description_ghost t (fun q -> (x*q) = p == true) 
-
+ 
 open FStar.Squash
 open FStar.Classical
 
+let principal_left_ideal_func #t {|r:ring t|} (x:t) : GTot (left_ideal_func t) =   
+  let test (p:t) : GTot(bool) = IndefiniteDescription.strong_excluded_middle (exists (q:t). x*q = p) in
+  IndefiniteDescription.indefinite_description_ghost (left_ideal_func t)
+    (fun f -> (forall (p:t). (f p <==> test p)))
+ 
+
+    
 (*
 let principal_ideal_func #t {|r:ring t|} (x:t) : GTot (left_ideal_func t) =   
   let logical_condition p = exists q. (q*x) = p  in  

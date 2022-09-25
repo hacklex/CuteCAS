@@ -43,18 +43,18 @@ class mul_defined (a b c: Type) = {
   [@@@TC.no_method] congruence: heterogenous_congruence_lemma mul;  
 }
 
-let ( * ) #a #b #c {| m: mul_defined a b c |} = m.mul
 
 class has_mul (t:Type) = { 
-  [@@@TC.no_method] mul: (z:mul_defined t t t{z.eq_a == z.eq_b /\ z.eq_b == z.eq_c })
+  [@@@TC.no_method] eq: equatable t;
+  [@@@TC.no_method] mul: t -> t -> t; //(z:mul_defined t t t{z.eq_a == z.eq_b /\ z.eq_b == z.eq_c })
+  [@@@TC.no_method] congruence : congruence_lemma mul;  
 }
 
-instance eq_of_mul (t:Type) {| h: has_mul t |} : equatable t = h.mul.eq_a
+let ( * ) #a {| m: has_mul a |} = m.mul
 
-let mul_congruence (#t:Type) {| m: has_mul t |} : congruence_lemma m.mul.mul = m.mul.congruence
+instance eq_of_mul (t:Type) {| h: has_mul t |} : equatable t = h.eq
 
-instance mul_defined_of_has_mul t (h: has_mul t) : mul_defined t t t = h.mul
-
+let mul_congruence (#t:Type) {| m: has_mul t |} : congruence_lemma m.mul = m.congruence
 
 type left_mul_absorber_lemma #t {| m: has_mul t |} (zero: t) = left_absorber_lemma ( * ) zero
 type right_mul_absorber_lemma #t {| m: has_mul t |} (zero: t) = right_absorber_lemma ( * ) zero
@@ -76,18 +76,12 @@ instance int_equatable : equatable int = {
   transitivity = (fun _ _ _ -> ());
 } 
 
-instance int_mul_defined : mul_defined int int int = {
+instance int_mul : has_mul int = {
   mul = op_Multiply;
-  eq_a = int_equatable;
-  eq_b = int_equatable;
-  eq_c = int_equatable;
+  eq = int_equatable;
   congruence = fun _ _ _ _ -> ()
 }
-
-instance int_mul : has_mul int = {
-  mul = int_mul_defined 
-}
-
+ 
 instance int_add : has_add int = {
   add = op_Addition;
   eq = int_equatable;
@@ -96,7 +90,7 @@ instance int_add : has_add int = {
 
 class mul_semigroup (t:Type) = {  
   [@@@TC.no_method] has_mul : has_mul t; 
-  [@@@TC.no_method] associativity: associativity_lemma has_mul.mul.mul;
+  [@@@TC.no_method] associativity: associativity_lemma has_mul.mul;
 }
 instance has_mul_of_sg (t:Type) {| h: mul_semigroup t |} = h.has_mul
 
@@ -139,9 +133,9 @@ instance eq_of_ho (t:Type) (h: has_one t) = h.eq
 
 class mul_monoid (t:Type) = {
   [@@@TC.no_method] has_one: has_one t;
-  [@@@TC.no_method] mul_semigroup: (m:mul_semigroup t{has_one.eq == m.has_mul.mul.eq_a});
-  left_mul_identity : left_identity_lemma mul_semigroup.has_mul.mul.mul one;
-  right_mul_identity : right_identity_lemma mul_semigroup.has_mul.mul.mul one;
+  [@@@TC.no_method] mul_semigroup: (m:mul_semigroup t{has_one.eq == m.has_mul.eq});
+  left_mul_identity : left_identity_lemma mul_semigroup.has_mul.mul one;
+  right_mul_identity : right_identity_lemma mul_semigroup.has_mul.mul one;
 }
 
 instance sg_of_mul_monoid (t:Type) {| h: mul_monoid t |} = h.mul_semigroup <: mul_semigroup t
@@ -153,7 +147,7 @@ class add_comm_magma (t:Type) = {
 }
 class mul_comm_magma (t:Type) = {
   [@@@TC.no_method] has_mul : has_mul t;
-  mul_commutativity: commutativity_lemma has_mul.mul.mul; 
+  mul_commutativity: commutativity_lemma has_mul.mul; 
 }
 
 instance has_add_of_comm_magma (t:Type) {| m: add_comm_magma t |} = m.has_add
@@ -232,6 +226,20 @@ instance sub_of_add_group (t:Type) {| h: add_group t |} = h.has_sub
 
 instance add_group_of_comm_group (t:Type) {| h: add_comm_group t |} = h.add_group
 instance add_comm_monoid_of_comm_group (t:Type) {| h: add_comm_group t |} = h.add_comm_monoid <: add_comm_monoid t
+
+let zero_equals_minus_zero #t {| a: add_group t |} 
+  : Lemma (a.add_monoid.has_zero.zero = -a.add_monoid.has_zero.zero) = 
+  let zero : t = zero in
+  let ha = a.add_monoid.add_semigroup.has_add in
+  let (=) = ha.eq.eq in
+  let (+) = ha.add in
+  let op_Minus = a.has_neg.neg in
+  Classical.forall_intro_2 ha.eq.symmetry;
+  left_add_identity (-zero);
+  assert (zero + -zero = -zero);
+  negation zero;
+  assert (zero + -zero = zero);
+  transitivity zero (zero + -zero) (-zero)
 
  
 let group_cancellation_left (#t:Type) {| g: add_group t |} (x y z: t)
@@ -377,4 +385,22 @@ let equality_is_zero_sum (#t:Type) {| add_group t |} (x y: t)
     right_add_identity x;
     left_add_identity y
     in Classical.move_requires_2 aux_2 x y
-    
+
+let neg_of_sum #t {| g: add_group t |} (x y:t)
+  : Lemma (-(x+y) = -y + -x) = 
+  Classical.forall_intro g.add_monoid.add_semigroup.has_add.eq.reflexivity;
+  Classical.forall_intro_2 g.add_monoid.add_semigroup.has_add.eq.symmetry;
+  transitivity_for_calc_proofs t;
+  calc (=) {
+    (x+y) + (-y + -x); = { add_associativity x y (-y + -x) }
+    x + (y + (-y + -x)); = { add_associativity y (-y) (-x);
+                             add_congruence x (y + (-y + -x)) x ((y + -y) + -x) }
+    x + ((y + -y) + -x); =  { negation y;
+                              add_congruence (y + -y) (-x) zero (-x);
+                              left_add_identity (-x);                              
+                              add_congruence x ((y + -y) + -x) x (-x) }
+    x + -x; = { negation x } 
+    zero;
+  };
+  negation (x+y); 
+  group_cancellation_left (x+y) (-y + -x) (-(x+y)) 

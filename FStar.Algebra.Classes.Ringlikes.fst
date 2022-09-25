@@ -29,7 +29,10 @@ class semiring (t:Type) = {
 
 instance add_cm_of_semiring (t:Type) (r: semiring t) = r.add_comm_monoid
 instance mul_m_of_semiring  (t:Type) (r: semiring t) = r.mul_monoid <: mul_monoid t
-  
+
+instance eq_of_acg #t {| g: add_comm_group t |} : equatable t =
+  g.add_group.add_monoid.add_semigroup.has_add.eq
+
 instance hm_r #t (r: semiring t) = r.mul_monoid.mul_semigroup.has_mul
 instance ha_r #t (r: semiring t) = r.add_comm_monoid.add_monoid.add_semigroup.has_add
 instance he_r #t (r: semiring t) = r.mul_monoid.mul_semigroup.has_mul.eq 
@@ -451,29 +454,6 @@ class field (t:Type) = {
 instance dr_of_field (t:Type) (f: field t) = f.division_ring
 instance comm_ring_of_field (t:Type) (f: field t) = f.commutative_ring <: commutative_ring t
 
-
-
-class left_module (vector: Type) 
-                  (scalar: Type) 
-                  (r: ring scalar) 
-                  (cm: add_comm_group vector) = {
-  s_mul_v: (x:scalar) -> (y: vector) -> vector;
-  s_left_associativity: (x: scalar) -> (y: scalar) -> (z: vector) -> Lemma (s_mul_v x (s_mul_v y z) = s_mul_v (x*y) z); 
-  s_left_distributivity: (x: scalar) -> (y: vector) -> (z: vector) -> Lemma (s_mul_v x (y + z) = s_mul_v x y + s_mul_v x z); 
-}
-
-
-
-
-class right_module (vector: Type) 
-                  (scalar: Type) 
-                  (r: ring scalar) 
-                  (cm: add_comm_group vector) = {
-  v_mul_s: (x:vector) -> (y: scalar) -> vector;
-  right_associativity: (x: vector) -> (y: scalar) -> (z: scalar) -> Lemma (s_mul_v x (s_mul_v y z) = s_mul_v (x*y) z);
-}
-
-
 let survives_addition #t {|r:ring t|} (f: t->bool) = 
   forall (x y: (q:t{f q})). f (x + y) 
 
@@ -527,6 +507,8 @@ let principal_left_ideal_func #t {|r:ring t|} (x:t) : GTot (left_ideal_func t) =
 
     
 (*
+  Work in progress, ideals will be rewritten entirely.
+
 let principal_ideal_func #t {|r:ring t|} (x:t) : GTot (left_ideal_func t) =   
   let logical_condition p = exists q. (q*x) = p  in  
   let indicator_function_property (f: (t->bool)) = forall z. f z <==> logical_condition z in  

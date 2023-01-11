@@ -14,16 +14,20 @@ type right_distributivity_lemma (#t:Type) {| equatable t |} (mul add: t->t->t)
 type valuation =
   | Value of nat
   | Nothing 
-  
+
+let add_of t {| has_add t |} = let add (x y:t) = x+y in add
+let mul_of t {| has_mul t |} = let mul (x y:t) = x*y in mul
+
+instance mul_of_mul_monoid #t {| m: mul_monoid t |} : has_mul t = m.mul_semigroup.has_mul
+
 class semiring (t:Type) = {
   [@@@TC.no_method] add_comm_monoid: add_comm_monoid t;
   [@@@TC.no_method] mul_monoid: (z:mul_monoid t{ z.mul_semigroup.has_mul.eq == 
                                                  add_comm_monoid.add_monoid.add_semigroup.has_add.eq });  
-  left_absorption      : left_absorber_lemma mul_monoid.mul_semigroup.has_mul.mul zero;
-  right_absorption     : right_absorber_lemma mul_monoid.mul_semigroup.has_mul.mul zero;
-  left_distributivity  : left_distributivity_lemma mul_monoid.mul_semigroup.has_mul.mul add_comm_monoid.add_monoid.add_semigroup.has_add.add;
-  right_distributivity : right_distributivity_lemma mul_monoid.mul_semigroup.has_mul.mul 
-                                                  add_comm_monoid.add_monoid.add_semigroup.has_add.add;
+  left_absorption      : left_absorber_lemma (mul_of t #mul_monoid.mul_semigroup.has_mul) zero;
+  right_absorption     : right_absorber_lemma (mul_of t #mul_monoid.mul_semigroup.has_mul) zero;
+  left_distributivity  : left_distributivity_lemma #t (mul_of t #mul_monoid.mul_semigroup.has_mul) ( + );
+  right_distributivity : right_distributivity_lemma #t (mul_of t #mul_monoid.mul_semigroup.has_mul) ( + );
   
 }
 
@@ -41,15 +45,16 @@ let absorption #t {| r: semiring t |} (z x:t)
   : Lemma (requires z=zero) (ensures (z*x = zero) /\ (x*z = zero)) = 
   let eq : equatable t = TC.solve in
   Classical.forall_intro_3 (Classical.move_requires_3 eq.transitivity);
+  Classical.forall_intro_2 eq.symmetry;
   Classical.forall_intro eq.reflexivity;
   mul_congruence z x zero x;
-  mul_congruence x z x zero;
-  left_absorption x;
-  right_absorption x
+  mul_congruence x z x zero; 
+  left_absorption x; 
+  right_absorption x 
 
 let absorber_is_two_sided_from_lemmas #t {| r: semiring t |} (#z1 #z2: t)
-  (z1_is_absorber: left_absorber_lemma  r.mul_monoid.mul_semigroup.has_mul.mul z1)
-  (z2_is_absorber: right_absorber_lemma r.mul_monoid.mul_semigroup.has_mul.mul z2)
+  (z1_is_absorber: left_absorber_lemma ( * ) z1)
+  (z2_is_absorber: right_absorber_lemma ( * ) z2)
   : Lemma (z1 = z2) = 
   z1_is_absorber z2;
   z2_is_absorber z1;
@@ -144,6 +149,8 @@ let ring_neg_x_is_minus_one_times_x (#t:Type) {| r: ring t |} (x:t)
 private let alternative_above_lemma (#t:Type) {| r: ring t |} (x:t)
   : Lemma (-x = (-one)*x) = 
   let (l, o) : t&t = one, zero in 
+  let (+)   (x y:t) = add_of t x y in
+  let ( * ) (x y:t) = mul_of t x y in
   elim_equatable_laws t;
   ring_zero_is_absorber x;
   negation l;
@@ -172,6 +179,8 @@ private let alternative_above_lemma (#t:Type) {| r: ring t |} (x:t)
 let ring_neg_x_is_x_times_minus_one (#t:Type) {| r: ring t |} (x:t) 
   : Lemma (-x = x*(-one)) = 
   let (l, o) : t&t = one, zero in
+  let (+)   (x y:t) = add_of t x y in
+  let ( * ) (x y:t) = mul_of t x y in
   elim_equatable_laws t; //symmetry and reflexivity
   transitivity_for_calc_proofs t; // forall-based transitivity for calc to work
   calc (=) {
@@ -200,6 +209,8 @@ let ring_neg_one_commutes_with_everything #t {| r: ring t |} (x:t)
 
 let ring_neg_xy_is_x_times_neg_y #t {| r: ring t |} (x y: t)
   : Lemma (-(x*y) = x*(-y)) =  
+  let (+)   (x y:t) = add_of t x y in
+  let ( * ) (x y:t) = mul_of t x y in
   transitivity_for_calc_proofs t;
   elim_equatable_laws t;
   calc (=) {
@@ -212,6 +223,8 @@ let ring_neg_xy_is_x_times_neg_y #t {| r: ring t |} (x y: t)
 
 let ring_neg_xy_is_neg_x_times_y #t {| r: ring t |} (x y: t)
   : Lemma (-(x*y) = (-x)*y) = 
+  let (+)   (x y:t) = add_of t x y in
+  let ( * ) (x y:t) = mul_of t x y in
   transitivity_for_calc_proofs t;
   elim_equatable_laws t;
   calc (=) {
@@ -273,6 +286,8 @@ instance zero_ne_one_semiring_of_domain (t:Type) {| d: domain t |} = d.zero_ne_o
 let left_cancellation #t {| d: domain t |} (x y z: t)
   : Lemma (requires (x*y = x*z) /\ (x<>zero)) (ensures y=z) = 
   let teq : equatable t = TC.solve in
+  let (+)   (x y:t) = add_of t x y in
+  let ( * ) (x y:t) = mul_of t x y in
   Classical.forall_intro teq.reflexivity;
   Classical.forall_intro_2 teq.symmetry;
   Classical.forall_intro_3 (Classical.move_requires_3 teq.transitivity);
@@ -302,6 +317,8 @@ let left_cancellation #t {| d: domain t |} (x y z: t)
 let right_cancellation #t {| d: domain t |} (x y z: t)
   : Lemma (requires (y*x = z*x) /\ (x<>zero)) (ensures y=z) = 
   let teq : equatable t = TC.solve in
+  let (+)   (x y:t) = add_of t x y in
+  let ( * ) (x y:t) = mul_of t x y in
   Classical.forall_intro teq.reflexivity;
   Classical.forall_intro_2 teq.symmetry;
   Classical.forall_intro_3 (Classical.move_requires_3 teq.transitivity);
@@ -374,7 +391,7 @@ let make_trivial_eq_instance #t (eq: t->t->bool)
                    (forall x y. eq x y <==> eq y x) /\
                    (forall x y z. (eq x y /\ eq y z) ==> eq x z))
          (ensures fun _ -> True) = 
-  { eq = eq; reflexivity = (fun _ -> ()); symmetry = (fun _ _ -> ()); transitivity = (fun _ _ _ -> ()) }
+  { (=) = eq; reflexivity = (fun _ -> ()); symmetry = (fun _ _ -> ()); transitivity = (fun _ _ _ -> ()) }
 
 // This one speeds up nat_norm_property below tremendously.
 instance option_nat_eq : equatable (option nat) = make_trivial_eq_instance op_Equality
@@ -409,10 +426,11 @@ type units_of t {| h: mul_monoid t |} = x:t{is_unit x}
 let unit_product_is_unit #t {| h: mul_monoid t |} (x y: units_of t)
   : Lemma (is_unit #t (x*y)) =
   let x:t = x in
-  let y:t = y in
-// uncommenting these two  makes verification a lot faster 
-  let ( * ) = h.mul_semigroup.has_mul.mul in
-  let ( = ) = h.mul_semigroup.has_mul.eq.eq in
+  let y:t = y in 
+  let ( * ) (x y:t) = mul_of t x y in
+  let ( = ) (x y:t) = x = y in
+// uncommenting these two  makes verification a lot faster  
+//  let ( = ) = h.mul_semigroup.has_mul.eq.eq in
 // But even with these two, fstar takes several seconds longer than it should...
   eliminate exists (x' y':t). (x'*x=one /\ y'*y=one)
     returns is_unit (x*y) with _.  
@@ -495,17 +513,7 @@ let principal_left_ideal_multiplier #t {|r:ring t|} (x:t) (p:principal_left_idea
 let principal_right_ideal_multiplier #t {|r:ring t|} (x:t) (p: principal_right_ideal x) 
   : GTot(z:t{x*z = p}) = 
   IndefiniteDescription.indefinite_description_ghost t (fun q -> (x*q) = p == true) 
- 
-open FStar.Squash
-open FStar.Classical
-
-let principal_left_ideal_func #t {|r:ring t|} (x:t) : GTot (left_ideal_func t) =   
-  let test (p:t) : GTot(bool) = IndefiniteDescription.strong_excluded_middle (exists (q:t). x*q = p) in
-  IndefiniteDescription.indefinite_description_ghost (left_ideal_func t)
-    (fun f -> (forall (p:t). (f p <==> test p)))
- 
-
-    
+  
 (*
   Work in progress, ideals will be rewritten entirely.
 

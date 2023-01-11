@@ -3,21 +3,19 @@ module FStar.Algebra.Classes.Equatable
 module TC = FStar.Tactics.Typeclasses
 
 class equatable (t:Type) = {
-  eq: t -> t -> bool;
-  reflexivity : (x:t -> Lemma (eq x x));
-  symmetry: (x:t -> y:t -> Lemma (x `eq` y <==> y `eq` x));
-  transitivity: (x:t -> y:t -> z:t -> Lemma (requires eq x y /\ eq y z) 
-                                         (ensures eq x z));
+  (=): t -> t -> bool;
+  reflexivity : (x:t -> Lemma (x = x));
+  symmetry: (x:t -> y:t -> Lemma ((x = y) <==> (y = x)));
+  transitivity: (x:t -> y:t -> z:t -> Lemma (requires (x = y) /\ (y = z)) 
+                                         (ensures x = z));
 } 
 
 instance default_equatable (t:eqtype) : equatable t = {
-  eq = (=);
+  (=) = Prims.op_Equality;
   reflexivity = (fun _ -> ());
   symmetry = (fun _ _ -> ());
   transitivity = (fun _ _ _ -> ())  
 }
-
-let ( = ) (#t:Type) {|h: equatable t|} = h.eq
 
 let ( <> ) (#t:Type) {|h: equatable t|} (x y: t) = not (x=y)
 
@@ -25,7 +23,6 @@ let elim_equatable_laws (t:Type) {| equatable t |}
   : squash ((forall (x:t). x=x) /\ (forall (x y: t). x=y <==> y=x)) = 
   Classical.forall_intro (reflexivity #t);
   Classical.forall_intro_2 (Classical.move_requires_2 (symmetry #t))
-
 
 open FStar.List.Tot.Base
 
@@ -65,7 +62,7 @@ private assume val is_zero (#t:Type) (f: fraction t) : bool
 private assume val sub (#t:Type) (a b: fraction t) : fraction t
 
 private instance fraction_equatable (t:Type) : equatable (fraction t) = {
-  eq = (fun a b -> is_zero (sub a b));
+  (=) = (fun a b -> is_zero (sub a b));
   reflexivity = (fun _ -> admit());
   symmetry = (fun _ _ -> admit());
   transitivity = (fun _ _ _ -> admit())

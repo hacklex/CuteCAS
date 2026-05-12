@@ -87,6 +87,9 @@ let ring_add_right_cancellation (#t:Type) {| r: ring t |} (x y z: t)
 let ring_zero_is_right_absorber (#t:Type) {| r: ring t |} (x:t)
   : Lemma (x * zero = zero) = 
   let (l,o): t&t = one, zero in
+  let (+)   (x y:t) = add_of t x y in
+  let ( * ) (x y:t) = mul_of t x y in
+  let op_Minus (x:t) = -x in
   elim_equatable_laws t;
   left_distributivity x o l; 
   left_add_identity l;
@@ -100,7 +103,95 @@ let ring_zero_is_right_absorber (#t:Type) {| r: ring t |} (x:t)
   add_congruence (x*o) (x + -x) (x*o) o;
   right_add_identity (x*o);
   trans_lemma [ o; (x + -x); (x*o + x + -x); (x*o + (x + -x)); (x*o + o); (x*o) ]
- 
+
+let left_distr #t (r: ring t) (x y z: t) : Lemma (x*(y+z) = x*y + x*z) = 
+  left_distributivity x y z 
+  
+let eq_sym #t (r: ring t) (x y: t) : Lemma (x=y <==> y=x) = symmetry x y
+let eq_refl #t (r: ring t) (x: t) : Lemma (ensures x=x) = reflexivity x 
+let eq_trans #t (r: ring t) (x y z: t) : Lemma (requires x=y /\ y=z) (ensures x=z) = transitivity x y z
+
+let eq_of #t (r: ring t) (x y: t) = x = y 
+
+let add_zero_lemma #t (r: ring t) (x: t) 
+  : Lemma (x + zero = x /\ 
+           zero + x = x /\ 
+           x = x + zero /\
+           x = zero + x) = 
+  right_add_identity x;
+  left_add_identity x;
+  eq_sym r x (zero+x);
+  eq_sym r x (x+zero) 
+
+let mul_one_lemma #t (r: ring t) (x:t) : Lemma (x*one = x /\ one*x = x /\ x = x*one /\ x = one*x) = 
+  right_mul_identity x;
+  left_mul_identity x;
+  eq_sym r x (one*x);
+  eq_sym r x (x*one)
+
+let z #t (r: ring t) = (has_zero_of_monoid t).zero
+let u #t (r: ring t) = (has_one_of_monoid t).one
+
+let ring_zero_is_right_zero #t {| r: ring t |} (x:t) : Lemma (x * z r = z r) = 
+  let (l,o): t&t = u r, z r in
+  let ( + ) (x y:t) = add_of t x y in
+  let ( * ) (x y:t) = mul_of t x y in 
+  let ( = ) (x y:t) = eq_of r x y in 
+  let op_Minus (x:t) = -x in 
+  Classical.forall_intro_3 (Classical.move_requires_3 (eq_trans r)); 
+  calc (=) {
+    x; = { mul_one_lemma r x }
+    x*l; = { add_zero_lemma r l; eq_refl r x; mul_congruence x l x (o+l) }
+    x*(o + l); = { left_distributivity x o l }
+    x*o + x*l; = { mul_one_lemma r x; eq_refl r (x*o); add_congruence (x*o) (x*l) (x*o) x }
+    x*o + x; 
+  }; 
+  calc (=) {
+    o; = { eq_sym r (x + -x) o; negation x }
+    x + -x; = { eq_refl r (-x); add_congruence x (-x) (x*o + x) (-x) }
+    x*o + x + -x; = { add_associativity (x*o) x (-x) }
+    x*o + (x + -x); = { eq_refl r (x*o); negation x; add_congruence (x*o) (x + -x) (x*o) o }
+    x*o + o; = { right_add_identity (x*o) }
+    x*o;
+  }; 
+  eq_sym r o (x*o);
+  ()
+  
+
+let resolution_test (#t:Type) {| r: ring t |} (x:t) : Lemma (x*zero = zero) = 
+  let (l,o): t&t = one, zero in
+  let (+)   (x y:t) = add_of t x y in
+  let ( * ) (x y:t) = mul_of t x y in
+  let am : add_monoid t = TC.solve in
+  let op_Minus (x:t) = -x in 
+  let (=) (x y:t) = eq_of r x y in
+  left_distr r x o l;
+  left_add_identity l; 
+  right_mul_identity x; 
+  eq_refl r x;
+  eq_sym r  (o+l) l ;
+  eq_sym r  (x*l) x ;  
+  eq_refl r (x*o);
+  mul_congruence x (o+l) x l; 
+  add_congruence (x*o) (x*l) (x*o) x; 
+  eq_sym r  (x*(o+l))  (x*l) ;
+  eq_trans r x (x*l) (x*(o+l));
+  eq_trans r (x*(o+l)) (x*o+x*l) (x*o+x) ;
+  eq_trans r x (x*(o+l)) (x*o+x);
+  eq_refl r (-x);
+  add_congruence x (-x) (x*o+x) (-x);
+  negation x; 
+  eq_sym r (x + -x) o;
+  add_associativity (x*o) x (-x);
+  add_congruence (x*o) (x + -x) (x*o) o; 
+  eq_trans r (x*o + x + -x) (x*o + (x + -x)) (x*o + o);
+  right_add_identity (x*o);
+  eq_trans r (x*o + x + -x)  (x*o + o) (x*o);  
+  eq_trans r o (x + -x) (x*o + x + -x);
+  eq_trans r o (x + -x) (x*o + x + -x);
+  eq_trans r o (x*o + x + -x) (x*o);
+  eq_sym r o (x*o) 
+
 let ring_zero_is_left_absorber (#t:Type) {| r: ring t |} (x:t)
   : Lemma (zero * x = zero) = 
   let (l,o): t&t = one, zero in

@@ -3,6 +3,7 @@ module FStar.Algebra.Classes.Grouplikes
 module TC=FStar.Tactics.Typeclasses
 
 open FStar.Algebra.Classes.Equatable
+open FStar.Tactics
 
 
 type associativity_lemma (#t:Type) {| equatable t |} (op: t->t->t) = 
@@ -394,3 +395,18 @@ let neg_of_sum #t {| g: add_group t |} (x y:t)
   };
   negation (x+y); 
   group_cancellation_left (x+y) (-y + -x) (-(x+y)) 
+
+
+
+let apply_assoc_once #t (g: add_group t) : Tac unit =
+  let g = cur_goal() in
+//  let assoc (x:t) (y:t) (z:t) : Lemma((x+y)+z = x+(y+z)) = add_associativity x y z in
+  match term_as_formula g with
+  | Some (App (=) [lhs; rhs]) ->
+    (match term_as_formula lhs with
+     | Some (App op1 [App op2 [a; b]; c]) when op1 == op2 ->
+       apply (`add_associativity);
+       ()
+     | _ -> fail "LHS is not ((ab)c)")
+  | _ -> fail "Goal is not x=y"
+     

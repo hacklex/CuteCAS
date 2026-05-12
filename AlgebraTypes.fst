@@ -1,6 +1,6 @@
 module AlgebraTypes
- 
-#push-options "--ifuel 0 --fuel 0 --z3rlimit 1"
+
+#set-options "--ifuel 0 --fuel 0 --z3rlimit 1"
 
 type binary_op (a:Type) = a -> a -> a
 type unary_op (a:Type) = a -> a
@@ -52,6 +52,9 @@ let trans_lemma_5 (#a:Type) (eq: equivalence_relation a) (x y z w v: a)
           (ensures eq x v && eq v x) = 
   reveal_opaque (`%is_transitive) (is_transitive eq);
   reveal_opaque (`%is_symmetric) (is_symmetric eq)                                                        
+
+let refl_lemma #a (eq:equivalence_relation a) (x:a) 
+  : Lemma (eq x x) = reveal_opaque (`%is_reflexive) (is_reflexive #a) 
 
 let symm_lemma (#a:Type) (eq:equivalence_relation a) (x y:a) 
   : Lemma (eq x y == eq y x) = reveal_opaque (`%is_symmetric) (is_symmetric eq) 
@@ -182,9 +185,13 @@ let is_neutral_from_lemma #a (#eq:equivalence_relation a) (op: op_with_congruenc
 type neutral_element_of (#a: Type) (#eq: equivalence_relation a) (op: op_with_congruence eq) = (x:a{is_neutral_of x op})
 
 let neutral_lemma (#a:Type) (#eq: equivalence_relation a) (op: op_with_congruence eq) (x: neutral_element_of op) (y:a)
-  : Lemma ((x `op` y) `eq` y /\ (y `op` x) `eq` y) = 
+  : Lemma (((x `op` y) `eq` y) /\ 
+           ((y `op` x) `eq` y) /\ 
+           (y `eq` (y `op` x)) /\ 
+           (y `eq` (x `op` y))) = 
   reveal_opaque (`%is_left_id_of) (is_left_id_of #a #eq); 
   reveal_opaque (`%is_right_id_of) (is_right_id_of #a #eq); 
+  reveal_opaque (`%is_symmetric) (is_symmetric #a);
   reveal_opaque (`%is_neutral_of) (is_neutral_of #a #eq)
   
 /// If you see something trivial, then it is either here to reduce the rlimit for some bigger lemma,
@@ -1606,4 +1613,186 @@ type field (a:Type) = r:domain a {
   is_commutative r.multiplication.op /\
   ring_multiplicative_group_condition r
 }
-#pop-options
+
+open FStar.Seq
+open FStar.IntegerIntervals
+
+private let rec pow_internal #a (m:monoid a) (x:a) (n:nat)
+  : Pure (a) (requires True) (ensures fun z -> if n=0 then (z == m.neutral) else True) 
+  = if n=0 then m.neutral 
+    else m.op x (pow_internal m x (n-1))
+
+private let rec pow_def #a (m:monoid a) (x:a) (n:pos) 
+  : Lemma (pow_internal m x n == x `m.op` pow_internal m x (n-1)) = 
+  if n=1 then begin 
+    assert_norm (pow_internal m x 1 == m.op x m.neutral) 
+  end
+  else begin
+    pow_def m x (n-1);
+    assert_norm (pow_internal m x n == x `m.op` pow_internal m x (n-1)) 
+  end 
+  
+let pow #a (m:monoid a) (x:a) : Pure(nat -> a) 
+  (requires True) 
+  (ensures fun f -> (f 0 == m.neutral) /\  (forall (k:pos). f k == x `m.op` f (k-1))) = 
+  Classical.forall_intro (pow_def m x); 
+  pow_internal m x  
+
+let pow_definition #a (m:monoid a) (x:a) (n:nat) 
+  : Lemma (pow m x n == (if n=0 then m.neutral else m.op x (pow m x (n-1)))) = ()  
+  
+let zero_pow #a (m:monoid a) (x:a) : Lemma (pow m x 0 == m.neutral) = () 
+let pos_pow #a (m:monoid a) (x:a) (k:pos) : Lemma (pow m x k == x `m.op` pow m x (k-1)) = ()
+   
+let rec pow_assoc_postfix #a (m:monoid a) (x:a) (n:nat) 
+  : Lemma (pow m x (n+1) `m.eq` (pow m x n `m.op` x)) = 
+ 
+    
+  if n=0 then begin 
+    assert (pow m x (n+1) == pow m x 1); //smt hint
+    pow_def m x (n+1);
+    neutral_lemma m.op m.neutral x;
+    trans_lemma m.eq (pow m x (n+1)) x (pow m x n `m.op` x)  
+  end else begin
+    let ( * ) = m.op in
+    let ( = ) = m.eq in
+    let ( ^ ) = pow m in 
+    reveal_opaque (`%is_reflexive) (is_reflexive #a);
+    pow_assoc_postfix m x (n-1);
+    //assert (x ^ n = (x^(n-1)) * x);
+    pow_def m x (n+1);
+    //assert (x^(n+1) == x * (x^n));
+    congruence_lemma_3 m.op (x^n) ((x^(n-1)) * x) x;
+    //assert (x * (x^n) = x * ((x^(n-1)) * x));
+    assoc_lemma_3 m.op x (x^(n-1)) x;
+    trans_lemma_4 m.eq (x^(n+1)) 
+                       (x * (x^n)) 
+                       (x * ((x^(n-1)) * x))
+                       ((x^n)*x) 
+  end 
+
+let rec pow_split #a (m:monoid a) (x:a) (p q: nat) 
+  : Lemma (ensures pow m x (p+q) `m.eq` (pow m x p `m.op` pow m x q)) (decreases p) = 
+  if p = 0 then begin
+    assert (pow m x (p+q) == pow m x q); 
+    neutral_lemma m.op (pow m x p) (pow m x q)  
+  end else begin
+    pow_split m x (p-1) (q+1);
+    pow_def m x(q+1);
+    assoc_lemma_3 m.op (pow m x (p-1)) x (pow m x q);
+    pow_assoc_postfix m x (p-1); 
+    congruence_lemma_3 m.op (m.op (pow m x (p-1)) x) (pow m x p) (pow m x q);
+    trans_lemma_4 m.eq (pow m x (p+q))
+                       (pow m x (p-1) `m.op` (x `m.op` pow m x q))
+                       ((pow m x (p-1) `m.op` x) `m.op` pow m x q)
+                       (pow m x p `m.op` pow m x q) 
+  end
+
+let (^) #a (#m: monoid a) (x:a) (p: nat) = pow m x p
+ 
+
+[@@"opaque_to_smt"] 
+let no_duplicates #a (eq: equivalence_relation a) (s:seq a) =
+  forall (i j: under (length s)). (index s i `eq` index s j) ==> (i == j)
+ 
+[@@"opaque_to_smt"] 
+let finite_set_property #a (eq:equivalence_relation a) (s:seq a)
+  = forall (x:a). exists (i: under (length s)). eq x (index s i)
+ 
+let finite_set #a (eq: equivalence_relation a)
+  = s:seq a { finite_set_property eq s /\ no_duplicates eq s }
+ 
+[@@"opaque_to_smt"] 
+let is_finite #a (eq: equivalence_relation a) 
+  = exists (q:seq a). finite_set_property eq q /\ no_duplicates eq q
+
+let all_elements #a (eq:equivalence_relation a{is_finite eq}) 
+  : GTot (finite_set eq) 
+  = reveal_opaque (`%is_finite) (is_finite #a);
+    reveal_opaque (`%finite_set_property) (finite_set_property #a); 
+    IndefiniteDescription.indefinite_description_ghost (finite_set eq) 
+      (fun (s:seq a) -> finite_set_property eq s /\ no_duplicates eq s)
+
+let index_of_element #a (eq:equivalence_relation a{is_finite eq}) (x:a) 
+  : GTot(i:(under (length (all_elements eq))) {x `eq` index (all_elements eq) i}) = 
+    let all = all_elements eq in    
+    reveal_opaque (`%finite_set_property) (finite_set_property #a);
+    reveal_opaque (`%is_finite) (is_finite #a); 
+    assert (forall (x:a). exists (i: under (length all)). eq x (index all i)); 
+    IndefiniteDescription.indefinite_description_ghost (under (length (all_elements eq)))
+      (fun (i:under (length all)) -> (eq x (index all i) == true)) 
+ 
+let no_duplicates_slice #a (eq:equivalence_relation a) (s: seq a) (i:nat) (j:nat{i<=j && j<= length s})
+  : Lemma (requires no_duplicates eq s)
+          (ensures no_duplicates eq (slice s i j)) 
+  = reveal_opaque (`%no_duplicates) (no_duplicates #a) 
+
+
+(*
+
+
+let rec dirichlet_aux #a (m:monoid a{is_finite m.eq}) 
+                         (all: finite_set m.eq) 
+                         (n: nat{ n > length all })
+                         (x:a)
+                         (s: seq a {s == init n (fun k -> pow m x k)})
+                         (i: under (length all+1))
+  : Lemma (requires no_duplicates m.eq s)
+          (ensures False) =
+          
+    reveal_opaque (`%no_duplicates) (no_duplicates #a) ;
+    assert (forall (k:under (length s)). forall (j: under (length s)). m.eq (index s k) (index s j) ==> k=j);
+    admit();
+   ()
+
+
+
+                         (s: seq a{ s == init n (fun i -> pow m x i) })
+  : Lemma (requires no_duplicates m.eq (slice s )
+          (ensures exists (k: under (length all)). pow m x n `m.eq` pow m x k)
+          (decreases i) =
+  let 
+  if i=0 then begin
+    reveal_opaque (`%finite_set_property) (finite_set_property #a);
+    reveal_opaque (`%is_finite) (is_finite #a);  
+    assert (exists (j:under (length all)). m.eq (pow m x n) (index all j));
+    assert (forall (j:efrom_eto i (length all)). not(m.eq (pow m x n) (index all j)));
+    assert (m.eq (pow m x n) (index all 0));
+    admit();
+    ()
+  end else admit() 
+
+             
+
+let dirichlet #a (eq:equivalence_relation a{is_finite eq}) 
+  (s: finite_set eq) 
+  (t: seq a{length t > length s})
+  : Lemma (exists (i j: under (length t)). (i<>j) /\ eq (index t i) (index t j)) 
+  = admit() 
+
+
+
+
+let reduce_power #a 
+  (#m:monoid a {is_finite a m.eq}) 
+  (x:a) 
+  (n: pos{n>=length (all_elements a m.eq)}) 
+  (i: under (length (all_elements a m.eq)))
+  : (k: under (length (all_elements a m.eq)))
+
+let power_can_be_reduced_in_finite_set #a 
+  (#m:monoid a {is_finite a m.eq}) 
+  (x:a) 
+  (n: pos{n>length (all_elements a m.eq)})
+  : Lemma (exists (k:nat{k<length (all_elements a m.eq)}). pow m x n `m.eq` pow m x k) = 
+  
+  ()
+
+let inverse_of_finite_domain_element #a (d: integral_domain a{is_finite a d.eq})
+                                        (x: non_absorber_of d.multiplication.op)
+  : GTot (x':a{d.multiplication.op x x' `d.eq` d.multiplication.neutral}) = 
+    
+  
+  
+  ()
+*)

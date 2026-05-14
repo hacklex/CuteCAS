@@ -4,7 +4,7 @@ open AlgebraTypes
 open Fractions.Definition
 open Fractions.Equivalence
 
-#push-options "--ifuel 0 --fuel 0 --z3rlimit 1 --split_queries"
+#push-options "--ifuel 0 --fuel 0 --z3rlimit 1 --split_queries always"
 
 /// We declare the type of fractions_add heavily refined so that our
 /// future lemmas will not have it too rough proving stuff
@@ -105,6 +105,7 @@ private let fraction_addition_is_associative (#a:Type) (d: integral_domain a)
   Classical.forall_intro_2 (symm_lemma (fraction_eq #a #d));
   Classical.forall_intro_3 (fraction_add_is_associative #a #d)
   
+#push-options "--z3rlimit 5"
 private let fraction_additive_neutral_lemma (#a:Type) (#d: integral_domain a) 
                                             (x: fraction d{is_neutral_of x.num d.addition.op}) (y: fraction d) 
   : Lemma ((x `fraction_add_op` y) `fraction_eq` y /\ ((y `fraction_add_op` x) `fraction_eq` y)) = 
@@ -127,6 +128,7 @@ private let fraction_additive_neutral_lemma (#a:Type) (#d: integral_domain a)
                  ((x.den `mul` y.den) `mul` y.num);
   fraction_add_is_commutative y x;
   trans_lemma fraction_eq (y `fraction_add_op` x) (x `fraction_add_op` y) y 
+#pop-options
 
 /// Proof that fraction addition respects fraction equality is lengthy, so I only commented out the intermediate asserts,
 /// but dare not remove them, as they help understanding the purpose of the proof steps 
@@ -490,24 +492,27 @@ let fraction_neg_yields_inverses_for_units_forall (#a:Type) (d: integral_domain 
     yields_inverses_for_units #(fraction d) #(fraction_eq) #(fraction_add #a #d) fraction_neg_uo) =  
   fraction_neg_properties d 
  
-let fraction_additive_group (#a:Type) (d: integral_domain a) : commutative_group (fraction d) = 
-  fraction_add_all_are_units #a #d; 
-  fraction_neg_yields_inverses_for_units_forall d;  
-  fraction_neg_properties d; 
+let fadd_op (#a:Type) (d: integral_domain a) : op_with_congruence (fraction_eq #a #d)
+  = fraction_add #a #d
+
+let fraction_additive_group (#a:Type) (d: integral_domain a) : commutative_group (fraction d) =
+  reveal_opaque (`%unary_congruence_condition) (unary_congruence_condition #(units_of (fadd_op d)));
+  fraction_add_all_are_units #a #d;
+  fraction_neg_yields_inverses_for_units_forall d;
+  fraction_neg_properties d;
   Classical.forall_intro_2 (fraction_neg_respects_equivalence #a #d);
   Classical.forall_intro_2 (fraction_neg_respects_equivalence_of_units #a #d);
-  let zero = fraction_zero d in
-  let fadd = fraction_add #a #d in
-  let fneg = fun (x: units_of (fraction_add #a #d)) -> fraction_neg x in
+  let fneg (x: units_of (fadd_op d)) : units_of (fadd_op d) = fraction_neg x in
+  let coco (x y: units_of (fadd_op d))
+    : Lemma (requires fraction_eq x y)
+            (ensures fraction_eq (fneg x) (fneg y) /\ fraction_eq (fneg y) (fneg x))
+            = fraction_neg_respects_equivalence_of_units x y in
+  Classical.forall_intro_2 (Classical.move_requires_2 coco);
   let aux (p: fraction d) : Lemma (
     is_neutral_of (fraction_add p (fneg p)) (fraction_add #a #d) /\
-    is_neutral_of (fraction_add (fneg p) p) (fraction_add #a #d) 
+    is_neutral_of (fraction_add (fneg p) p) (fraction_add #a #d)
   ) = fraction_neg_is_inverse_for_add p in Classical.forall_intro aux;
   reveal_opaque (`%is_inverse_operation_for) (is_inverse_operation_for #(fraction d) #(fraction_eq #a #d));
-  reveal_opaque (`%unary_congruence_condition) (unary_congruence_condition #(fraction d)); 
-  assert (is_inverse_operation_for fneg fadd); 
-  reveal_opaque (`%unary_congruence_condition) 
-                (unary_congruence_condition #(units_of #(fraction d) (fraction_add #a #d))); 
-  Mkmagma (fraction_eq #a #d) fadd fneg zero 
-#pop-options 
-
+  reveal_opaque (`%unary_congruence_condition) (unary_congruence_condition #(fraction d));
+  Mkmagma (fraction_eq #a #d) (fadd_op d) fneg (fraction_zero d)
+#pop-options

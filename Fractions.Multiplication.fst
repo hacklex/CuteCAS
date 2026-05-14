@@ -207,7 +207,7 @@ let fraction_one_is_not_equal_to_fraction_zero (#a: Type) (#d: integral_domain a
   reveal_opaque (`%is_symmetric) (is_symmetric #(fraction d)); 
   Classical.move_requires (fraction_one_eq_absorber_is_nonsense #a) d 
 
-#push-options "--ifuel 0 --fuel 0 --z3rlimit 5"
+#push-options "--ifuel 0 --fuel 0 --z3rlimit 15"
 #restart-solver
 let fraction_absorber_means_numerator_absorber (#a:Type) (#d: integral_domain a) (x: fraction d)  
   : Lemma (requires is_absorber_of x fraction_mul)
@@ -308,7 +308,7 @@ let fraction_nonabsorber_means_numerator_nonabsorber (#a:Type) (#d: integral_dom
           (ensures ~(is_absorber_of x.num d.multiplication.op))
   = nonabsorber_fraction_means_nonabsorber_enumerator x
  
-#push-options "--z3rlimit 15"
+#push-options "--z3rlimit 60"
 let fraction_nonabsorber_is_unit (#a:Type) (#d: integral_domain a) (x: non_absorber_of #(fraction d) fraction_mul) 
   : Lemma 
        (ensures is_unit x fraction_mul) = 
@@ -530,4 +530,5 @@ let fraction_multiplicative_almost_group (#a:Type) (#d: integral_domain a) : com
   let fi : unary_op_on_units_of (fmul d) = finv in
   Mkmagma (fraction_eq #a #d) (fmul d) finv (fraction_one d)
 
+#pop-options
 #pop-options

@@ -7,7 +7,6 @@ module CFN=FStar.Algebra.CommMonoid.Fold.Nested
 open AlgebraTypes
    
 open FStar.Seq
-open FStar.Mul
 open FStar.Seq.Base
 open FStar.Matrix
 open FStar.Seq.Properties
@@ -360,7 +359,14 @@ let rec foldm_snoc_cut_tail #c #eq (cm: CE.cm c eq) (s: seq c{length s > 0}) (n:
   eq.reflexivity subsum; 
   cm.congruence last subsum cm.unit subsum;
   comm_monoid_transitivity_4 eq lhs (cm.unit `cm.mult` subsum) subsum rhs     
+
+let foldm_snoc_cut_tail_from_lemma #c #eq (cm: CE.cm c eq) (s: seq c{length s > 0}) (n: nat{n<length s})
+                                   (proof: (i:int{i>=n && i<length s}) -> Lemma (index s i `eq.eq` cm.unit))
+  : Lemma (ensures foldm_snoc cm s `eq.eq` foldm_snoc cm (slice s 0 n)) = 
+  Classical.forall_intro proof;
+  foldm_snoc_cut_tail cm s n
  
+#push-options "--z3rlimit 30"
 let poly_mul_congruence_equilen_aux #c (#r: commutative_ring c) 
                                  (x y z: noncompact_poly_over_ring r)
   : Lemma (requires ncpoly_eq x y /\ length y > 0 /\ length x = length y /\ length z > 0) 
@@ -369,9 +375,7 @@ let poly_mul_congruence_equilen_aux #c (#r: commutative_ring c)
   let m_xz = matrix_seq (poly_mul_monomial_matrix_gen x z) in
   let m_yz = matrix_seq (poly_mul_monomial_matrix_gen y z) in
   let m, n = length x, length z in
-  let eq = r.eq in 
-  let zero = r.addition.neutral in 
-  let mul, add = r.multiplication.op, r.addition.op in
+  let mul = r.multiplication.op in
   let aux (ij: under (m*n)) : Lemma (index m_xz ij `ncpoly_eq` index m_yz ij) = 
     let i = get_i m n ij in
     let j = get_j m n ij in
@@ -379,14 +383,13 @@ let poly_mul_congruence_equilen_aux #c (#r: commutative_ring c)
     congruence_lemma_3 r.multiplication.op (nth x i) (nth y i) (nth z j);
     monomial_equality_lemma r (nth x i `mul` nth z j) (nth y i `mul` nth z j) (i+j) in
   foldm_snoc_equality_from_lemma cm m_xz m_yz aux
+#pop-options
 
-#push-options "--ifuel 0 --fuel 0 --z3rlimit 5" 
+#push-options "--z3rlimit 30"
 let poly_mul_congruence_main_aux #c (#r: commutative_ring c) 
                                  (x y z: noncompact_poly_over_ring r)
   : Lemma (requires ncpoly_eq x y /\ length y > 0 /\ length x > length y /\ length z > 0) 
           (ensures poly_mul x z `ncpoly_eq` poly_mul y z) = 
-  let eq = r.eq in 
-  let add = r.addition.op in
   let mul = r.multiplication.op in
   let zero = r.addition.neutral in 
   let cm = poly_add_commutative_monoid r in
@@ -394,15 +397,15 @@ let poly_mul_congruence_main_aux #c (#r: commutative_ring c)
   let m_yz = matrix_seq (poly_mul_monomial_matrix_gen y z) in
   let m_big, m_sml, n = length x, length y, length z in
   Math.Lemmas.multiplication_order_lemma m_big m_sml n;
-  let aux (ij: under (m_sml*n)) : Lemma (index m_xz ij `ncpoly_eq` index m_yz ij) = 
+  let m_xz_head = slice m_xz 0 (m_sml*n) in
+  let aux (ij: under (m_sml*n)) : Lemma (index m_xz_head ij `ncpoly_eq` index m_yz ij) = 
     let i = get_i m_sml n ij in
     let j = get_j m_sml n ij in
     nth_eq_from_poly_eq x y i; 
     congruence_lemma_3 r.multiplication.op (nth x i) (nth y i) (nth z j);
-    monomial_equality_lemma r (nth x i `mul` nth z j) (nth y i `mul` nth z j) (i+j); 
-  () in Classical.forall_intro aux;
+    monomial_equality_lemma r (nth x i `mul` nth z j) (nth y i `mul` nth z j) (i+j) in 
   let aux_tail (ij: int{ij>=(m_sml*n) && ij<(m_big*n)}) 
-    : Lemma (index m_xz ij `ncpoly_eq` empty) = 
+    : Lemma (index m_xz ij `ncpoly_eq` cm.unit) = 
     let i = get_i m_big n ij in
     let j = get_j m_big n ij in 
     Math.Lemmas.division_definition_lemma_2 ij n m_sml; 
@@ -410,12 +413,11 @@ let poly_mul_congruence_main_aux #c (#r: commutative_ring c)
     absorber_equal_is_absorber mul zero (nth x i);
     absorber_lemma mul (nth x i) (nth z j);
     absorber_is_unique mul zero (mul (nth x i) (nth z j));
-    monomial_zero_lemma r (mul (nth x i) (nth z j)) (i+j); 
-  () in Classical.forall_intro aux_tail;
-  foldm_snoc_cut_tail cm m_xz (m_sml*n);
-  foldm_snoc_equality cm (slice m_xz 0 (m_sml*n)) m_yz;
-  trans_lemma ncpoly_eq (poly_mul x z) (foldm_snoc cm (slice m_xz 0 (m_sml*n))) (poly_mul y z)
-#pop-options 
+    monomial_zero_lemma r (mul (nth x i) (nth z j)) (i+j) in 
+  foldm_snoc_cut_tail_from_lemma cm m_xz (m_sml*n) aux_tail;
+  foldm_snoc_equality_from_lemma cm m_xz_head m_yz aux;
+  trans_lemma ncpoly_eq (poly_mul x z) (foldm_snoc cm m_xz_head) (poly_mul y z)
+#pop-options
 
 let poly_mul_congruence_lemma_left #c (#r: commutative_ring c) 
                                       (x y z: noncompact_poly_over_ring r)
@@ -491,7 +493,7 @@ let poly_mul_left_distributivity #c (#r: commutative_ring c) (x y z: noncompact_
     let xi, yj, zj, sumj = (nth x i, nth yb j, nth zb j, nth (noncompact_poly_add yb zb) j) in
     poly_add_congruence_lemma y z yb zb;
     nth_eq_from_poly_eq (noncompact_poly_add y z) (noncompact_poly_add yb zb) j;
-    left_distributivity_lemma mul add xi yj zj;
+    r.left_distributivity xi yj zj;
     monomial_equality_lemma r (xi `mul` (nth (noncompact_poly_add y z) j)) (xi `mul` sumj) (i+j);
     monomial_equality_lemma r (xi `mul` sumj) ((xi `mul` yj) `add` (xi `mul` zj)) (i+j);
     sum_of_monomials_is_monomial_of_sum #c #r (xi `mul` yj) (xi `mul` zj) (i+j);
@@ -517,30 +519,41 @@ let poly_mul_right_distributivity #c (#r: commutative_ring c) (x y z: noncompact
   poly_mul_left_distributivity z x y;
   poly_add_congruence_lemma (poly_mul z x) (poly_mul z y) (poly_mul x z) (poly_mul y z)
 
+#push-options "--fuel 2 --ifuel 1 --z3rlimit 50"
 let rec poly_mul_fold_of_polys_lemma #c (#r: commutative_ring c) (p: noncompact_poly_over_ring r) (s: seq (noncompact_poly_over_ring r))
   : Lemma (ensures ncpoly_eq (poly_mul p (foldm_snoc (poly_add_commutative_monoid r) s))
                              (foldm_snoc (poly_add_commutative_monoid r) (FStar.Seq.Base.init (length s) (fun i -> poly_mul p (index s i))))) 
           (decreases length s) =
-  if length s = 0 then () else
   let init = FStar.Seq.Base.init in
-  let liat, last = un_snoc s in 
   let cm = poly_add_commutative_monoid r in
-  let lhs = poly_mul p (foldm_snoc cm s) in
-  let rhseq_fun (n:nat{n<=length s}) (i: under n) = poly_mul p (index s i) in  
-  let rhs = foldm_snoc cm (init (length s) (rhseq_fun (length s))) in
-  let rhseq = init (length s) (rhseq_fun (length s)) in
-  let rh_subseq, rh_last = un_snoc rhseq in 
-  lemma_eq_elim (init (length s) (fun (i: under (length s)) -> poly_mul p (index s i)))
-                (init (length s) (fun i -> poly_mul p (index s i)));
-  poly_mul_fold_of_polys_lemma p liat;
-  poly_mul_left_distributivity p last (foldm_snoc cm liat); 
-  lemma_eq_elim (init (length liat) (rhseq_fun (length liat)))
-                (init (length liat) (fun i -> poly_mul p (index liat i)));
-  lemma_eq_elim rh_subseq (init (length liat) (rhseq_fun (length liat)));
-  ncpoly_eq_is_reflexive_lemma (poly_mul p last);
-  poly_add_congruence_lemma (poly_mul p last) (poly_mul p (foldm_snoc cm liat)) 
-                            (poly_mul p last) (foldm_snoc cm rh_subseq);
-  Classical.forall_intro_3 (ncpoly_eq_is_transitive_lemma #c #r)
+  let goal_rhs_seq = init (length s) (fun i -> poly_mul p (index s i)) in
+  if length s = 0 then begin
+    assert (Seq.equal goal_rhs_seq Seq.empty);
+    ncpoly_eq_is_reflexive_lemma (foldm_snoc cm s)
+  end else begin
+    let liat, last = un_snoc s in 
+    let target_liat = init (length liat) (fun i -> poly_mul p (index liat i)) in
+    let goal_rhs_liat, goal_rhs_last = un_snoc goal_rhs_seq in
+    // un_snoc properties: goal_rhs_last == poly_mul p last; goal_rhs_liat is equal to target_liat pointwise
+    assert (goal_rhs_last == poly_mul p last);
+    let eq_liat (i: under (length goal_rhs_liat))
+      : Lemma (index goal_rhs_liat i == index target_liat i) = 
+      assert (index s i == index liat i);
+      ()
+    in Classical.forall_intro eq_liat;
+    assert (Seq.equal goal_rhs_liat target_liat);
+    // IH and distributivity
+    poly_mul_fold_of_polys_lemma p liat;
+    poly_mul_left_distributivity p last (foldm_snoc cm liat);
+    // Now goal_rhs_seq has same fold as cm.mult (poly_mul p last) (foldm_snoc cm goal_rhs_liat)
+    // and goal_rhs_liat fold == target_liat fold (propositionally, via Seq.equal -> ==)
+    Seq.lemma_eq_elim goal_rhs_liat target_liat;
+    ncpoly_eq_is_reflexive_lemma (poly_mul p last);
+    poly_add_congruence_lemma (poly_mul p last) (poly_mul p (foldm_snoc cm liat)) 
+                              (poly_mul p last) (foldm_snoc cm target_liat);
+    Classical.forall_intro_3 (ncpoly_eq_is_transitive_lemma #c #r)
+  end
+#pop-options
 
 let poly_mul_fold_seq_lemma_aux #c (#r: commutative_ring c) (p: noncompact_poly_over_ring r) 
                             (s: seq (noncompact_poly_over_ring r))
@@ -572,7 +585,7 @@ let poly_mul_fold_seq_lemma #c (#r: commutative_ring c) (p: noncompact_poly_over
 let nth_as_monomial #c (#r: commutative_ring c) (p: noncompact_poly_over_ring r) (n: nat{n<length p})
   : t:noncompact_poly_over_ring r{t==monomial r (nth p n) n} = monomial r (nth p n) n
 
-#push-options "--fuel 0 --z3rlimit 15 --ifuel 0"
+#push-options "--fuel 1 --z3rlimit 30 --ifuel 1"
 #restart-solver
 let poly_equals_lc_monomial_plus_liat #c (#r: commutative_ring c) (p: noncompact_poly_over_ring r)
   : Lemma (requires length p>0) 
@@ -582,7 +595,8 @@ let poly_equals_lc_monomial_plus_liat #c (#r: commutative_ring c) (p: noncompact
     neutral_lemma r.addition.op r.addition.neutral (nth (liat p) i);
     neutral_lemma r.addition.op r.addition.neutral (last p);
     reveal_opaque (`%is_transitive) (is_transitive #c);
-    nth_of_sum p rhs i in Classical.forall_intro aux;
+    reveal_opaque (`%is_symmetric) (is_symmetric #c);
+    nth_of_sum (liat p) (monomial r (last p) (length p-1)) i in Classical.forall_intro aux;
   poly_eq_from_nth_eq p rhs 
 #pop-options
 
@@ -712,7 +726,7 @@ let monomial_mul_is_associative #c (r: commutative_ring c)
                               (monomial r (a `mul` (b `mul` d)) (m+n+k))
                               (monomial r ((a `mul` b) `mul` d) (m+n+k)) rhs
  
-#push-options "--ifuel 0 --fuel 0 --z3refresh --z3rlimit 20"
+#push-options "--ifuel 2 --fuel 1 --z3refresh --z3rlimit 50 --split_queries always"
 let poly_mul_is_associative #c (#r: commutative_ring c) (p q w: noncompact_poly_over_ring r)
   : Lemma (requires length p>0 /\ length q>0 /\ length w > 0)
           (ensures poly_mul p (poly_mul q w) `ncpoly_eq` poly_mul (poly_mul p q) w) = 
@@ -754,11 +768,13 @@ let poly_mul_is_associative #c (#r: commutative_ring c) (p q w: noncompact_poly_
   let mx_3d_dgen : matrix_generator (noncompact_poly_over_ring r) (m*n) h =
     fun ij k -> poly_mul (index mx_pq ij) (nth_as_monomial w k) in
 
-  let mx_3d_fold_seq = init m (fun i -> foldm_snoc cm (init (n*h) (mx_3d_gen i))) in
-  let mx_3d_fold_dseq = init (m*n) (fun ij -> foldm_snoc cm (init h (mx_3d_dgen ij))) in
+  let mx_3d_fold_seq : Seq.seq (noncompact_poly_over_ring r) = 
+    FStar.Seq.Base.init m (fun (i:nat{i<m}) -> foldm_snoc cm (FStar.Seq.Base.init (n*h) (mx_3d_gen i))) in
+  let mx_3d_fold_dseq : Seq.seq (noncompact_poly_over_ring r) = 
+    FStar.Seq.Base.init (m*n) (fun (ij:nat{ij<m*n}) -> foldm_snoc cm (FStar.Seq.Base.init h (mx_3d_dgen ij))) in
 
-  let mx_3d_2 = matrix_seq mx_3d_dgen in
-  let mx_3d = matrix_seq mx_3d_gen in
+  let mx_3d_2 : Seq.seq (noncompact_poly_over_ring r) = seq_of_matrix (FStar.Matrix.init mx_3d_dgen) in
+  let mx_3d : Seq.seq (noncompact_poly_over_ring r) = seq_of_matrix (FStar.Matrix.init mx_3d_gen) in
  
   Math.Lemmas.paren_mul_right m n h;
   
@@ -791,6 +807,23 @@ let poly_mul_is_associative #c (#r: commutative_ring c) (p q w: noncompact_poly_
   Classical.forall_intro p_qw_aux;
   foldm_snoc_equality cm p_qw_seq mx_3d_fold_seq;
   foldm_snoc_equality cm pq_w_seq mx_3d_fold_dseq;
+  let mxlemma_a () : Lemma 
+    ((poly_equiv #c #r).eq (foldm_snoc cm (seq_of_matrix (FStar.Matrix.init mx_3d_gen)))
+                           (foldm_snoc cm (FStar.Seq.Base.init m (fun i -> foldm_snoc cm (FStar.Seq.Base.init (n*h) (mx_3d_gen i))))))
+    = matrix_fold_equals_fold_of_seq_folds #(noncompact_poly_over_ring r) #poly_equiv #m #(n*h) cm mx_3d_gen in
+  let mxlemma_b () : Lemma 
+    ((poly_equiv #c #r).eq (foldm_snoc cm (seq_of_matrix (FStar.Matrix.init mx_3d_dgen)))
+                           (foldm_snoc cm (FStar.Seq.Base.init (m*n) (fun ij -> foldm_snoc cm (FStar.Seq.Base.init h (mx_3d_dgen ij))))))
+    = matrix_fold_equals_fold_of_seq_folds #(noncompact_poly_over_ring r) #poly_equiv #(m*n) #h cm mx_3d_dgen in
+  mxlemma_a ();
+  mxlemma_b ();
+  let bridge (x y: noncompact_poly_over_ring r) 
+    : Lemma ((poly_equiv #c #r).eq x y <==> ncpoly_eq #c #r x y) = () in
+  Classical.forall_intro_2 bridge;
+  assert (foldm_snoc cm p_qw_seq `ncpoly_eq` foldm_snoc cm mx_3d_fold_seq);
+  assert (foldm_snoc cm pq_w_seq `ncpoly_eq` foldm_snoc cm mx_3d_fold_dseq);
+  assert (foldm_snoc cm mx_3d `ncpoly_eq` foldm_snoc cm mx_3d_fold_seq);
+  assert (foldm_snoc cm mx_3d_2 `ncpoly_eq` foldm_snoc cm mx_3d_fold_dseq);
   trans_lemma ncpoly_eq (foldm_snoc cm p_qw_seq) (foldm_snoc cm mx_3d_fold_seq) (foldm_snoc cm mx_3d);
   let index_3d (ijk: under (m*(n*h))) : Lemma (index mx_3d ijk == poly_mul (monomial r (nth p (get_i m (n*h) ijk)) (get_i m (n*h) ijk))
                                                                            (monomial r (mul (nth q (get_i n h (get_j m (n*h) ijk)))
@@ -802,7 +835,16 @@ let poly_mul_is_associative #c (#r: commutative_ring c) (p q w: noncompact_poly_
   poly_mul_is_commutative p (foldm_snoc cm mx_qw);  
   poly_mul_congruence_lemma_left p (foldm_snoc cm p_monos) (foldm_snoc cm mx_qw);
   poly_mul_fold_seq_lemma (foldm_snoc cm mx_qw) p_monos qw_p_seq;
-  poly_mul_is_commutative (foldm_snoc cm mx_qw) (foldm_snoc cm p_monos) 
+  poly_mul_is_commutative (foldm_snoc cm mx_qw) (foldm_snoc cm p_monos);
+  trans_lemma_4 ncpoly_eq (poly_mul p (poly_mul q w))
+                          (poly_mul (foldm_snoc cm mx_qw) (foldm_snoc cm p_monos))
+                          (foldm_snoc cm qw_p_seq)
+                          (foldm_snoc cm p_qw_seq);
+  trans_lemma_5 ncpoly_eq lhs (foldm_snoc cm p_qw_seq)
+                              (foldm_snoc cm mx_3d)
+                              (foldm_snoc cm mx_3d_2)
+                              (foldm_snoc cm pq_w_seq);
+  trans_lemma ncpoly_eq lhs (foldm_snoc cm pq_w_seq) rhs
 #pop-options
 (* 
    Previously this was stated explicitly, but it seems that 
@@ -879,3 +921,4 @@ let poly_mul_commutative_monoid #c (r: commutative_ring c)
                                 poly_mul_is_commutative 
                                 poly_mul_congruence_lemma
   
+

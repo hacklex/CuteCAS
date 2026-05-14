@@ -327,3 +327,4 @@ let poly_eq_nil_means_first_eq_zero #c (#r: commutative_ring c) (p: noncompact_p
 
 let poly_eq_nil_last_is_zero #c (#r: commutative_ring c) (p: noncompact_poly_over_ring r{noncompact_poly_eq p empty /\ length p > 0}) 
   : Lemma (ensures is_zero r (last p)) = ()
+#pop-options

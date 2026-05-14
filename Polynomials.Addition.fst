@@ -10,6 +10,8 @@ open Polynomials.Definition
 open Polynomials.Equivalence
 open Polynomials.Compact
 
+#push-options "--split_queries always"
+
 let max (x y: nat) : (t:nat{ t >= x /\ t >= y /\ (if x>y then t=x else t=y) }) = if x>y then x else y
 
 let nth_of_cons #c (#r: commutative_ring c) (h: c) (t: noncompact_poly_over_ring r) : Lemma (forall (i: nat{i<length t}). nth t i == nth (h +$ t) (i+1)) = ()
@@ -43,7 +45,7 @@ let rec noncompact_poly_add_is_commutative #c (#r: commutative_ring c) (p q: non
   if is_nonempty p && is_nonempty q then comm_lemma r.addition.op (head p) (head q);
   if is_empty p && is_empty q then () else noncompact_poly_add_is_commutative (tail p) (tail q) 
  
-#push-options "--ifuel 0 --fuel 1 --z3rlimit 5"
+#push-options "--ifuel 0 --fuel 1 --z3rlimit 15"
 let rec noncompact_poly_add_is_associative #c (#r: commutative_ring c) (p q w: noncompact_poly_over_ring r) 
   : Lemma (ensures (noncompact_poly_add p (noncompact_poly_add q w)) `ncpoly_eq` (noncompact_poly_add (noncompact_poly_add p q) w))
           (decreases %[length p;length q;length w]) =  
@@ -112,9 +114,9 @@ let rec noncompact_poly_negate #c (#r: commutative_ring c) (p: noncompact_poly_o
   : Tot(q: noncompact_poly_over_ring r{ contains_no_nonzeros (noncompact_poly_add q p) }) (decreases length p) = 
   if is_empty p then empty else (
     let neg = r.addition.inv (head p) in
-    reveal_opaque (`%is_neutral_of) (is_neutral_of #c);
-    reveal_opaque (`%is_left_id_of) (is_left_id_of #c);
-    reveal_opaque (`%is_right_id_of) (is_right_id_of #c);
+    reveal_opaque (`%is_neutral_of) (is_neutral_of #c #r.eq);
+    reveal_opaque (`%is_left_id_of) (is_left_id_of #c #r.eq);
+    reveal_opaque (`%is_right_id_of) (is_right_id_of #c #r.eq);
     inverse_operation_lemma (neg_of r) neg;  
     neutral_is_unique r.addition.op (r.addition.op neg (head p)) r.addition.neutral; 
     r.addition.inv (head p)) +$ (noncompact_poly_negate (tail p)
@@ -179,3 +181,5 @@ let poly_add_zero_lemma #c (#r: commutative_ring c) (p: noncompact_poly_over_rin
   poly_add_congruence_lemma p empty p z;
   poly_add_congruence_lemma empty p z p
   
+#pop-options
+#pop-options

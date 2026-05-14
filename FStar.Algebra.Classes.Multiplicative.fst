@@ -18,7 +18,7 @@ type heterogenous_congruence_lemma (#a #b: Type)
                                    {| ea: equatable a |} 
                                    {| eb: equatable b |}                                    
                                    {| ec: equatable c |} (op: a->b->c) =
-  x:a -> y:b -> z:a -> w:b -> Lemma (requires x `ea.eq` z /\ y `eb.eq` w) (ensures op x y `ec.eq` op z w)
+  x:a -> y:b -> z:a -> w:b -> Lemma (requires x `ea.op_Equals` z /\ y `eb.op_Equals` w) (ensures op x y `ec.op_Equals` op z w)
 
 class has_smul (scalar vector: Type0) = {
   [@@@TC.no_method] s_eq : equatable scalar;
@@ -77,7 +77,7 @@ type left_mul_absorber_lemma #t {| m: has_mul t |} (zero: t) = left_absorber_lem
 type right_mul_absorber_lemma #t {| m: has_mul t |} (zero: t) = right_absorber_lemma m.mul.op zero
    
 instance int_equatable : equatable int = {
-  eq = op_Equality;
+  ( = ) = op_Equality;
   reflexivity = (fun _ -> ());
   symmetry = (fun _ _ -> ());
   transitivity = (fun _ _ _ -> ());
@@ -85,7 +85,7 @@ instance int_equatable : equatable int = {
 
 instance int_mul_def : mul_def int int = {
   mul_result = int;
-  op = op_Multiply;
+  op = Prims.op_Star;
 }
 
 instance int_mul : has_mul int = {

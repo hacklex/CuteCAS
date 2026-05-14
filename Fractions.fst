@@ -235,8 +235,6 @@ let fraction_ring_op_distr #a (d: integral_domain a)
     reveal_opaque (`%fraction_add_grp) (fraction_add_grp d);    
     reveal_opaque (`%fraction_mul_grp) (fraction_mul_grp d);    
     reveal_opaque (`%op_of) (op_of #(fraction d));
-    assert (op_of (fraction_add_grp d) == fraction_add #a #d);
-    assert (op_of (fraction_mul_grp d) == fraction_mul #a #d);
     reveal_opaque (`%is_fully_distributive) (is_fully_distributive #(fraction d) #fraction_eq); 
     reveal_opaque (`%is_left_distributive) (is_left_distributive #(fraction d) #fraction_eq); 
     reveal_opaque (`%is_right_distributive) (is_right_distributive #(fraction d) #fraction_eq);  
@@ -317,33 +315,6 @@ let fraction_field (#a:Type) (d: integral_domain a) : field (fraction d) =
 
 
 
-let fraction_field2 (#a:Type) (d: integral_domain a) : field (fraction d) =   
-  fraction_distributivity_lemma #a #d;
-  fraction_one_is_not_equal_to_fraction_zero #a #d;
-  fraction_nonabsorbers_are_regular #a #d;
-  Classical.forall_intro (fraction_unit_cant_be_absorber #a #d);  
-  Classical.forall_intro (fraction_nonabsorber_is_unit #a #d);
-  let addition = fraction_additive_group d in
-  let multiplication = fraction_multiplicative_almost_group #a #d in
-  let eq = fraction_eq #a #d in
-  let zero = fraction_absorber d in  
-  assert (zero == addition.neutral);
-  assert (addition.eq == multiplication.eq);
-  assert (congruence_condition addition.op eq);
-  assert (congruence_condition multiplication.op eq);
-  assert (eq == addition.eq);
-  assert (multiplication.op == fraction_mul #a #d);
-  assert (is_fully_distributive multiplication.op addition.op);
-  assert (is_absorber_of addition.neutral multiplication.op);    
-  { 
-    addition = addition;
-    multiplication = multiplication;
-    eq = eq;
-    left_distributivity = (left_distributivity #a #d);
-    right_distributivity = (right_distributivity #a #d);
-    unit_part_of = fr_up_func d;
-    normal_part_of = unit_normal_of_frac d;
-    euclidean_norm = fr_eu d
-  }
 #pop-options
 
+#pop-options

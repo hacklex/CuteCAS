@@ -96,8 +96,8 @@ instance int_ring : ring int = {
     add_comm_monoid = int_semiring.add_comm_monoid;
     add_group = {
       add_monoid = int_semiring.add_comm_monoid.add_monoid;
-      has_neg = { neg = op_Minus };
-      has_sub = { sub = op_Subtraction };
+      has_neg = { op_Minus = op_Minus };
+      has_sub = { op_Subtraction = op_Subtraction };
       subtraction_definition = (fun _ _ -> ());
       negation = (fun _ -> ())
     }    
@@ -448,19 +448,24 @@ let zmul_ssv_assoc  #t {| g: add_comm_group t |} (a b:int) (x:t)
 (* Note how one symmetry call solves the issue with the right_module mirrored declaration *)
 instance z_module (vector: Type) (g: add_comm_group vector) 
   : full_module vector int int_ring g =  
-  Classical.forall_intro_2 g.add_group.add_monoid.add_semigroup.has_add.eq.symmetry;  
+  let eq = g.add_group.add_monoid.add_semigroup.has_add.eq in
+  Classical.forall_intro_2 eq.symmetry;  
   {
     left_module = {
       s_mul_v = (fun (s:int) (v:vector) -> zmul s v);
       left_module_congruence = (fun a x y -> zmul_congruence a x y);
-      ssv_associativity = (fun a b x -> zmul_ssv_assoc a b x);
+      ssv_associativity = (fun a b x ->
+        zmul_ssv_assoc a b x;
+        eq.symmetry (zmul (a*b) x) (zmul a (zmul b x)));
       svv_distributivity = (fun a x y -> zmul_svv_distr a x y);
       ssv_distributivity = (fun a b x -> zmul_ssv_distr a b x);
     };
     right_module = {
       v_mul_s = (fun (v:vector) (s:int) -> zmul s v);
       right_module_congruence = (fun x y a -> zmul_congruence a x y);
-      vss_associativity = (fun x a b -> zmul_ssv_assoc a b x);
+      vss_associativity = (fun x a b ->
+        zmul_ssv_assoc a b x;
+        eq.symmetry (zmul (a*b) x) (zmul b (zmul a x)));
       vvs_distributivity = (fun x y a -> zmul_svv_distr a x y);
       vss_distributivity = (fun x a b -> zmul_ssv_distr a b x);      
     };

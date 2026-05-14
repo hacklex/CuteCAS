@@ -349,7 +349,10 @@ let elim_ring_eq_laws #t (r: ring t) : squash (
 let elim_ring_trans #t (r: ring t) : Lemma (forall (x y z: t). x=y /\ y=z ==> x=z)
   = 
   let eq : equatable t = TC.solve in
-  Classical.forall_intro_3 (Classical.move_requires_3 eq.transitivity)
+  let aux (x y z: t) : Lemma (x=y /\ y=z ==> x=z) =
+    Classical.move_requires_3 eq.transitivity x y z
+  in
+  Classical.forall_intro_3 aux
 
 let ring_neg_right_distributivity #t {| r: ring t |} (x y z: t)
   : Lemma ((x + -y) * z = x*z + -(y*z)) =

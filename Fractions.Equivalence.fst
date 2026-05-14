@@ -44,7 +44,37 @@ private let equality_is_reflexive (#a:Type) (d: integral_domain a)
 
 /// The first big lemma is the proof of fraction equality transitivity.
 /// Basically, we're proving that ad=bc && cf=de ==> af=be.
-#push-options "--ifuel 0 --fuel 0 --z3rlimit 5"
+#push-options "--ifuel 0 --fuel 0 --z3rlimit 10"
+private let fraction_transitivity_zero_case (#p: Type) (dom: integral_domain p) 
+                                            (a c e: p) (b d f: valid_denominator_of dom)
+  : Lemma (requires (let mul = dom.multiplication.op in
+                     (mul a d) `dom.eq` (mul b c) /\
+                     (mul c f) `dom.eq` (mul d e) /\
+                     (mul c d) `dom.eq` dom.addition.neutral))
+          (ensures (let mul = dom.multiplication.op in 
+                    (mul a f) `dom.eq` (mul b e))) = 
+  let eq = dom.eq in
+  let mul = dom.multiplication.op in  
+  let zero = dom.addition.neutral in
+  reveal_opaque (`%is_transitive) (is_transitive eq);
+  reveal_opaque (`%is_symmetric) (is_symmetric eq);
+  reveal_opaque (`%is_reflexive) (is_reflexive eq);
+  reveal_opaque (`%has_no_absorber_divisors) (has_no_absorber_divisors mul); 
+  absorber_equal_is_absorber mul zero (mul c d);
+  domain_deduce_zero_factor_from_zero_product_and_nonzero_factor dom c d;
+  absorber_lemma mul c b;
+  absorber_equal_is_absorber mul (mul b c) (mul a d);
+  domain_deduce_zero_factor_from_zero_product_and_nonzero_factor dom a d;
+  absorber_lemma mul c f;
+  absorber_lemma mul a f;
+  symm_lemma eq (mul d e) (mul c f);
+  absorber_equal_is_absorber mul (mul c f) (mul d e);
+  domain_deduce_zero_factor_from_zero_product_and_nonzero_factor dom d e;
+  absorber_lemma mul e b;
+  absorber_is_unique mul (mul a f) (mul b e)
+#pop-options
+
+#push-options "--ifuel 0 --fuel 0 --z3rlimit 10"
 private let fraction_equality_transitivity_lemma (#p: Type) (dom: integral_domain p) 
                                                  (x y z: fraction dom) 
   : Lemma (requires fractions_are_equal x y /\ fractions_are_equal y z)
@@ -83,20 +113,9 @@ private let fraction_equality_transitivity_lemma (#p: Type) (dom: integral_domai
                       ((mul c f) `eq` (mul d e)))
             (ensures mul a f `eq` mul b e) =     
     domain_law_from_pq_eq_pr dom (c `mul` d) (b `mul` e) (a `mul` f);             
-    if (c `mul` d `eq` zero) then begin
-      absorber_equal_is_absorber mul zero (mul c d);
-      domain_deduce_zero_factor_from_zero_product_and_nonzero_factor dom c d;
-      absorber_lemma mul c b; //bc=0
-      absorber_equal_is_absorber mul (mul b c) (mul a d); //ad=bc=0
-      domain_deduce_zero_factor_from_zero_product_and_nonzero_factor dom a d; //ad=0 ==> a=0
-      absorber_lemma dom.multiplication.op c f; //c=0 ==> cf=0
-      absorber_lemma dom.multiplication.op a f; //a=0 ==> af=0
-      symm_lemma dom.eq (mul d e) (mul c f); //de=cf
-      absorber_equal_is_absorber mul (mul c f) (mul d e); //0=de=cf
-      domain_deduce_zero_factor_from_zero_product_and_nonzero_factor dom d e; //de=0 => e=0
-      absorber_lemma mul e b; //e=0 ==> eb=0
-      absorber_is_unique mul (mul a f) (mul b e) //eb=0 & af=0 ==> af=be
-    end else symm_lemma dom.eq (mul a f) (mul b e) in af_equals_be a c e b d f 
+    if (c `mul` d `eq` zero) then
+      fraction_transitivity_zero_case dom a c e b d f
+    else symm_lemma dom.eq (mul a f) (mul b e) in af_equals_be a c e b d f 
 #pop-options
 
 private let fraction_equality_transitivity_implication_lemma 

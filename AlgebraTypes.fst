@@ -130,6 +130,7 @@ let is_commutative (#a:Type) (#eq: equivalence_relation a)
                    (op: op_with_congruence eq) 
   = forall (x y:a). ((x `op` y) `eq` (y `op` x)) /\ ((y `op` x) `eq` (x `op` y))
 
+#push-options "--z3rlimit 5"
 let bring_any_operand_forth (#a:Type) 
                   (#eq: equivalence_relation a) 
                   (op: op_with_congruence eq { is_associative op /\ is_commutative op })
@@ -151,6 +152,7 @@ let bring_any_operand_forth (#a:Type)
                               (z `op` x `op` y `op` w)
                               (w `op` x `op` y `op` z)); 
   assoc_lemma_4 op w x y z  
+#pop-options
  
 /// This one is used to assert commutativity, works with both add and mul.
 /// Used when revealing is_commutative opaque wastes too much rlimit.
@@ -601,15 +603,18 @@ let unit_product_is_unit (#a:Type) (#eq: equivalence_relation a) (mul: op_with_c
     neutral_equivalent_is_neutral op (x `op` x') ((x `op` y) `op` (y' `op` x'));   
   ()
 
-type unary_op_on_units_of (#a:Type) (#eq: equivalence_relation a) (mul: op_with_congruence eq) =
-  unary_op_with_congruence #(units_of mul) (    
+let units_eq (#a:Type) (#eq: equivalence_relation a) (mul: op_with_congruence eq)
+  : Tot (equivalence_relation (units_of mul)) =
      reveal_opaque (`%is_reflexive) (is_reflexive #a); 
      reveal_opaque (`%is_reflexive) (is_reflexive #(units_of mul)); 
      reveal_opaque (`%is_symmetric) (is_symmetric #a);   
      reveal_opaque (`%is_symmetric) (is_symmetric #(units_of mul));   
      reveal_opaque (`%is_transitive) (is_transitive #a);
      reveal_opaque (`%is_transitive) (is_transitive #(units_of mul));
-     eq)
+     eq
+
+type unary_op_on_units_of (#a:Type) (#eq: equivalence_relation a) (mul: op_with_congruence eq) =
+  unary_op_with_congruence #(units_of mul) (units_eq mul)
  
 let yields_inverses_for_units (#a:Type) (#eq: equivalence_relation a) 
                               (#op: op_with_congruence eq) 
@@ -668,11 +673,13 @@ type commutative_magma (a:Type)     = g: magma a{is_commutative g.op}
 type commutative_semigroup (a:Type) = g: semigroup a{is_commutative g.op}
 type monoid (a:Type)                = g: semigroup a{is_neutral_of g.neutral g.op}
 type commutative_monoid (a:Type)    = g: monoid a{is_commutative g.op}
-type group (a:Type)                 = g: (m:monoid a{all_are_units m.op}){is_inverse_operation_for #a ( 
-  reveal_opaque (`%unary_congruence_condition) (unary_congruence_condition #a); 
-  reveal_opaque (`%unary_congruence_condition) (unary_congruence_condition #(units_of g.op));
-//  reveal_opaque (`%is_inverse_operation_for) (is_inverse_operation_for #a #g.eq);  
-g.inv) g.op}
+let magma_inv_as_unary_op_with_congruence (#a:Type) (m: magma a{is_associative m.op /\ all_are_units m.op})
+  : unary_op_with_congruence #a m.eq =
+  reveal_opaque (`%unary_congruence_condition) (unary_congruence_condition #a);
+  reveal_opaque (`%unary_congruence_condition) (unary_congruence_condition #(units_of m.op));
+  m.inv
+
+type group (a:Type)                 = g: (m:monoid a{all_are_units m.op}){is_inverse_operation_for #a (magma_inv_as_unary_op_with_congruence g) g.op}
 type commutative_group (a:Type)     = g: group a{is_commutative g.op}
 
 let partial_inverse_lemma (#a:Type) (#eq: equivalence_relation a) 
@@ -1124,14 +1131,13 @@ let ring_add_neutral_is_right_absorber #a (r: ring a) p
   let o = r.addition.neutral in
   let op = mul o p in   
   r.right_distributivity o o p; 
-  congruence_lemma_3 mul o (add o o) p; 
-  trans_lemma eq (op) ((o `add` o) `mul` p) (op `add` op); 
+  congruence_lemma_3 mul (add o o) o p;
+  trans_lemma eq op ((o `add` o) `mul` p) (op `add` op);
+  congruence_lemma_3 add op (op `add` op) (neg op);
   assoc_lemma_3 add (neg op) op op;
-  trans_lemma_5 eq o 
-                   (neg op `add` op) 
-                   (neg op `add` (op `add` op)) 
-                   ((neg op `add` op) `add` op) 
-                   op 
+  trans_lemma eq (neg op `add` op) (neg op `add` (op `add` op)) ((neg op `add` op) `add` op);
+  trans_lemma eq o (neg op `add` op) ((neg op `add` op) `add` op);
+  trans_lemma eq o ((neg op `add` op) `add` op) op
 
 let ring_zero_is_mul_absorber #a (r: ring a) 
   : Lemma (is_absorber_of r.addition.neutral r.multiplication.op) = 
@@ -1274,20 +1280,26 @@ let x_eq_y_means_inv_x_eq_inv_y (#a:Type) (#eq: equivalence_relation a)
 let ring_additive_inv_x_is_x_times_minus_one (#a:Type) (r: ring a) (x: a)
   : Lemma ((r.addition.inv x) `r.eq` (r.multiplication.op x (r.addition.inv r.multiplication.neutral)) /\
            (r.multiplication.op x (r.addition.inv r.multiplication.neutral)) `r.eq` (r.addition.inv x)) = 
-    reveal_opaque (`%is_symmetric) (is_symmetric #a); 
-    reveal_opaque (`%is_transitive) (is_transitive #a);  
     let eq = r.eq in
     let mul = r.multiplication.op in
     let add = r.addition.op in
-    let inv = group_inv_op r.addition in 
+    let inv = neg_of r in 
     let zero = r.addition.neutral in
     let one = r.multiplication.neutral in
-    r.left_distributivity x one (inv one);
-    group_inv_is_complete r.addition;
+    reveal_opaque (`%is_transitive) (is_transitive eq); 
+    group_inv_is_complete r.addition;  
+    group_inv_congruence_condition r.addition; 
     neutral_is_unique r.addition.op zero (one `add` (inv one));
-    neutral_equivalent_is_neutral add zero ((mul x one) `add` (mul x (inv one)));
+    r.left_distributivity x one (inv one);
+    absorber_equal_is_absorber mul zero (add one (inv one));
+    absorber_lemma mul (add one (inv one)) x;
+    trans_lemma eq ((mul x one) `add` (mul x (inv one)))
+                   (mul x (add one (inv one)))  
+                   zero;
+    neutral_equivalent_is_neutral add zero (mul x one `add` mul x (inv one));
     producing_neutral_means_inverses inv (mul x one) (mul x (inv one));
-    x_eq_y_means_inv_x_eq_inv_y inv (mul x one) x
+    x_eq_y_means_inv_x_eq_inv_y inv (mul x one) x;
+    trans_lemma eq (inv x) (inv (mul x one)) (mul x (inv one))
 
 let ring_additive_inv_x_is_minus_one_times_x (#a:Type) (r: ring a) (x: a)
   : Lemma ((r.addition.inv x) `r.eq` (r.multiplication.op (r.addition.inv r.multiplication.neutral) x) /\
@@ -1485,15 +1497,24 @@ let domain_nonzero_product_means_nonzero_factors (#a:Type) (r: ring a) (p q: a)
 let domain_characterizing_lemma (#a:Type) (dom: domain a) (p q: a) 
   : Lemma ((p `dom.multiplication.op` q) `dom.eq` dom.addition.neutral <==>
            (p `dom.eq` dom.addition.neutral \/ q `dom.eq` dom.addition.neutral)) =   
-  reveal_opaque (`%is_transitive) (is_transitive #a);              
-  FStar.Classical.move_requires_2 (domain_zero_product_means_zero_factor dom) p q;
-  if (dom.eq p dom.addition.neutral) then (
-    absorber_equal_is_absorber dom.multiplication.op dom.addition.neutral p;
-    absorber_lemma dom.multiplication.op p q
-  ) else if (dom.eq q dom.addition.neutral) then (
-    absorber_equal_is_absorber dom.multiplication.op dom.addition.neutral q;
-    absorber_lemma dom.multiplication.op q p
-  ) 
+  let mul = dom.multiplication.op in
+  let eq = dom.eq in
+  let zero = dom.addition.neutral in
+  reveal_opaque (`%is_transitive) (is_transitive #a);
+  let forward () : Lemma (requires (p `mul` q) `eq` zero)
+                         (ensures (p `eq` zero \/ q `eq` zero)) = 
+    domain_zero_product_means_zero_factor dom p q in
+  let backward_p () : Lemma (requires p `eq` zero)
+                            (ensures (p `mul` q) `eq` zero) = 
+    absorber_equal_is_absorber mul zero p;
+    absorber_lemma mul p q in
+  let backward_q () : Lemma (requires q `eq` zero)
+                            (ensures (p `mul` q) `eq` zero) = 
+    absorber_equal_is_absorber mul zero q;
+    absorber_lemma mul q p in
+  Classical.move_requires forward ();
+  Classical.move_requires backward_p ();
+  Classical.move_requires backward_q ()
   
 let domain_law_from_pq_eq_pr (#a:Type) (d: domain a) (p q r: a)
   : Lemma (requires d.multiplication.op p q `d.eq` d.multiplication.op p r) 

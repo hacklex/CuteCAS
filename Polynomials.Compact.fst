@@ -193,3 +193,4 @@ let poly_compact_of_zeros_is_nil #c (#r: commutative_ring c) (p:noncompact_poly_
 
 let poly_eq_nil_means_compact_is_nil #c (#r: commutative_ring c) (p: noncompact_poly_over_ring r{noncompact_poly_eq p empty}) 
   : Lemma (poly_compact p == empty) = ()
+#pop-options

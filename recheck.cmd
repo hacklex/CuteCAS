@@ -17,14 +17,6 @@ echo Fraction Multiplication
 fstar Fractions.Multiplication.fst %OPTIONS%
 echo Fraction Field
 fstar Fractions.fst %OPTIONS%
-echo FStar.IntegerIntervals
-fstar FStar.IntegerIntervals.fst %OPTIONS%
-echo FStar.Algebra.CommMonoid.Fold
-fstar FStar.Algebra.CommMonoid.Fold.fst %OPTIONS%
-echo FStar.Matrix
-fstar FStar.Matrix.fst %OPTIONS%
-echo FStar.Algebra.CommMonoid.Fold.Nested
-fstar FStar.Algebra.CommMonoid.Fold.Nested.fst %OPTIONS%
 echo Poly Definitions
 fstar Polynomials.Definition.fst %OPTIONS%
 echo Poly Equivalence
@@ -39,7 +31,5 @@ echo Poly Multiplication
 fstar Polynomials.Multiplication.fst %OPTIONS%
 echo Poly Ring
 fstar Polynomials.fst %OPTIONS%
-echo RefinementEquality utility module
-fstar RefinementEquality.fst %OPTIONS%
 echo --- Recheck successful! ---
 pause

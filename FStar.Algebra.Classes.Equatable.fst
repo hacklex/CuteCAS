@@ -41,9 +41,12 @@ let rec trans_lemma (#t:Type) {| equatable t |} (expressions: list t{length expr
   | h1::h2::t2 -> trans_lemma (h2::t2);
                transitivity h1 h2 (last t2)
  
-let transitivity_for_calc_proofs (t:Type) {| equatable t |}
+let transitivity_for_calc_proofs (t:Type) {| eq: equatable t |}
   : squash (forall (x y z:t). x=y /\ y=z ==> x=z) = 
-  Classical.forall_intro_3 (Classical.move_requires_3 (transitivity #t))
+  let aux (x y z: t) : Lemma (x=y /\ y=z ==> x=z) =
+    Classical.move_requires_3 eq.transitivity x y z
+  in
+  Classical.forall_intro_3 aux
 
 
 private let z = 4 = 5

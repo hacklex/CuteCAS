@@ -66,7 +66,7 @@ instance int_equatable : equatable int = {
 } 
 
 instance int_mul : has_mul int = {
-  ( * ) = op_Multiply;
+  ( * ) = Prims.op_Star;
   eq = int_equatable;
   congruence = fun _ _ _ _ -> ()
 }
@@ -398,6 +398,11 @@ let neg_of_sum #t {| g: add_group t |} (x y:t)
 
 
 
+// NOTE: This experimental tactic targets an older Tactics API where
+// `term_as_formula` returned `option formula`; in current F* it returns
+// `formula` directly, breaking the pattern match below. Commented out
+// while porting Fractions to the typeclass tower; not used elsewhere.
+(*
 let apply_assoc_once #t (g: add_group t) : Tac unit =
   let g = cur_goal() in
 //  let assoc (x:t) (y:t) (z:t) : Lemma((x+y)+z = x+(y+z)) = add_associativity x y z in
@@ -409,4 +414,5 @@ let apply_assoc_once #t (g: add_group t) : Tac unit =
        ()
      | _ -> fail "LHS is not ((ab)c)")
   | _ -> fail "Goal is not x=y"
+*)
      

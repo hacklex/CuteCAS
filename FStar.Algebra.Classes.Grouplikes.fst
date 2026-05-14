@@ -218,6 +218,34 @@ instance sub_of_add_group (t:Type) {| h: add_group t |} = h.has_sub
 instance add_group_of_comm_group (t:Type) {| h: add_comm_group t |} = h.add_group
 instance add_comm_monoid_of_comm_group (t:Type) {| h: add_comm_group t |} = h.add_comm_monoid <: add_comm_monoid t
 
+(* ------------------------------------------------------------------------ *)
+(*  Multiplicative inverse and groups                                       *)
+(*                                                                          *)
+(*  Mirrors `has_neg` and `add_group` above. Used for groups where the      *)
+(*  *whole* carrier is a group under multiplication (permutation groups,    *)
+(*  matrix groups, etc.). NOT used for the multiplicative structure of a    *)
+(*  field/division ring \u2014 there the carrier is `t \ {0}` and that is        *)
+(*  captured separately by `field`/`division_ring`. For "units of a ring"   *)
+(*  see `FStar.Algebra.Classes.RingUnits` (`ring_unit` record + its         *)
+(*  `mul_group` instance).                                                  *)
+(* ------------------------------------------------------------------------ *)
+
+class has_inv (t:Type) = {
+  [@@@TC.no_method] has_one: has_one t;
+  inv: t -> t;
+}
+
+instance has_one_of_has_inv (t:Type) {| h: has_inv t |} = h.has_one
+
+class mul_group (t:Type) = {
+  [@@@TC.no_method] mul_monoid: mul_monoid t;
+  [@@@TC.no_method] has_inv: (h:has_inv t{ h.has_one == mul_monoid.has_one });
+  inversion: inversion_lemma #t ( * ) one has_inv.inv;
+}
+
+instance mul_monoid_of_mul_group (t:Type) {| g: mul_group t |} = g.mul_monoid
+instance has_inv_of_mul_group (t:Type) {| g: mul_group t |} = g.has_inv <: has_inv t
+
 let zero_equals_minus_zero #t {| a: add_group t |} 
   : Lemma (a.add_monoid.has_zero.zero = -a.add_monoid.has_zero.zero) = 
   let zero : t = zero in

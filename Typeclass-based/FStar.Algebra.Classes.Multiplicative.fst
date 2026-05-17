@@ -179,8 +179,4 @@ let left_factor_is_right_factor_if_commutative (#t:Type)
       mul_commutativity c factor;
       symmetry  (c*factor) (factor*c);
       transitivity (factor*c) (c*factor) product
-    end in Classical.move_requires aux_2 ()  
-
-assume 
-  val ghost_of_fun_from_fun_of_ghost (#t:Type) (f: t -> GTot bool) 
-    : GTot (g:(t -> bool){forall (x:t). g x = f x })
+    end in Classical.move_requires aux_2 ()

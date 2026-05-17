@@ -1,4 +1,4 @@
-module FStar.Algebra.Classes.RingUnits
+module FStar.CAS.RingUnits
 
 (* ------------------------------------------------------------------------ *)
 (*  Units of a ring.                                                        *)
@@ -21,9 +21,9 @@ module FStar.Algebra.Classes.RingUnits
 
 module TC = FStar.Tactics.Typeclasses
 
-open FStar.Algebra.Classes.Equatable
-open FStar.Algebra.Classes.Grouplikes
-open FStar.Algebra.Classes.Ringlikes
+open FStar.CAS.Equatable
+open FStar.CAS.Grouplikes
+open FStar.CAS.Ringlikes
 
 noeq type ring_unit (t: Type) {| r: ring t |} = {
   value     : t;

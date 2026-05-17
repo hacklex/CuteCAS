@@ -1,29 +1,16 @@
-module FStar.Algebra.Permutation
+module FStar.CAS.Permutation
 
 (*
-  Permutations of [0..n) — a bijection on `fin n` packaged with its inverse
-  and the round-trip equations.
+  Permutations of [0..n) — proofs and internal helpers.
 
-  Designed for use in determinant and resultant constructions. Provides a
-  `mul_group (permutation n)` typeclass instance for use by downstream modules.
+  Public interface lives in `FStar.CAS.Permutation.fsti`.
 
   Author: A. Rozanov (CuteCAS).
 *)
 
 module TC = FStar.Tactics.Typeclasses
-
-(* The natural-number-bounded index type used everywhere. *)
-type fin (n: nat) = i:nat{i < n}
-
-(* A permutation of `fin n` carries its inverse and the two round-trip proofs.
-   Keeping the inverse explicit avoids any existential/decidability detours.
-*)
-noeq type permutation (n: nat) = {
-  fwd : fin n -> fin n;
-  bwd : fin n -> fin n;
-  fwd_bwd_id : (i: fin n) -> Lemma (fwd (bwd i) == i);
-  bwd_fwd_id : (i: fin n) -> Lemma (bwd (fwd i) == i);
-}
+module E = FStar.CAS.Equatable
+module G = FStar.CAS.Grouplikes
 
 (* Basic operations *)
 
@@ -33,6 +20,11 @@ let identity (n: nat) : permutation n = {
   fwd_bwd_id = (fun _ -> ());
   bwd_fwd_id = (fun _ -> ());
 }
+
+let identity_fwd (n: nat) (i: fin n)
+  : Lemma ((identity n).fwd i == i /\ (identity n).bwd i == i)
+          [SMTPat ((identity n).fwd i)]
+  = ()
 
 let inverse (#n: nat) (p: permutation n) : permutation n = {
   fwd = p.bwd;
@@ -53,6 +45,9 @@ let compose (#n: nat) (p q: permutation n) : permutation n = {
     q.bwd_fwd_id i);
 }
 
+let compose_fwd (#n: nat) (p q: permutation n) (i: fin n)
+  : Lemma ((compose p q).fwd i == p.fwd (q.fwd i)) = ()
+
 (* Transposition of two distinct indices, identity elsewhere. *)
 let transposition (n: nat) (a b: fin n) : permutation n =
   let swap (i: fin n) : fin n =
@@ -65,44 +60,131 @@ let transposition (n: nat) (a b: fin n) : permutation n =
     bwd_fwd_id = (fun _ -> ());
   }
 
-(* Equality of permutations: agreement of `fwd` on every index. *)
-let perm_eq (#n: nat) (p q: permutation n) : prop =
-  forall (i: fin n). p.fwd i == q.fwd i
+(* Equality of permutations: defined in the .fsti as perm_eq_bool_from p q 0,
+   opaque_to_smt. These lemmas are the only way to interact with perm_eq from SMT.
+   For sym/trans/refl, use the equatable instance (permutation_equatable). *)
+
+let rec perm_eq_bool_from (#n: nat) (p q: permutation n) (k: nat{k <= n})
+  : Tot bool (decreases (n - k))
+  = if k >= n then true
+    else (p.fwd k = q.fwd k) && perm_eq_bool_from p q (k + 1)
+
+(* Reflexivity of perm_eq_bool_from. *)
+let rec perm_eq_bool_from_refl (#n: nat) (p: permutation n) (k: nat{k <= n})
+  : Lemma (ensures perm_eq_bool_from p p k) (decreases (n - k))
+  = if k >= n then ()
+    else perm_eq_bool_from_refl p (k + 1)
+
+(* Symmetry. *)
+let rec perm_eq_bool_from_sym (#n: nat) (p q: permutation n) (k: nat{k <= n})
+  : Lemma (ensures perm_eq_bool_from p q k <==> perm_eq_bool_from q p k)
+  = if k >= n then ()
+    else perm_eq_bool_from_sym p q (k + 1)
+
+(* Transitivity. *)
+let rec perm_eq_bool_from_trans (#n: nat) (p q r: permutation n) (k: nat{k <= n})
+  : Lemma (requires perm_eq_bool_from p q k /\ perm_eq_bool_from q r k)
+          (ensures  perm_eq_bool_from p r k)
+  = if k >= n then ()
+    else perm_eq_bool_from_trans p q r (k + 1)
+
+(* From the boolean equality back to extensional agreement. *)
+let rec perm_eq_bool_from_implies_fwd
+  (#n: nat) (p q: permutation n) (k: nat{k <= n}) (i: fin n)
+  : Lemma (requires perm_eq_bool_from p q k /\ i >= k)
+          (ensures  p.fwd i == q.fwd i)
+          (decreases (n - k))
+  = if k >= n then ()
+    else if i = k then ()
+    else perm_eq_bool_from_implies_fwd p q (k + 1) i
+
+(* And the other direction: extensional agreement implies the boolean equality. *)
+let rec fwd_agree_implies_perm_eq_bool_from
+  (#n: nat) (p q: permutation n) (k: nat{k <= n})
+  : Lemma (requires forall (i: fin n). p.fwd i == q.fwd i)
+          (ensures  perm_eq_bool_from p q k)
+  = if k >= n then ()
+    else fwd_agree_implies_perm_eq_bool_from p q (k + 1)
+
+let perm_eq_intro (#n: nat) (p q: permutation n)
+  : Lemma (requires forall (i: fin n). p.fwd i == q.fwd i)
+          (ensures perm_eq p q)
+  = reveal_opaque (`%perm_eq) (perm_eq p q);
+    fwd_agree_implies_perm_eq_bool_from p q 0
+
+let perm_eq_elim (#n: nat) (p q: permutation n) (i: fin n)
+  : Lemma (requires perm_eq p q)
+          (ensures p.fwd i == q.fwd i)
+  = reveal_opaque (`%perm_eq) (perm_eq p q);
+    perm_eq_bool_from_implies_fwd p q 0 i
+
+let perm_neq_intro (#n: nat) (p q: permutation n) (i: fin n)
+  : Lemma (requires ~(p.fwd i == q.fwd i))
+          (ensures ~(perm_eq p q))
+  = Classical.move_requires (fun () -> perm_eq_elim p q i) ()
 
 (* Key algebraic facts *)
 
 let identity_left (#n: nat) (p: permutation n)
-  : Lemma (perm_eq (compose (identity n) p) p) = ()
+  : Lemma (perm_eq (compose (identity n) p) p) = perm_eq_intro (compose (identity n) p) p
 
 let identity_right (#n: nat) (p: permutation n)
-  : Lemma (perm_eq (compose p (identity n)) p) = ()
+  : Lemma (perm_eq (compose p (identity n)) p) = perm_eq_intro (compose p (identity n)) p
 
 let compose_associative (#n: nat) (p q r: permutation n)
-  : Lemma (perm_eq (compose (compose p q) r) (compose p (compose q r))) = ()
+  : Lemma (perm_eq (compose (compose p q) r) (compose p (compose q r))) = perm_eq_intro (compose (compose p q) r) (compose p (compose q r))
 
 let inverse_left (#n: nat) (p: permutation n)
   : Lemma (perm_eq (compose (inverse p) p) (identity n)) =
   let lhs = compose (inverse p) p in
   let goal (i: fin n) : Lemma (lhs.fwd i == i) = p.bwd_fwd_id i in
-  Classical.forall_intro goal
+  Classical.forall_intro goal;
+  perm_eq_intro lhs (identity n)
 
 let inverse_right (#n: nat) (p: permutation n)
   : Lemma (perm_eq (compose p (inverse p)) (identity n)) =
   let lhs = compose p (inverse p) in
   let goal (i: fin n) : Lemma (lhs.fwd i == i) = p.fwd_bwd_id i in
-  Classical.forall_intro goal
+  Classical.forall_intro goal;
+  perm_eq_intro lhs (identity n)
 
 let inverse_involutive (#n: nat) (p: permutation n)
-  : Lemma (perm_eq (inverse (inverse p)) p) = ()
+  : Lemma (perm_eq (inverse (inverse p)) p) = perm_eq_intro (inverse (inverse p)) p
+
+let inverse_fwd (#n: nat) (p: permutation n) (j: fin n)
+  : Lemma ((inverse p).fwd j == p.bwd j /\ (inverse p).bwd j == p.fwd j) = ()
+
+let inverse_congruence (#n: nat) (p q: permutation n)
+  : Lemma (requires perm_eq p q) (ensures perm_eq (inverse p) (inverse q))
+  = let goal (j: fin n) : Lemma ((inverse p).fwd j == (inverse q).fwd j)
+      = inverse_fwd p j;
+        inverse_fwd q j;
+        let i = p.bwd j in
+        p.fwd_bwd_id j;       (* p.fwd i == j *)
+        perm_eq_elim p q i;   (* q.fwd i == p.fwd i *)
+        q.bwd_fwd_id i        (* q.bwd (q.fwd i) == i, so q.bwd j == i == p.bwd j *)
+    in
+    Classical.forall_intro goal;
+    perm_eq_intro (inverse p) (inverse q)
 
 (* Transposition self-inverse + identity outside its support. *)
 
 let transposition_self_inverse (n: nat) (a b: fin n)
   : Lemma (perm_eq (compose (transposition n a b) (transposition n a b))
-                   (identity n)) = ()
+                   (identity n)) = perm_eq_intro (compose (transposition n a b) (transposition n a b)) (identity n)
 
 let transposition_trivial (n: nat) (a: fin n)
-  : Lemma (perm_eq (transposition n a a) (identity n)) = ()
+  : Lemma (perm_eq (transposition n a a) (identity n)) = perm_eq_intro (transposition n a a) (identity n)
+
+let transposition_fwd_left (n: nat) (a b: fin n)
+  : Lemma ((transposition n a b).fwd a == b) = ()
+
+let transposition_fwd_right (n: nat) (a b: fin n)
+  : Lemma ((transposition n a b).fwd b == a) = ()
+
+let transposition_fwd_other (n: nat) (a b k: fin n)
+  : Lemma (requires ~(k == a) /\ ~(k == b))
+          (ensures (transposition n a b).fwd k == k) = ()
 
 (* Injectivity of `fwd` — a direct consequence of having the inverse. *)
 let fwd_injective (#n: nat) (p: permutation n) (i j: fin n)
@@ -171,83 +253,32 @@ let parity_identity (n: nat) : Lemma (parity (identity n) == true) =
 (*  Typeclass instances: G.mul_group (permutation n)                          *)
 (* ------------------------------------------------------------------------ *)
 
-module E = FStar.Algebra.Classes.Equatable
-module G = FStar.Algebra.Classes.Grouplikes
-
-(* Boolean extensional equality: agree on every index k < n. *)
-let rec perm_eq_bool_from (#n: nat) (p q: permutation n) (k: nat{k <= n})
-  : Tot bool (decreases (n - k))
-  = if k >= n then true
-    else (p.fwd k = q.fwd k) && perm_eq_bool_from p q (k + 1)
-
-let perm_eq_bool (#n: nat) (p q: permutation n) : bool =
-  perm_eq_bool_from p q 0
-
-(* Reflexivity of perm_eq_bool_from. *)
-let rec perm_eq_bool_from_refl (#n: nat) (p: permutation n) (k: nat{k <= n})
-  : Lemma (ensures perm_eq_bool_from p p k) (decreases (n - k))
-  = if k >= n then ()
-    else perm_eq_bool_from_refl p (k + 1)
-
-let perm_eq_bool_refl (#n: nat) (p: permutation n)
-  : Lemma (perm_eq_bool p p)
-  = perm_eq_bool_from_refl p 0
-
-(* Symmetry. *)
-let rec perm_eq_bool_from_sym (#n: nat) (p q: permutation n) (k: nat{k <= n})
-  : Lemma (ensures perm_eq_bool_from p q k <==> perm_eq_bool_from q p k)
-          (decreases (n - k))
-  = if k >= n then ()
-    else perm_eq_bool_from_sym p q (k + 1)
-
-(* Transitivity. *)
-let rec perm_eq_bool_from_trans (#n: nat) (p q r: permutation n) (k: nat{k <= n})
-  : Lemma (requires perm_eq_bool_from p q k /\ perm_eq_bool_from q r k)
-          (ensures  perm_eq_bool_from p r k)
-          (decreases (n - k))
-  = if k >= n then ()
-    else perm_eq_bool_from_trans p q r (k + 1)
-
 instance permutation_equatable (n: nat) : E.equatable (permutation n) = {
-  op_Equals    = perm_eq_bool;
-  reflexivity  = (fun p -> perm_eq_bool_refl p);
-  symmetry     = (fun p q -> perm_eq_bool_from_sym p q 0);
-  transitivity = (fun p q r -> perm_eq_bool_from_trans p q r 0);
+  op_Equals    = perm_eq;
+  reflexivity  = (fun p ->
+    reveal_opaque (`%perm_eq) (perm_eq p p);
+    perm_eq_bool_from_refl p 0);
+  symmetry     = (fun p q ->
+    reveal_opaque (`%perm_eq) (perm_eq p q);
+    reveal_opaque (`%perm_eq) (perm_eq q p);
+    perm_eq_bool_from_sym p q 0);
+  transitivity = (fun p q r ->
+    reveal_opaque (`%perm_eq) (perm_eq p q);
+    reveal_opaque (`%perm_eq) (perm_eq q r);
+    reveal_opaque (`%perm_eq) (perm_eq p r);
+    perm_eq_bool_from_trans p q r 0);
 }
-
-(* From the boolean equality back to extensional agreement. *)
-let rec perm_eq_bool_from_implies_fwd
-  (#n: nat) (p q: permutation n) (k: nat{k <= n}) (i: fin n)
-  : Lemma (requires perm_eq_bool_from p q k /\ i >= k)
-          (ensures  p.fwd i == q.fwd i)
-          (decreases (n - k))
-  = if k >= n then ()
-    else if i = k then ()
-    else perm_eq_bool_from_implies_fwd p q (k + 1) i
-
-let perm_eq_bool_implies_fwd (#n: nat) (p q: permutation n) (i: fin n)
-  : Lemma (requires perm_eq_bool p q) (ensures p.fwd i == q.fwd i)
-  = perm_eq_bool_from_implies_fwd p q 0 i
-
-(* And the other direction: extensional agreement implies the boolean equality. *)
-let rec fwd_agree_implies_perm_eq_bool_from
-  (#n: nat) (p q: permutation n) (k: nat{k <= n})
-  : Lemma (requires forall (i: fin n). p.fwd i == q.fwd i)
-          (ensures  perm_eq_bool_from p q k)
-          (decreases (n - k))
-  = if k >= n then ()
-    else fwd_agree_implies_perm_eq_bool_from p q (k + 1)
 
 (* Composition congruence: equal in -> equal out. *)
 let compose_congruence (#n: nat) (p1 q1 p2 q2: permutation n)
-  : Lemma (requires perm_eq_bool p1 p2 /\ perm_eq_bool q1 q2)
-          (ensures  perm_eq_bool (compose p1 q1) (compose p2 q2))
+  : Lemma (requires perm_eq p1 p2 /\ perm_eq q1 q2)
+          (ensures  perm_eq (compose p1 q1) (compose p2 q2))
   = let aux (i: fin n) : Lemma ((compose p1 q1).fwd i == (compose p2 q2).fwd i) =
-      perm_eq_bool_implies_fwd q1 q2 i;
-      perm_eq_bool_implies_fwd p1 p2 (q1.fwd i)
+      perm_eq_elim q1 q2 i;
+      perm_eq_elim p1 p2 (q1.fwd i)
     in
     Classical.forall_intro aux;
-    fwd_agree_implies_perm_eq_bool_from (compose p1 q1) (compose p2 q2) 0
+    perm_eq_intro (compose p1 q1) (compose p2 q2)
 
 instance permutation_has_mul (n: nat) : G.has_mul (permutation n) = {
   eq = permutation_equatable n;
@@ -255,15 +286,9 @@ instance permutation_has_mul (n: nat) : G.has_mul (permutation n) = {
   congruence = (fun p1 q1 p2 q2 -> compose_congruence p1 q1 p2 q2);
 }
 
-(* Associativity of composition lifted to the boolean equality. *)
-let compose_assoc_bool (#n: nat) (p q r: permutation n)
-  : Lemma (perm_eq_bool (compose (compose p q) r) (compose p (compose q r)))
-  = fwd_agree_implies_perm_eq_bool_from
-      (compose (compose p q) r) (compose p (compose q r)) 0
-
 instance permutation_mul_semigroup (n: nat) : G.mul_semigroup (permutation n) = {
   has_mul = permutation_has_mul n;
-  associativity = (fun p q r -> compose_assoc_bool p q r);
+  associativity = (fun p q r -> compose_associative p q r);
 }
 
 instance permutation_has_one (n: nat) : G.has_one (permutation n) = {
@@ -271,19 +296,11 @@ instance permutation_has_one (n: nat) : G.has_one (permutation n) = {
   one = identity n;
 }
 
-let identity_left_bool (#n: nat) (p: permutation n)
-  : Lemma (perm_eq_bool (compose (identity n) p) p)
-  = fwd_agree_implies_perm_eq_bool_from (compose (identity n) p) p 0
-
-let identity_right_bool (#n: nat) (p: permutation n)
-  : Lemma (perm_eq_bool (compose p (identity n)) p)
-  = fwd_agree_implies_perm_eq_bool_from (compose p (identity n)) p 0
-
 instance permutation_mul_monoid (n: nat) : G.mul_monoid (permutation n) = {
   has_one = permutation_has_one n;
   mul_semigroup = permutation_mul_semigroup n;
-  left_mul_identity  = (fun p -> identity_left_bool p);
-  right_mul_identity = (fun p -> identity_right_bool p);
+  left_mul_identity  = (fun p -> identity_left p);
+  right_mul_identity = (fun p -> identity_right p);
 }
 
 instance permutation_has_inv (n: nat) : G.has_inv (permutation n) = {
@@ -291,26 +308,10 @@ instance permutation_has_inv (n: nat) : G.has_inv (permutation n) = {
   inv = inverse;
 }
 
-let inverse_left_bool (#n: nat) (p: permutation n)
-  : Lemma (perm_eq_bool (compose (inverse p) p) (identity n))
-  = let aux (i: fin n) : Lemma ((compose (inverse p) p).fwd i == (identity n).fwd i) =
-      p.bwd_fwd_id i
-    in
-    Classical.forall_intro aux;
-    fwd_agree_implies_perm_eq_bool_from (compose (inverse p) p) (identity n) 0
-
-let inverse_right_bool (#n: nat) (p: permutation n)
-  : Lemma (perm_eq_bool (compose p (inverse p)) (identity n))
-  = let aux (i: fin n) : Lemma ((compose p (inverse p)).fwd i == (identity n).fwd i) =
-      p.fwd_bwd_id i
-    in
-    Classical.forall_intro aux;
-    fwd_agree_implies_perm_eq_bool_from (compose p (inverse p)) (identity n) 0
-
 instance permutation_mul_group (n: nat) : G.mul_group (permutation n) = {
   mul_monoid = permutation_mul_monoid n;
   has_inv = permutation_has_inv n;
-  inversion = (fun p -> inverse_right_bool p; inverse_left_bool p);
+  inversion = (fun p -> inverse_right p; inverse_left p);
 }
 
 
@@ -767,9 +768,11 @@ let rec inv_aux_perm_eq_invariant
     end
 
 let parity_perm_eq_invariant (#n: nat) (p1 p2: permutation n)
-  : Lemma (requires forall (i: fin n). p1.fwd i == p2.fwd i)
+  : Lemma (requires perm_eq p1 p2)
           (ensures parity p1 == parity p2)
-  = inv_aux_perm_eq_invariant p1 p2 0
+  = let aux (i: fin n) : Lemma (p1.fwd i == p2.fwd i) = perm_eq_elim p1 p2 i in
+    Classical.forall_intro aux;
+    inv_aux_perm_eq_invariant p1 p2 0
 
 (* Look for the smallest adjacent descent.  *)
 let rec find_descent (#n: nat) (q: permutation n) (i: nat{i <= n})
@@ -833,6 +836,7 @@ let parity_compose_right_swap
   (#n: nat) (p q: permutation n) (i: nat{i+1 < n})
   : Lemma (parity (compose p (right_swap q i)) == not (parity (compose p q)))
   = Classical.forall_intro (compose_with_right_swap_eq p q i);
+    perm_eq_intro (compose p (right_swap q i)) (right_swap (compose p q) i);
     parity_perm_eq_invariant (compose p (right_swap q i)) (right_swap (compose p q) i);
     parity_right_swap (compose p q) i
 
@@ -850,6 +854,7 @@ let rec sign_homomorphism
         // compose p q is extensionally p
         let aux_cpq (k: fin n) : Lemma ((compose p q).fwd k == p.fwd k) = () in
         Classical.forall_intro aux_cpq;
+        perm_eq_intro (compose p q) p;
         parity_perm_eq_invariant (compose p q) p
     | Some i ->
         inv_right_swap_at_descent q i;
@@ -857,3 +862,134 @@ let rec sign_homomorphism
         let q' = right_swap q i in
         sign_homomorphism p q';
         parity_compose_right_swap p q i
+
+(* The inverse permutation has the same parity.
+
+   sign_homomorphism (inverse p) p           gives
+     parity (compose (inverse p) p) == (parity (inverse p) = parity p)
+   inverse_left + parity_perm_eq_invariant   gives
+     parity (compose (inverse p) p) == parity (identity n) == true
+   hence (parity (inverse p) = parity p) == true.                       *)
+let parity_inverse (#n: nat) (p: permutation n)
+  : Lemma (parity (inverse p) == parity p)
+  = sign_homomorphism (inverse p) p;
+    inverse_left p;
+    parity_perm_eq_invariant (compose (inverse p) p) (identity n);
+    parity_identity n
+
+(* Decomposition principle for induction on inversion_count:
+   either p has zero inversions (it's extensionally identity), or some
+   adjacent right_swap reduces the inversion_count. *)
+let perm_descent_exists_or_inv_zero (#n: nat) (p: permutation n)
+  : Lemma (inversion_count p == 0 \/
+           (exists (i: nat{i+1 < n}).
+              inversion_count (right_swap p i) < inversion_count p))
+  = match find_descent p 0 with
+    | None ->
+        find_descent_none_implies_inv_zero p
+    | Some i ->
+        inv_right_swap_at_descent p i
+
+(* ====================================================================== *)
+(*  Block-swap permutation:                                                 *)
+(*     block_swap_perm m n : permutation (m + n) where                      *)
+(*       fwd k = if k < m then k + n else k - m                             *)
+(*       bwd k = if k < n then k + m else k - n                             *)
+(*  This is the permutation that swaps the first m and last n positions.    *)
+(*  Its parity is (m * n) mod 2 (i.e., m*n inversions).                    *)
+(* ====================================================================== *)
+
+let block_swap_perm (m n: nat) : permutation (m + n)
+  = let fwd (k: fin (m + n)) : fin (m + n) =
+        if (k <: nat) < m then ((k <: nat) + n) <: fin (m + n)
+        else ((k <: nat) - m) <: fin (m + n) in
+    let bwd (k: fin (m + n)) : fin (m + n) =
+        if (k <: nat) < n then ((k <: nat) + m) <: fin (m + n)
+        else ((k <: nat) - n) <: fin (m + n) in
+    {
+      fwd; bwd;
+      fwd_bwd_id = (fun _ -> ());
+      bwd_fwd_id = (fun _ -> ());
+    }
+
+(* count_at_left for i < m: stepping through j from 0 to m+n, contribution at
+   step j is 1 iff j >= m (and then j > i since i < m). Therefore:
+     count_at_left ... i j = if j >= m+n then 0
+                              else if j >= m then m+n - j
+                              else n
+*)
+let rec count_at_left_block_swap_lt_m
+  (m n: nat) (i: fin (m + n)) (j: nat{j <= m + n})
+  : Lemma (requires (i <: nat) < m)
+          (ensures count_at_left (block_swap_perm m n) i j
+                   == (if j >= m + n then 0
+                       else if j >= m then m + n - j
+                       else n))
+          (decreases (m + n - j))
+  = if j >= m + n then ()
+    else begin
+      count_at_left_block_swap_lt_m m n i (j + 1);
+      let p = block_swap_perm m n in
+      let here = if j > (i <: nat) && p.fwd i > p.fwd (j <: fin (m + n)) then 1 else 0 in
+      if j < m then begin
+        (* fwd(j) = j + n, fwd(i) = i + n. Need j > i and j + n < i + n, impossible. *)
+        assert (p.fwd (j <: fin (m + n)) == (j + n));
+        assert (p.fwd i == ((i <: nat) + n));
+        assert (here == 0)
+      end else begin
+        (* j >= m. fwd(j) = j - m < n, fwd(i) = i + n > j - m always. j > i auto. *)
+        assert (p.fwd (j <: fin (m + n)) == (j - m));
+        assert (p.fwd i == ((i <: nat) + n));
+        assert (j > (i <: nat));
+        assert (here == 1)
+      end
+    end
+
+(* count_at_left for i >= m: fwd(i) = i - m. For j > i (so j > m), fwd(j) = j - m.
+   Need j - m < i - m iff j < i, contradiction. So contribution is always 0. *)
+let rec count_at_left_block_swap_ge_m
+  (m n: nat) (i: fin (m + n)) (j: nat{j <= m + n})
+  : Lemma (requires (i <: nat) >= m)
+          (ensures count_at_left (block_swap_perm m n) i j == 0)
+          (decreases (m + n - j))
+  = if j >= m + n then ()
+    else begin
+      count_at_left_block_swap_ge_m m n i (j + 1);
+      let p = block_swap_perm m n in
+      if j > (i <: nat) then begin
+        (* j > i >= m, so j >= m+1 > m, fwd(j) = j - m. fwd(i) = i - m. *)
+        assert (p.fwd (j <: fin (m + n)) == (j - m));
+        assert (p.fwd i == ((i <: nat) - m));
+        assert (~(p.fwd i > p.fwd (j <: fin (m + n))))
+      end
+    end
+
+(* inversion_count_aux summed: for i in [0, m), each contributes n; for i in
+   [m, m+n), each contributes 0. Total = (m - i) * n for i <= m, 0 otherwise. *)
+let rec inversion_count_aux_block_swap
+  (m n: nat) (i: nat{i <= m + n})
+  : Lemma (ensures inversion_count_aux (block_swap_perm m n) i
+                   == (if i >= m then 0 else (m - i) * n))
+          (decreases (m + n - i))
+  = if i >= m + n then ()
+    else begin
+      inversion_count_aux_block_swap m n (i + 1);
+      if i < m then
+        count_at_left_block_swap_lt_m m n (i <: fin (m + n)) 0
+      else
+        count_at_left_block_swap_ge_m m n (i <: fin (m + n)) 0
+    end
+
+let inversion_count_block_swap (m n: nat)
+  : Lemma (inversion_count (block_swap_perm m n) == m * n)
+  = inversion_count_aux_block_swap m n 0
+
+let parity_block_swap (m n: nat)
+  : Lemma (parity (block_swap_perm m n) == ((m * n) % 2 = 0))
+  = inversion_count_block_swap m n
+
+(* Definitional unfolding of block_swap_perm.fwd, useful downstream. *)
+let block_swap_perm_fwd (m n: nat) (k: fin (m + n))
+  : Lemma ((block_swap_perm m n).fwd k ==
+           (if (k <: nat) < m then (k <: nat) + n else (k <: nat) - m))
+  = ()

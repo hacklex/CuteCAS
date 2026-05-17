@@ -1,8 +1,8 @@
-module FStar.Algebra.Classes.Multiplicative
+module FStar.CAS.Multiplicative
 
 module TC=FStar.Tactics.Typeclasses
 
-open FStar.Algebra.Classes.Equatable
+open FStar.CAS.Equatable
 
 type either_of (a b: Type0) = c:Type {c==a \/ c==b}
 
@@ -130,10 +130,7 @@ instance has_mul_of_comm_magma (t:Type) {| m: mul_comm_magma t |} = m.has_mul
 class mul_comm_semigroup (t:Type) = {
   [@@@TC.no_method] mul_semigroup: mul_semigroup t;
   [@@@TC.no_method] mul_comm_magma : (m:mul_comm_magma t{m.has_mul == mul_semigroup.has_mul});
-  dvd: x:t -> y:t -> (p:bool{ p <==> (exists (c:t). y = c*x) });
 }
-
-let ( |: ) #t {| mul_comm_semigroup t |} (x y: t) = dvd x y
 
 instance sg_of_mul_comm_semigroup (t:Type) {| h: mul_comm_semigroup t |} = h.mul_semigroup
 instance mul_comm_magma_of_comm_sg (t:Type) {| h: mul_comm_semigroup t |} = h.mul_comm_magma <: mul_comm_magma t
@@ -179,8 +176,4 @@ let left_factor_is_right_factor_if_commutative (#t:Type)
       mul_commutativity c factor;
       symmetry  (c*factor) (factor*c);
       transitivity (factor*c) (c*factor) product
-    end in Classical.move_requires aux_2 ()  
-
-assume 
-  val ghost_of_fun_from_fun_of_ghost (#t:Type) (f: t -> GTot bool) 
-    : GTot (g:(t -> bool){forall (x:t). g x = f x })
+    end in Classical.move_requires aux_2 ()

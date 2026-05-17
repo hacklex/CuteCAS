@@ -1,4 +1,4 @@
-module FStar.Algebra.Matrix
+module FStar.CAS.Matrix
 
 (*
   Square matrices over an arbitrary type, represented as functions
@@ -13,11 +13,11 @@ module FStar.Algebra.Matrix
 
 module TC = FStar.Tactics.Typeclasses
 
-open FStar.Algebra.Classes.Equatable
-open FStar.Algebra.Classes.Grouplikes
-open FStar.Algebra.Classes.Ringlikes
-open FStar.Algebra.FinSum
-open FStar.Algebra.Permutation
+open FStar.CAS.Equatable
+open FStar.CAS.Grouplikes
+open FStar.CAS.Ringlikes
+open FStar.CAS.FinSum
+open FStar.CAS.Permutation
 
 (* The natural-number-bounded index type, shared with `Permutation`. *)
 
@@ -72,6 +72,17 @@ let id_matrix (#t: Type) {| h0: has_zero t |} {| h1: has_one t |}
               (n: nat) : square_matrix t n
   = fun i j -> if i = j then one else zero
 
+let id_matrix_diag (#t: Type) {| h0: has_zero t |} {| h1: has_one t |}
+                   (n: nat) (i: fin n)
+  : Lemma (id_matrix #t n i i == one)
+  = ()
+
+let id_matrix_off (#t: Type) {| h0: has_zero t |} {| h1: has_one t |}
+                  (n: nat) (i j: fin n)
+  : Lemma (requires ~(i == j))
+          (ensures  id_matrix #t n i j == zero)
+  = ()
+
 (* The zero matrix. *)
 let zero_matrix (#t: Type) {| has_zero t |} (n: nat) : square_matrix t n
   = fun _ _ -> zero
@@ -113,12 +124,12 @@ let matrix_add_eq_at (#t: Type) {| has_add t |} (#n: nat)
 
 let matrix_mul (#t: Type) {| r: semiring t |} (#n: nat)
                (a b: square_matrix t n) : square_matrix t n
-  = fun i j -> sum_range (fun (k: nat) -> if k < n then a i k * b k j else zero) 0 n
+  = fun i j -> fin_sum (fun (k: fin n) -> a i k * b k j)
 
 let matrix_mul_eq_at (#t: Type) {| r: semiring t |} (#n: nat)
                     (a b: square_matrix t n) (i j: fin n)
   : Lemma (matrix_mul a b i j ==
-           sum_range (fun (k: nat) -> if k < n then a i k * b k j else zero) 0 n) = ()
+           fin_sum (fun (k: fin n) -> a i k * b k j)) = ()
 
 (* ----------------------------------------------------------------- *)
 (*  Boolean matrix equality                                          *)

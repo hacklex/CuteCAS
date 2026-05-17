@@ -1,8 +1,8 @@
-module FStar.Algebra.Classes.Grouplikes
+module FStar.CAS.Grouplikes
 
 module TC=FStar.Tactics.Typeclasses
 
-open FStar.Algebra.Classes.Equatable
+open FStar.CAS.Equatable
 open FStar.Tactics
 
 
@@ -155,10 +155,7 @@ instance add_comm_magma_of_comm_sg (t:Type) {| h: add_comm_semigroup t |} = h.ad
 class mul_comm_semigroup (t:Type) = {
   [@@@TC.no_method] mul_semigroup: mul_semigroup t;
   [@@@TC.no_method] mul_comm_magma : (m:mul_comm_magma t{m.has_mul == mul_semigroup.has_mul});
-  dvd: x:t -> y:t -> (p:bool{ p <==> (exists (c:t). y = c*x) });
 }
-
-let ( |: ) #t {| mul_comm_semigroup t |} (x y: t) = dvd x y
 
 instance sg_of_mul_comm_semigroup (t:Type) {| h: mul_comm_semigroup t |} = h.mul_semigroup
 instance mul_comm_magma_of_comm_sg (t:Type) {| h: mul_comm_semigroup t |} = h.mul_comm_magma <: mul_comm_magma t
@@ -226,7 +223,7 @@ instance add_comm_monoid_of_comm_group (t:Type) {| h: add_comm_group t |} = h.ad
 (*  matrix groups, etc.). NOT used for the multiplicative structure of a    *)
 (*  field/division ring \u2014 there the carrier is `t \ {0}` and that is        *)
 (*  captured separately by `field`/`division_ring`. For "units of a ring"   *)
-(*  see `FStar.Algebra.Classes.RingUnits` (`ring_unit` record + its         *)
+(*  see `FStar.CAS.RingUnits` (`ring_unit` record + its         *)
 (*  `mul_group` instance).                                                  *)
 (* ------------------------------------------------------------------------ *)
 

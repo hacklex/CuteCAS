@@ -29,6 +29,12 @@ let poly_zero (#t:Type) : polynomial t = []
 
 let poly_one (#t:Type) {| h: has_one t |} : polynomial t = [one]
 
+let poly_one_def (#t:Type) {| h: has_one t |} (u: unit)
+  : Lemma (poly_one #t == [one]) = ()
+
+let poly_zero_def (#t:Type) (u: unit)
+  : Lemma (poly_zero #t == ([] <: polynomial t)) = ()
+
 (* ------------------------------------------------------------------------ *)
 (*  Equality                                                                *)
 (*                                                                          *)

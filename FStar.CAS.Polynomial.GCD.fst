@@ -29,6 +29,8 @@ let field_hz (#t:Type) (f: field t) : has_zero t = semiring_has_zero (field_sr f
 let field_am (#t:Type) (f: field t) : add_monoid t = (field_sr f).add_comm_monoid.add_monoid
 let field_rng (#t:Type) (f: field t) : ring t = f.division_ring.domain.ring
 let field_g (#t:Type) (f: field t) : add_comm_group t = (field_rng f).add_comm_group
+let field_acm (#t:Type) (f: field t) : add_comm_monoid t = (field_sr f).add_comm_monoid
+let field_cr (#t:Type) (f: field t) : commutative_ring t = f.commutative_ring
 
 (* ====================================================================== *)
 (*  Degree measure for termination                                         *)
@@ -497,3 +499,421 @@ let rec gcd_is_maximal (#t:Type) {| f: field t |} (p q d: polynomial t)
       divides_mod d p q;
       gcd_is_maximal q (poly_mod p q) d
     end
+
+(* ====================================================================== *)
+(*  Extended GCD: Bézout identity                                          *)
+(* ====================================================================== *)
+
+(* Helper: (a + b) + (c + neg(a)) ≡ b + c
+   All poly_add/poly_neg, no poly_sub in the goal to avoid TC diamond *)
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 60"
+let poly_add_neg_rearrange (#t:Type) {| f: field t |} (a b c: polynomial t)
+  : Lemma (let am = field_am f in
+           let g = field_g f in
+           let hz = field_hz f in
+           let na = poly_neg #t #g a in
+           poly_eq #t #hz
+             (poly_add #t #am (poly_add #t #am a b) (poly_add #t #am c na))
+             (poly_add #t #am b c))
+  = let sr = field_sr f in
+    let hz = field_hz f in
+    let am = field_am f in
+    let g = field_g f in
+    let acm = field_acm f in
+    semiring_has_zero_unfold sr;
+    let na = poly_neg #t #g a in
+    let add = poly_add #t #am in
+    // (a+b)+(c+na) → a+(b+(c+na))
+    poly_add_associative #t #am a b (add c na);
+    // c+na → na+c
+    poly_add_commutative #t #acm c na;
+    // b+(c+na) ≡ b+(na+c)
+    poly_eq_reflexivity #t #hz b;
+    poly_add_congruence #t #am b (add c na) b (add na c);
+    // (b+na)+c ≡ b+(na+c) [standard assoc direction]
+    poly_add_associative #t #am b na c;
+    // b+(na+c) ≡ (b+na)+c
+    poly_eq_symmetry #t #hz (add (add b na) c) (add b (add na c));
+    // b+(c+na) ≡ (b+na)+c
+    poly_eq_transitivity #t #hz (add b (add c na)) (add b (add na c)) (add (add b na) c);
+    // a+(b+(c+na)) ≡ a+((b+na)+c)
+    poly_eq_reflexivity #t #hz a;
+    poly_add_congruence #t #am a (add b (add c na)) a (add (add b na) c);
+    // (a+(b+na))+c ≡ a+((b+na)+c) [standard assoc direction]
+    poly_add_associative #t #am a (add b na) c;
+    // a+((b+na)+c) ≡ (a+(b+na))+c
+    poly_eq_symmetry #t #hz (add (add a (add b na)) c) (add a (add (add b na) c));
+    // (a+b)+(c+na) ≡ (a+(b+na))+c
+    poly_eq_transitivity #t #hz
+      (add (add a b) (add c na))
+      (add a (add b (add c na)))
+      (add a (add (add b na) c));
+    poly_eq_transitivity #t #hz
+      (add (add a b) (add c na))
+      (add a (add (add b na) c))
+      (add (add a (add b na)) c);
+    // Now: (a+(b+na)) ≡ b
+    // (a+b)+na ≡ a+(b+na) [standard assoc]
+    poly_add_associative #t #am a b na;
+    // (a+b)+na ≡ na+(a+b)
+    poly_add_commutative #t #acm (add a b) na;
+    // na+(a+b) ≡ (na+a)+b [reverse assoc]
+    poly_add_associative #t #am na a b;
+    poly_eq_symmetry #t #hz (add (add na a) b) (add na (add a b));
+    // (a+b)+na ≡ (na+a)+b
+    poly_eq_transitivity #t #hz (add (add a b) na) (add na (add a b)) (add (add na a) b);
+    // na+a ≡ 0
+    poly_neg_inversion #t #g a;
+    // (na+a)+b ≡ 0+b
+    poly_eq_reflexivity #t #hz b;
+    poly_add_congruence #t #am (add na a) b (poly_zero #t) b;
+    // 0+b ≡ b
+    poly_add_left_identity #t #am b;
+    // (a+b)+na ≡ b
+    poly_eq_transitivity #t #hz (add (add a b) na) (add (add na a) b) (add (poly_zero #t) b);
+    poly_eq_transitivity #t #hz (add (add a b) na) (add (poly_zero #t) b) b;
+    // a+(b+na) ≡ b
+    poly_eq_symmetry #t #hz (add (add a b) na) (add a (add b na));
+    poly_eq_transitivity #t #hz (add a (add b na)) (add (add a b) na) b;
+    // (a+(b+na))+c ≡ b+c
+    poly_eq_reflexivity #t #hz c;
+    poly_add_congruence #t #am (add a (add b na)) c b c;
+    // (a+b)+(c+na) ≡ b+c
+    poly_eq_transitivity #t #hz
+      (add (add a b) (add c na))
+      (add (add a (add b na)) c)
+      (add b c)
+#pop-options
+
+(* Extended GCD: returns (a, b, g) where a*p + b*q ≡ g = gcd(p,q) *)
+let rec poly_ext_gcd (#t:Type) {| f: field t |} (p q: polynomial t)
+  : Tot (polynomial t & polynomial t & polynomial t)
+    (decreases (degree_measure q))
+  = let sr = field_sr f in
+    semiring_has_zero_unfold sr;
+    if None? (degree q) then
+      (poly_one #t, poly_zero #t, p)
+    else begin
+      poly_mod_decreases_measure p q;
+      let (a', b', g) = poly_ext_gcd q (poly_mod p q) in
+      let quot = poly_div p q in
+      (b', poly_sub #t #(field_g f) a' (poly_mul #t #sr b' quot), g)
+    end
+
+(* Bézout identity: ext_gcd returns (a, b, g) such that a*p + b*q ≡ g *)
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 60"
+let rec ext_gcd_correct (#t:Type) {| f: field t |} (p q: polynomial t)
+  : Lemma (ensures (let sr = field_sr f in
+                    let hz = field_hz f in
+                    let am = field_am f in
+                    let (a, b, g) = poly_ext_gcd p q in
+                    poly_eq #t #hz
+                      (poly_add #t #am (poly_mul #t #sr a p) (poly_mul #t #sr b q))
+                      g))
+          (decreases (degree_measure q))
+  = let sr = field_sr f in
+    let hz = field_hz f in
+    let am = field_am f in
+    let g = field_g f in
+    let acm = field_acm f in
+    let cr = field_cr f in
+    let rng = field_rng f in
+    semiring_has_zero_unfold sr;
+    let add = poly_add #t #am in
+    let mul = poly_mul #t #sr in
+    let neg = poly_neg #t #g in
+    let sub = poly_sub #t #g in
+    if None? (degree q) then begin
+      let one_p = poly_one #t in
+      let zero_p = poly_zero #t in
+      poly_mul_one_left #t #sr p;
+      poly_mul_zero_left #t #sr q;
+      poly_eq_reflexivity #t #hz (mul one_p p);
+      poly_add_congruence #t #am (mul one_p p) (mul zero_p q) (mul one_p p) zero_p;
+      poly_add_right_identity #t #am (mul one_p p);
+      poly_eq_transitivity #t #hz
+        (add (mul one_p p) (mul zero_p q))
+        (add (mul one_p p) zero_p)
+        (mul one_p p);
+      poly_eq_transitivity #t #hz (add (mul one_p p) (mul zero_p q)) (mul one_p p) p
+    end
+    else begin
+      poly_mod_decreases_measure p q;
+      ext_gcd_correct q (poly_mod p q);
+      let (a', b', gv) = poly_ext_gcd q (poly_mod p q) in
+      let quot = poly_div p q in
+      let r = poly_mod p q in
+      // IH: a'*q + b'*r ≡ gv.  Need: b'*p + (sub a' (mul b' quot))*q ≡ gv
+      // (1) p ≡ q*quot + r  then (2) b'*p ≡ b'*(q*quot + r) ≡ b'*(q*quot) + b'*r
+      poly_divmod_correct p q;
+      poly_eq_reflexivity #t #hz b';
+      poly_eq_symmetry #t #hz (add (mul q quot) r) p;
+      poly_mul_congruence #t #sr b' p b' (add (mul q quot) r);
+      poly_mul_right_distrib #t #sr b' (mul q quot) r;
+      poly_eq_transitivity #t #hz
+        (mul b' p) (mul b' (add (mul q quot) r))
+        (add (mul b' (mul q quot)) (mul b' r));
+      // (5) b'*(q*quot) ≡ (b'*quot)*q via comm then assoc
+      poly_mul_commutative #t #cr q quot;
+      poly_eq_reflexivity #t #hz b';
+      poly_mul_congruence #t #sr b' (mul q quot) b' (mul quot q);
+      poly_mul_associative #t #sr b' quot q;
+      poly_eq_symmetry #t #hz (mul (mul b' quot) q) (mul b' (mul quot q));
+      poly_eq_transitivity #t #hz (mul b' (mul q quot)) (mul b' (mul quot q)) (mul (mul b' quot) q);
+      // (6) sub a' (mul b' quot) == add a' (neg (mul b' quot))
+      poly_sub_unfold #t #g a' (mul b' quot);
+      // (7) (sub a' X)*q ≡ a'*q + (neg X)*q via left distrib
+      poly_mul_left_distrib #t #sr a' (neg (mul b' quot)) q;
+      // (8) (neg X)*q ≡ -((b'*quot)*q) via comm + neg
+      poly_mul_commutative #t #cr (neg (mul b' quot)) q;
+      poly_mul_neg #t #rng q (mul b' quot);
+      poly_eq_transitivity #t #hz (mul (neg (mul b' quot)) q) (mul q (neg (mul b' quot))) (neg (mul q (mul b' quot)));
+      poly_mul_commutative #t #cr q (mul b' quot);
+      poly_neg_congruence #t #g (mul q (mul b' quot)) (mul (mul b' quot) q);
+      poly_eq_transitivity #t #hz (mul (neg (mul b' quot)) q) (neg (mul q (mul b' quot))) (neg (mul (mul b' quot) q));
+      // (9) (sub a' X)*q ≡ a'*q + neg((b'*quot)*q)
+      poly_eq_reflexivity #t #hz (mul a' q);
+      poly_add_congruence #t #am (mul a' q) (mul (neg (mul b' quot)) q) (mul a' q) (neg (mul (mul b' quot) q));
+      poly_eq_transitivity #t #hz
+        (mul (sub a' (mul b' quot)) q)
+        (add (mul a' q) (mul (neg (mul b' quot)) q))
+        (add (mul a' q) (neg (mul (mul b' quot) q)));
+      // (10) b'*p ≡ (b'*quot)*q + b'*r
+      poly_eq_reflexivity #t #hz (mul b' r);
+      poly_add_congruence #t #am (mul b' (mul q quot)) (mul b' r) (mul (mul b' quot) q) (mul b' r);
+      poly_eq_transitivity #t #hz (mul b' p) (add (mul b' (mul q quot)) (mul b' r)) (add (mul (mul b' quot) q) (mul b' r));
+      // (11) LHS ≡ ((b'*quot)*q + b'*r) + (a'*q + neg((b'*quot)*q))
+      poly_add_congruence #t #am
+        (mul b' p) (mul (sub a' (mul b' quot)) q)
+        (add (mul (mul b' quot) q) (mul b' r)) (add (mul a' q) (neg (mul (mul b' quot) q)));
+      // (12) rearrangement: (A+B)+(C+neg(A)) ≡ B+C
+      poly_add_neg_rearrange #t #f (mul (mul b' quot) q) (mul b' r) (mul a' q);
+      // (13) LHS ≡ b'*r + a'*q
+      let lhs = add (mul b' p) (mul (sub a' (mul b' quot)) q) in
+      poly_eq_transitivity #t #hz lhs
+        (add (add (mul (mul b' quot) q) (mul b' r)) (add (mul a' q) (neg (mul (mul b' quot) q))))
+        (add (mul b' r) (mul a' q));
+      // (14) b'*r + a'*q ≡ a'*q + b'*r ≡ gv
+      poly_add_commutative #t #acm (mul b' r) (mul a' q);
+      poly_eq_transitivity #t #hz lhs (add (mul b' r) (mul a' q)) (add (mul a' q) (mul b' r));
+      poly_eq_transitivity #t #hz lhs (add (mul a' q) (mul b' r)) gv
+    end
+#pop-options
+
+(* ====================================================================== *)
+(*  ext_gcd produces the same g as poly_gcd                               *)
+(* ====================================================================== *)
+
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 30"
+let rec ext_gcd_is_gcd (#t:Type) {| f: field t |} (p q: polynomial t)
+  : Lemma (ensures (let hz = field_hz f in
+                    let (_, _, g) = poly_ext_gcd p q in
+                    poly_eq #t #hz g (poly_gcd p q)))
+          (decreases (degree_measure q))
+  = let sr = field_sr f in
+    let hz = field_hz f in
+    semiring_has_zero_unfold sr;
+    if None? (degree q) then
+      poly_eq_reflexivity #t #hz p
+    else begin
+      poly_mod_decreases_measure p q;
+      ext_gcd_is_gcd q (poly_mod p q)
+    end
+#pop-options
+
+(* ====================================================================== *)
+(*  Degree-0 polynomial is poly_eq to its singleton [lc(p)]              *)
+(* ====================================================================== *)
+
+#push-options "--fuel 2 --ifuel 1 --z3rlimit 60"
+let degree_zero_eq_singleton (#t:Type) {| f: field t |} (p: polynomial t)
+  : Lemma (requires (let hz = field_hz f in degree #t #hz p == Some 0))
+          (ensures (let hz = field_hz f in
+                    poly_eq #t #hz p [leading_coefficient #t #hz p]))
+  = let sr = field_sr f in
+    let hz = field_hz f in
+    semiring_has_zero_unfold sr;
+    let lc = leading_coefficient #t #hz p in
+    coeff_at_degree_eq_lc #t #hz p;
+    // coeff_at p 0 = lc(p)
+    let q : polynomial t = [lc] in
+    let aux (i:nat) : Lemma (coeff_at #t #hz p i = coeff_at #t #hz q i)
+      = if i = 0 then begin
+          coeff_at_unfold #t #hz q 0;
+          assert (L.length q = 1);
+          assert (L.index q 0 == lc)
+        end
+        else begin
+          coeff_above_degree_is_zero #t #hz p i;
+          coeff_at_unfold #t #hz q i;
+          assert (i >= L.length q)
+        end
+    in
+    Classical.forall_intro aux;
+    coeff_at_to_poly_eq #t #hz p q
+#pop-options
+
+(* ====================================================================== *)
+(*  Singleton multiplication inverse over a field                          *)
+(* ====================================================================== *)
+
+#push-options "--fuel 2 --ifuel 1 --z3rlimit 80"
+let singleton_mul_inverse (#t:Type) {| f: field t |} (c: t{c <> zero})
+  : Lemma (ensures (let sr = field_sr f in
+                    let hz = field_hz f in
+                    let c_inv = f.division_ring.inv c in
+                    poly_eq #t #hz
+                      (poly_mul #t #sr [c_inv] [c])
+                      (poly_one #t)))
+  = let sr = field_sr f in
+    let hz = field_hz f in
+    semiring_has_zero_unfold sr;
+    let c_inv = f.division_ring.inv c in
+    let x = sr.mul_monoid.mul_semigroup.has_mul.op_Star c_inv c in
+    let e : polynomial t = [] in
+    // Step A: scalar_mul c_inv [c] == [x]
+    poly_mul_singleton #t #sr c_inv [c];
+    scalar_mul_cons #t #sr c_inv c e;
+    scalar_mul_nil #t #sr c_inv;
+    // Step B: poly_one == [one]
+    poly_one_def #t ();
+    // Step C: poly_eq [x] [one]
+    poly_eq_nil_right #t #hz e;
+    all_zero_nil #t #hz ();
+    // poly_eq [] [] == all_zero [] == true
+    let one_ = sr.mul_monoid.has_one.one in
+    poly_eq_cons_cons #t #hz x e one_ e;
+    // poly_eq [x] [one_] == (x = one_ && poly_eq [] []) == (x = one_ && true)
+    // Step D: x = one_ from inv spec
+    // c_inv * c = one from division_ring.inv, and * = sr.mul..., one = sr.mul...has_one.one
+    // Step E: bridge with poly_mul_singleton
+    let sm = scalar_mul #t #sr c_inv [c] in
+    let target = poly_one #t in
+    // sm == [x], target == [one_]
+    // poly_eq sm target follows since sm == [x] and target == [one_]
+    // and poly_eq [x] [one_] is established in step C
+    // Final: poly_eq result target via transitivity with sm
+    let result = poly_mul #t #sr [c_inv] [c] in
+    poly_eq_transitivity #t #hz result sm target
+#pop-options
+
+(* ====================================================================== *)
+(*  Degree-0 polynomial has a multiplicative inverse over a field          *)
+(* ====================================================================== *)
+
+(* Note: we avoid `inv` in the ensures to sidestep TC-diamond refinement
+   issues. The concrete inverse [lc_inv] is constructed in call sites. *)
+
+(* ====================================================================== *)
+(*  Euclid's lemma: coprime(p,q) ∧ p | a*q → p | a                       *)
+(* ====================================================================== *)
+
+let coprime (#t:Type) {| f: field t |} (p q: polynomial t) : bool =
+  let hz = field_hz f in
+  semiring_has_zero_unfold (field_sr f);
+  degree #t #hz (poly_gcd p q) = Some 0
+
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 60"
+let euclid_lemma (#t:Type) {| f: field t |} (p q a: polynomial t)
+  : Lemma (requires Some? (degree p) /\
+                   degree #t #(field_hz f) (poly_gcd p q) == Some 0 /\
+                   poly_divides p (poly_mul #t #(field_sr f) a q))
+          (ensures poly_divides p a)
+  = let sr = field_sr f in
+    let hz = field_hz f in
+    let am = field_am f in
+    let g = field_g f in
+    let cr = field_cr f in
+    semiring_has_zero_unfold sr;
+    let mul = poly_mul #t #sr in
+    let add = poly_add #t #am in
+    // From Bézout: s*p + t*q ≡ gv, where gv ≡ gcd(p,q)
+    ext_gcd_correct p q;
+    ext_gcd_is_gcd p q;
+    let (s, t_, gv) = poly_ext_gcd p q in
+    let gcd_pq = poly_gcd p q in
+    // gv ≡ gcd_pq, degree gcd_pq = Some 0
+    // Transfer degree: degree gv = Some 0
+    degree_well_defined #t #hz gv gcd_pq;
+    // Step 1: p | p (self), p | p*a, p | (p*a)*s
+    divides_self p;
+    divides_mul_right p p a;
+    divides_mul_right p (mul p a) s;
+    // (p*a)*s ≡ s*(p*a) by comm
+    poly_mul_commutative #t #cr (mul p a) s;
+    poly_divides_congruence p (mul (mul p a) s) (mul s (mul p a));
+    // s*(p*a) ≡ (s*p)*a by assoc (symmetric)
+    poly_mul_associative #t #sr s p a;
+    poly_eq_symmetry #t #hz (mul (mul s p) a) (mul s (mul p a));
+    poly_divides_congruence p (mul s (mul p a)) (mul (mul s p) a);
+    // So: p | (s*p)*a
+    // Step 2: p | a*q (hypothesis), p | (a*q)*t_
+    divides_mul_right p (mul a q) t_;
+    // (a*q)*t_ ≡ t_*(a*q) by comm
+    poly_mul_commutative #t #cr (mul a q) t_;
+    poly_divides_congruence p (mul (mul a q) t_) (mul t_ (mul a q));
+    // t_*(a*q) ≡ t_*(q*a) by comm inside + mul_cong
+    poly_mul_commutative #t #cr a q;
+    poly_eq_reflexivity #t #hz t_;
+    poly_mul_congruence #t #sr t_ (mul a q) t_ (mul q a);
+    poly_divides_congruence p (mul t_ (mul a q)) (mul t_ (mul q a));
+    // t_*(q*a) ≡ (t_*q)*a by assoc (symmetric)
+    poly_mul_associative #t #sr t_ q a;
+    poly_eq_symmetry #t #hz (mul (mul t_ q) a) (mul t_ (mul q a));
+    poly_divides_congruence p (mul t_ (mul q a)) (mul (mul t_ q) a);
+    // So: p | (t_*q)*a
+    // Step 3: p | ((s*p)*a)*1 + (t_*q)*a by divides_sum
+    divides_sum p (mul (mul s p) a) (poly_one #t) (mul (mul t_ q) a);
+    // ((s*p)*a)*1 ≡ (s*p)*a
+    poly_mul_one_right #t #sr (mul (mul s p) a);
+    poly_eq_reflexivity #t #hz (mul (mul t_ q) a);
+    poly_add_congruence #t #am
+      (mul (mul (mul s p) a) (poly_one #t)) (mul (mul t_ q) a)
+      (mul (mul s p) a) (mul (mul t_ q) a);
+    poly_divides_congruence p
+      (add (mul (mul (mul s p) a) (poly_one #t)) (mul (mul t_ q) a))
+      (add (mul (mul s p) a) (mul (mul t_ q) a));
+    // So: p | (s*p)*a + (t_*q)*a
+    // Step 4: (s*p)*a + (t_*q)*a ≡ (s*p + t_*q)*a by left_distrib (symmetric)
+    poly_mul_left_distrib #t #sr (mul s p) (mul t_ q) a;
+    poly_eq_symmetry #t #hz
+      (mul (add (mul s p) (mul t_ q)) a)
+      (add (mul (mul s p) a) (mul (mul t_ q) a));
+    poly_divides_congruence p
+      (add (mul (mul s p) a) (mul (mul t_ q) a))
+      (mul (add (mul s p) (mul t_ q)) a);
+    // So: p | (s*p + t_*q)*a
+    // Step 5: s*p + t_*q ≡ gv → (s*p + t_*q)*a ≡ gv*a
+    poly_eq_reflexivity #t #hz a;
+    poly_mul_congruence #t #sr (add (mul s p) (mul t_ q)) a gv a;
+    poly_divides_congruence p (mul (add (mul s p) (mul t_ q)) a) (mul gv a);
+    // So: p | gv*a
+    // Step 6: construct gv_inv = [lc_inv], show [lc_inv]*gv ≡ poly_one
+    lc_nonzero_of_degree_some #t #hz gv;
+    let lc = leading_coefficient #t #hz gv in
+    let lc_inv = f.division_ring.inv lc in
+    let gv_inv : polynomial t = [lc_inv] in
+    // Inline degree-zero inverse proof: gv ≡ [lc], [lc_inv]*gv ≡ [lc_inv]*[lc] ≡ poly_one
+    degree_zero_eq_singleton #t #f gv;
+    poly_eq_reflexivity #t #hz gv_inv;
+    poly_mul_congruence #t #sr gv_inv gv gv_inv [lc];
+    singleton_mul_inverse #t #f lc;
+    poly_eq_transitivity #t #hz (mul gv_inv gv) (mul gv_inv [lc]) (poly_one #t);
+    // Step 7: p | (gv*a)*gv_inv
+    divides_mul_right p (mul gv a) gv_inv;
+    // Step 8: (gv*a)*gv_inv ≡ gv_inv*(gv*a) by comm
+    poly_mul_commutative #t #cr (mul gv a) gv_inv;
+    poly_divides_congruence p (mul (mul gv a) gv_inv) (mul gv_inv (mul gv a));
+    // Step 9: gv_inv*(gv*a) ≡ (gv_inv*gv)*a by assoc (sym)
+    poly_mul_associative #t #sr gv_inv gv a;
+    poly_eq_symmetry #t #hz (mul (mul gv_inv gv) a) (mul gv_inv (mul gv a));
+    poly_divides_congruence p (mul gv_inv (mul gv a)) (mul (mul gv_inv gv) a);
+    // Step 10: gv_inv*gv ≡ poly_one (proved inline above)
+    // → (gv_inv*gv)*a ≡ poly_one * a
+    poly_eq_reflexivity #t #hz a;
+    poly_mul_congruence #t #sr (mul gv_inv gv) a (poly_one #t) a;
+    poly_divides_congruence p (mul (mul gv_inv gv) a) (mul (poly_one #t) a);
+    // Step 11: poly_one * a ≡ a
+    poly_mul_one_left #t #sr a;
+    poly_divides_congruence p (mul (poly_one #t) a) a
+#pop-options

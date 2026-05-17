@@ -27,6 +27,12 @@ val poly_zero (#t:Type) : polynomial t
 
 val poly_one (#t:Type) {| h: has_one t |} : polynomial t
 
+val poly_one_def (#t:Type) {| h: has_one t |} (u: unit)
+  : Lemma (poly_one #t == [one])
+
+val poly_zero_def (#t:Type) (u: unit)
+  : Lemma (poly_zero #t == ([] <: polynomial t))
+
 (* ------------------------------------------------------------------------ *)
 (*  Coefficient-wise equality (trailing zeros ignored)                      *)
 (* ------------------------------------------------------------------------ *)

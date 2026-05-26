@@ -4,27 +4,34 @@ This repository is a Windows F\* sandbox driving the **CuteCAS** project: an
 in-progress verified Risch symbolic integrator (purely transcendental case)
 built on a typeclass tower of algebraic structures.
 
-## 0. Module naming
+## 0. Layout and module naming
 
-All actively developed modules live under the **`FStar.CAS.*`** namespace
-(e.g. `FStar.CAS.Equatable`, `FStar.CAS.Ringlikes`, `FStar.CAS.FinSum`,
-`FStar.CAS.Permutation`, `FStar.CAS.Permutation.Enum`,
-`FStar.CAS.Permutation.Sum`, `FStar.CAS.Matrix`, `FStar.CAS.Matrix.Ring`,
-`FStar.CAS.Matrix.Determinant`, `FStar.CAS.Polynomial`, `FStar.CAS.Fractions`,
-…). New modules MUST use this namespace.
+The repository is **flat**: all source `.fst` / `.fsti` files live at the
+repository root (`c:\Projects\CuteCAS\`). There is no `core\`,
+`new\`, or `proto\` subdirectory anymore — those folders were
+consolidated into the root in the 2026-05-25 cleanup. Run F\* from the
+repo root with `--include . --cache_checked_modules --cache_dir obj`.
 
-The `FStar.Algebra.Classes.*` and `FStar.Algebra.{FinSum,Permutation,Matrix,
-Determinant,…}` names are **retired**: they were renamed to `FStar.CAS.*` in
-a single rename pass. Do not re-introduce them.
+All actively developed modules live under the **`Core.*`** namespace
+(e.g. `Core.Algebra`, `Core.Algebra.Notation`, `Core.FinSum`,
+`Core.Permutation`, `Core.Permutation.Enum`, `Core.Permutation.Sum`,
+`Core.Matrix`, `Core.Matrix.Ring`, `Core.Matrix.Determinant`,
+`Core.Polynomial.Class`, `Core.Polynomial.Class.Div`, `Core.Fractions`,
+`Core.Tactics.CanonRing`, `Core.Tactics.CanonCommGroup`, …).
+New modules MUST use this namespace.
+
+The earlier `FStar.CAS.*` and `FStar.Algebra.*` names are **retired**:
+the old tower was discarded when the fine-grained-TC `Core.*` rewrite
+landed. Do not re-introduce those names.
 
 Heavy modules (≳400 LOC with a clear public/private separation) ship as
 `.fst` + `.fsti` pairs: signatures and class declarations in `.fsti`, proofs
 and helper lemmas in `.fst`.
 
-Legacy files in this repo — `AlgebraTypes.fst`, `Polynomials.*.fst`,
-`Fractions.*.fst`, `Fractions.fst`, `PigeonPrinciple.fst` — are historical
-artifacts kept only for reference. They are **not** part of the new typeclass
-tower and are not maintained.
+Legacy artifacts live under `legacy\` (currently just
+`legacy\AlgebraTypes.fst`, the old monolithic algebraic-types module).
+They are kept for reference only — **not** part of the new tower, not
+maintained, not on the include path.
 
 Agents working in this repo MUST follow the rules below.
 
@@ -142,8 +149,79 @@ input) and completeness (Liouville) must be fully proven.
   evolution.
 - Per-lemma `let ( * ) = r.mul in …`-style bindings to short-circuit
   typeclass resolution.
+- **NEVER write lambdas in postconditions, lemma statements, or `prod_range
+  /fin_sum/sum_over_fns_to` arguments.** F\* does not reduce lambda bodies
+  through SMT-equality reliably; you will produce unprovable lemmas. Instead,
+  give every function used in a lemma statement a top-level (or `private let`)
+  name, take any captured implicits as parameters of that named function,
+  and write lemma statements using the **name**. Examples of mandatory
+  factoring:
+  - `prod_range (fun (k:fin n) -> a i k * b k j) 0 n` → introduce
+    `let row_col_term (a b: ...) (i j: fin n) (k:fin n) : t = a i k * b k j`,
+    then `prod_range (row_col_term a b i j) 0 n`.
+  - `sum_over_fns_to n m (fun phi -> prod_range (inner_term phi) 0 n)` →
+    introduce a named outer term too.
+  - Lambdas inside proof *bodies* (between `let .. in` etc., not on the
+    SMT side) are fine — the rule is about postconditions and lemma
+    statements and any argument that SMT will need to unify across calls.
+- The "no lambdas" rule is what doomed the old `..\new\` tower's Det.Mul:
+  hours were spent on `fun (k:fin n) -> ...` lambdas that SMT could not
+  bridge to other definitions. Don't repeat that mistake.
 
-## 7. Working with the plan
+## 7. Proof development methodology
+
+When developing new lemmas or proofs:
+
+### 7.1 Isolate new work in temporary files
+
+Never re-verify already-proven modules. When working on a new lemma:
+
+- Create a **temporary scratch file** (e.g. `Scratch.fst`) that `open`s the
+  already-verified modules (their `.checked` files in `obj/` will be reused).
+- Prove the lemma in the scratch file first, then move it to its final home
+  once verified.
+- This avoids wasting minutes re-checking hundreds of lines of proven code
+  on every iteration.
+
+### 7.2 Decompose proofs into small lemmas
+
+Do NOT write monolithic proof bodies. Factor out every non-trivial
+sub-fact as its own named lemma. Examples of obvious factoring candidates:
+
+- `minor (transpose m) i j = transpose (minor m j i)` — separate lemma.
+- Any indexed-value equality (e.g. showing two matrix expressions agree at
+  every slot) — write an explicit formula for each side's `(i,j)`-th entry
+  and show they refer to the same original matrix slot.
+- Any `fin_sum` congruence bridge — wrap in a one-line helper that calls
+  `fin_sum_congruence_cr`.
+
+Small lemmas are easier for Z3, easier to debug, and reusable.
+
+### 7.3 Use sliding `admit()` / `assert()` to pinpoint failures
+
+When a lemma body fails verification, do **NOT** rewrite the entire body
+speculatively. Instead:
+
+1. Insert `admit()` at the END of the failing body — confirm the lemma
+   passes (proving the setup code is fine, only the conclusion is wrong).
+2. **Slide the `admit()` upward** between statements to find the exact
+   statement that breaks.
+3. When you find the failing statement, insert `assert (fact_you_expect)`
+   followed by `admit()` to test whether the precondition you think holds
+   actually does.
+4. Once you identify the exact gap, fix ONLY that gap.
+
+This is the **only** acceptable debugging workflow for stuck proofs.
+Blind full-body rewrites are forbidden — they waste verification time and
+often introduce new issues.
+
+### 7.4 `admit()` is a debugging tool, not committed code
+
+Rule §4 still applies: no `admit()` in final committed code. But during
+development iterations, `admit()` is the correct way to isolate failures.
+Remove all `admit()` calls before declaring a lemma done.
+
+## 8. Working with the plan
 
 There is a long-running session plan at
 `C:\Users\Alex\.copilot\session-state\<session-id>\plan.md`. Agents read it
@@ -151,3 +229,11 @@ at session start, update it at meaningful milestones, and respect the phase
 structure laid out there. The phase plan and the rules above are
 authoritative; this `.github/copilot-instructions.md` file just makes the
 non-negotiables explicit to any future agent that hasn't seen the plan yet.
+
+## 9. F\* MCP server
+
+When available, use the **fstar-mcp** tools (`fstar-create_session`,
+`fstar-typecheck_buffer`, `fstar-get_proof_context`, etc.) for interactive
+verification instead of spawning `fstar.exe` from the command line. The MCP
+server gives incremental feedback, proof context, and hover information
+without full-module re-verification overhead.

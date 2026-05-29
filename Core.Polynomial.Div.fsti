@@ -1,8 +1,8 @@
-module Core.Polynomial.Class.Div
+module Core.Polynomial.Div
 
 (*
    Euclidean division of univariate polynomials over a field, ported to
-   the new Core.Polynomial.Class tower.
+   the new Core.Polynomial tower.
 
    Provides:
      - monomial constructor
@@ -19,7 +19,7 @@ module TC = FStar.Tactics.Typeclasses
 
 open Core.Algebra
 open Core.Algebra.Notation
-open Core.Polynomial.Class
+open Core.Polynomial
 
 (* ------------------------------------------------------------------ *)
 (*  Monomial: monomial c n = c*x^n = [0;...;0;c] with n leading zeros *)
@@ -86,6 +86,11 @@ val monomial_coeff (#t:Type) {| cr: commutative_ring t |}
                      (c: t) (n: nat) (i: nat)
   : Lemma (ensures (if i = n then coeff (monomial c n) i = c
                     else coeff (monomial c n) i = (zero <: t)))
+
+(* coeff (zero @ p) (i+1) = coeff p i.                                  *)
+val zero_shift_coeff (#t:Type) {| cr: commutative_ring t |}
+                     (p: polynomial t) (i: nat)
+  : Lemma (ensures coeff ((zero <: t) @ p) (Prims.op_Addition i 1) = coeff p i)
 
 (* coeff (poly_mul (monomial c k) q) (k+j) = c * coeff q j.            *)
 val monomial_mul_coeff (#t:Type) {| cr: commutative_ring t |}

@@ -1,12 +1,12 @@
-module Core.Polynomial.Class.Unique
+module Core.Polynomial.Unique
 
 module TC = FStar.Tactics.Typeclasses
 module L  = FStar.List.Tot
 
 open Core.Algebra
 open Core.Algebra.Notation
-open Core.Polynomial.Class
-open Core.Polynomial.Class.Div
+open Core.Polynomial
+open Core.Polynomial.Div
 open Core.Tactics.CanonRing
 
 (* ================================================================ *)

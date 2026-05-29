@@ -21,7 +21,7 @@ module TC = FStar.Tactics.Typeclasses
 
 open Core.Algebra
 open Core.Algebra.Notation
-open Core.Polynomial.Class
+open Core.Polynomial
 
 (* ---------------------------------------------------------------- *)
 (*  Carrier                                                          *)

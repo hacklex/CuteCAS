@@ -1,10 +1,10 @@
-module Core.Polynomial.Class.Tests
+module Core.Polynomial.Tests
 
 (*
    Acceptance / regression tests for the polynomial Class tower.
 
    The goal of this module is purely to *exercise* the API surface of
-   Core.Polynomial.Class and Core.Polynomial.Class.Div from the
+   Core.Polynomial and Core.Polynomial.Div from the
    perspective of a downstream user:
 
      - basic ring / integral-domain axioms resolve through the typeclass
@@ -32,8 +32,8 @@ module L  = FStar.List.Tot
 
 open Core.Algebra
 open Core.Algebra.Notation
-open Core.Polynomial.Class
-open Core.Polynomial.Class.Div
+open Core.Polynomial
+open Core.Polynomial.Div
 open Core.Tactics.CanonRing
 
 (*  Bring a polynomial CR instance into TC scope wherever we need one.

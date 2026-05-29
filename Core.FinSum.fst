@@ -1166,6 +1166,27 @@ let fin_prod_congruence
     Classical.forall_intro prf;
     fin_prod_congruence_forall f g
 
+(* ---------- Propositional-equality congruences ---------- *)
+
+let rec sum_range_eq_pointwise #t {| acg:add_comm_group t |} (f g: nat -> t) (from: nat) (to: nat{from < to})
+  : Lemma (requires (forall (k: nat{k >= from /\ k < to}). f k == g k))
+          (ensures sum_range f from to == sum_range g from to)
+          (decreases (to - from)) =
+  sum_range_unfold_left f from to;
+  sum_range_unfold_left g from to;
+  if (from < to - 1) then sum_range_eq_pointwise f g (nat_succ from) to
+  else begin
+    sum_range_empty f (nat_succ from) to;
+    sum_range_empty g (nat_succ from) to
+  end
+
+let fin_sum_eq_pointwise #t {| acg:add_comm_group t |} (#n:pos) (f g: fin n -> t)
+  : Lemma (requires (forall (k: fin n). f k == g k))
+          (ensures fin_sum f == fin_sum g) =
+  let lifted_f (k:nat) = if k < n then f (k <: fin n) else zero in
+  let lifted_g (k:nat) = if k < n then g (k <: fin n) else zero in
+  sum_range_eq_pointwise lifted_f lifted_g 0 n
+
 (* ---------------- sum_list / map ---------------- *)
 
 let sum_list_map_neg

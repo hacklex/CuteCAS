@@ -108,9 +108,15 @@ F\* verification can be expensive. Hard constraints on this machine:
   large `N`. Single-threaded verification is the default.
 - Verify one module at a time. Do not kick off whole-tree rebuilds
   speculatively.
-- Per-lemma `--z3rlimit` should be in the **30–80** range. If a single
-  lemma needs `--z3rlimit > 80` to close, that is a code smell: factor it,
-  rewrite it, or split the file.
+- **DO NOT use `#push-options` / `#pop-options` in this project.** All proofs
+  in this project verify under F\*'s default limits. When verification fails,
+  the problem is proof structure (missing lemma, wrong decomposition, SMT
+  can't see a fact), NOT resource exhaustion. If you temporarily use
+  `#push-options` during proof development to isolate a failure, **remove it
+  once the proof is done** — you almost certainly didn't need it.
+- If a lemma genuinely won't verify under defaults after structural fixes,
+  that is a signal to decompose further (factor out a helper lemma, add an
+  intermediate assertion), not to bump rlimit.
 - One module per file. When a `.fst` grows past ~600 LOC or ~25 lemmas,
   split it along a natural seam.
 - Always use the `.checked` cache (`--cache_checked_modules --cache_dir obj`).
@@ -149,24 +155,34 @@ input) and completeness (Liouville) must be fully proven.
   evolution.
 - Per-lemma `let ( * ) = r.mul in …`-style bindings to short-circuit
   typeclass resolution.
-- **NEVER write lambdas in postconditions, lemma statements, or `prod_range
-  /fin_sum/sum_over_fns_to` arguments.** F\* does not reduce lambda bodies
-  through SMT-equality reliably; you will produce unprovable lemmas. Instead,
-  give every function used in a lemma statement a top-level (or `private let`)
-  name, take any captured implicits as parameters of that named function,
-  and write lemma statements using the **name**. Examples of mandatory
-  factoring:
-  - `prod_range (fun (k:fin n) -> a i k * b k j) 0 n` → introduce
-    `let row_col_term (a b: ...) (i j: fin n) (k:fin n) : t = a i k * b k j`,
-    then `prod_range (row_col_term a b i j) 0 n`.
-  - `sum_over_fns_to n m (fun phi -> prod_range (inner_term phi) 0 n)` →
-    introduce a named outer term too.
-  - Lambdas inside proof *bodies* (between `let .. in` etc., not on the
-    SMT side) are fine — the rule is about postconditions and lemma
-    statements and any argument that SMT will need to unify across calls.
-- The "no lambdas" rule is what doomed the old `..\new\` tower's Det.Mul:
-  hours were spent on `fun (k:fin n) -> ...` lambdas that SMT could not
-  bridge to other definitions. Don't repeat that mistake.
+- **ABSOLUTE: no lambdas in definitions, postconditions, preconditions,
+  or type refinements.** Use named combinators from
+  `Core.Algebra.Combinators` (`swap_args`, `pointwise_mul`,
+  `pointwise_add`, `const`, `fcomp`, `apply_along`, `restrict_fn`).
+  Use `row`/`col` instead of partial application of a matrix. Use
+  `vector_dot` instead of `fin_sum (fun k -> ...)`.
+  Lambdas in proof bodies are acceptable only as a last resort; stop
+  and ask if you feel one is needed.
+- **Instance records list named functions directly** — no lambda wrappers:
+  ```fstar
+  instance foo = { op = named_op; law = named_law_lemma }
+  (* NOT: { op = (fun x y -> ...); law = (fun a b c -> ...) } *)
+  ```
+- **Use `Classical.forall_intro_N` with the law directly** when the law's
+  type matches, rather than writing per-element proof helpers:
+  ```fstar
+  Classical.forall_intro_3 add_associativity  (* good *)
+  (* NOT: let pf i j = add_associativity ... in forall_intro_2 pf *)
+  ```
+- Matrix dimensions are `pos`, never `nat`. `square_matrix t n` with
+  `n: pos`.
+- Use `unfold let` for definitions that should be transparent (e.g.
+  `vector_dot`, `matrix_mul`, `matrix_eq`).
+- The "no lambdas" rule is what doomed the old tower's Det.Mul and
+  me_col_k_is_zero: hours were spent on `fun (k:fin n) -> ...` lambdas
+  that SMT could not bridge across TC-instance boundaries. The fix that
+  finally worked: replace all named `let f x = ...` with inline
+  combinator calls so every `fin_sum` argument is a single named term.
 
 ## 7. Proof development methodology
 
@@ -237,3 +253,49 @@ When available, use the **fstar-mcp** tools (`fstar-create_session`,
 verification instead of spawning `fstar.exe` from the command line. The MCP
 server gives incremental feedback, proof context, and hover information
 without full-module re-verification overhead.
+
+## 10. IDE-accelerated refactoring tools
+
+The `tools\` directory contains IDE-accelerated refactoring scripts:
+
+- **`tools\fstar-refactor-ide.ps1`** — batch transforms per-definition.
+  Uses F\*'s IDE `full-buffer` protocol for incremental verification
+  (10-100× faster than standalone `fstar.exe`). Modes: `count`, `list`,
+  `get`, `transform`. Built-in safety checks: definition count, line count,
+  CRLF integrity, and F\* segment parse count (all compared pre vs post).
+  Transform scripts live in `tools\transforms\*.ps1`.
+
+- **`tools\remove-push-pop.ps1`** — removes `#push-options`/`#pop-options`
+  pairs. Processes last-to-first; each removal is verified by the IDE
+  before writing.
+
+Usage example:
+```powershell
+# Count definitions in a file
+.\tools\fstar-refactor-ide.ps1 -File Foo.fst -Mode count
+
+# Run a transform (verifies each change, rolls back failures)
+.\tools\fstar-refactor-ide.ps1 -File Foo.fst -Mode transform `
+    -Script .\tools\transforms\drop-fin-casts.ps1 -LogFile log.txt
+
+# Remove unnecessary push-pop pairs
+.\tools\remove-push-pop.ps1 -File Foo.fst -LogFile log.txt
+```
+
+These tools are **safe by construction**: every edit is verified by the F\*
+IDE before being committed to disk. Failures are rolled back automatically.
+
+## 11. Proof style: why verification succeeds under defaults
+
+This project's proofs are structured as **explicit lemma chains** — each step
+invokes a specific lemma, giving Z3 a series of small obligations rather than
+one big one. This style means:
+
+- Z3 never needs high fuel/ifuel (we don't rely on recursive unfolding).
+- Z3 never needs high rlimit (each individual obligation is trivial).
+- When verification *fails*, it's because SMT can't see a needed fact
+  (wrong decomposition, missing intermediate lemma), never because it
+  ran out of time searching.
+
+Corollary: **never blame resource limits for a failed proof.** The fix is
+always structural: factor, assert an intermediate, or invoke a missing lemma.

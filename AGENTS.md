@@ -123,23 +123,115 @@ from projections on the un-inlined form, breaking SMT equality. Use
 plain `instance` only. If you need normalization, use the `compute()`
 tactic at the use site.
 
-### 1.6 Named top-level functions over inline lambdas
+### 1.6 Named combinators over inline lambdas — ABSOLUTE RULE
 
-If an expression involving lambdas might appear in a postcondition,
-under a tactic, as an index of a `fin_sum`, etc., **bind it as a named
-top-level function**. Closures bound by `let` (even named `let`) are
-distinct SMT terms from inline lambdas even with identical bodies.
+**No lambda (`fun _ ->`) shall appear in any definition's type, pre-
+condition, post-condition, or refinement.** If a lambda appears in the
+_body_ of a definition, it must be an exceptional last-resort — stop
+and ask the user before introducing one.
 
+Use the combinator vocabulary from `Core.Algebra.Combinators`:
+- `swap_args f` instead of `fun y x -> f x y`
+- `pointwise_mul f g` instead of `fun x -> f x * g x`
+- `pointwise_add f g` instead of `fun x -> f x + g x`
+- `pointwise_neg f` instead of `fun x -> neg (f x)`
+- `const v` instead of `fun _ -> v`
+- `fcomp f g` instead of `fun x -> f (g x)`
+- `apply_along a phi` instead of `fun i -> a i (phi i)`
+- `restrict_fn f` instead of `fun (i: fin k) -> f (i <: fin (k+1))`
+- `row a i` instead of `fun j -> a i j` or `a i`
+- `col a j` instead of `fun i -> a i j` or `swap_args a j`
+
+**Why this matters (proven by experience):**
+
+1. **Let-binding opacity in SMT**: `let f x = body` creates a named
+   SMT symbol. `fin_sum f` and `fin_sum (fun x -> body)` are
+   syntactically distinct and SMT cannot apply congruence between them.
+2. **Typeclass diamond amplification**: When lambdas contain operators
+   (`*`, `+`), TC resolution stamps different instance paths into
+   syntactically-identical-looking bodies, producing terms that Z3
+   cannot unify even with `assert`.
+3. **Named combinators are stable under refactoring**: A `pointwise_mul`
+   call survives any change to TC resolution paths because its identity
+   is its _name_, not a lambda body that must be α-equivalent.
+4. **Post-condition matching**: Lemma posts mentioning `fin_sum f` only
+   match at call sites when `f` is THE SAME named term. Lambdas
+   re-elaborated at different sites get different internal names.
+
+**For definitions:**
 ```fstar
-let cofactor_body (#t:Type) (m: matrix t n n) (i j: nat{i<n}) (k:nat{k<n}) : t = …
-  
-let det_via_cofactor m i =
-  fin_sum (cofactor_body m i) ← good
-  // not: fin_sum (fun k -> …) ← bad
+(* GOOD — combinators, no lambdas *)
+unfold let matrix_mul a b i j = vector_dot (row a i) (col b j)
+let transpose a = swap_args a
+let col a j = swap_args a j
+let zero_matrix r c = zero
+
+(* BAD — lambdas in definitions *)
+let matrix_mul a b = fun i j -> fin_sum (fun k -> a i k * b k j)
+let transpose a = fun i j -> a j i
+let zero_matrix n = fun _ _ -> zero
 ```
 
-This was a major source of friction in the old tower (it produced the
-let-binding opacity that defeated `compute()`-based bridges).
+**For proofs / instance records:**
+```fstar
+(* GOOD — named functions directly *)
+instance matrix_equatable t n = {
+  eq = matrix_eq_bool;
+  reflexivity = matrix_eq_bool_reflexivity;
+  symmetry = matrix_eq_bool_symmetry;
+  transitivity = matrix_eq_bool_transitivity;
+}
+
+(* BAD — lambda wrappers *)
+instance matrix_equatable t n = {
+  transitivity = (fun a b c -> ...);  (* NO! *)
+}
+```
+
+**For algebraic law proofs:**
+```fstar
+(* GOOD — use forall_intro with the law directly *)
+let matrix_add_associativity a b c =
+  Classical.forall_intro_3 add_associativity;
+  matrix_eq_bool_iff_pointwise ...
+
+(* BAD — per-element proof function *)
+let matrix_add_associativity a b c =
+  let pf (i j: fin n) : Lemma (...) = g.add_associativity ... in
+  Classical.forall_intro_2 pf; ...
+```
+
+**The ONLY acceptable exception**: `matrix_mul_eq_at` (and analogous
+"bridge" lemmas) that exist solely to connect a combinator-based
+definition to the old lambda form that downstream callers may have
+committed in their `.checked` files. These bridges are marked with a
+comment `(* bridge lemma — lambda necessary *)`.
+
+### 1.7 Use `pos` for matrix dimensions
+
+Matrix dimensions are always `pos` (positive), never `nat`. A 0×0
+matrix is vacuous and causes edge-case noise in proofs. The type
+`square_matrix t n = fin n -> fin n -> t` with `n: pos` eliminates
+this class of problems.
+
+### 1.8 Use `unfold let` for transparent definitions
+
+Definitions that should reduce at the call site (so callers never need
+a reveal lemma) must be `unfold let`:
+```fstar
+unfold let vector_dot a b = fin_sum (pointwise_mul a b)
+unfold let matrix_mul a b i j = vector_dot (row a i) (col b j)
+unfold let matrix_eq a b = matrix_eq_prop_pointwise a b
+```
+
+Non-`unfold` definitions require explicit reveal/unfold lemmas.
+
+### 1.9 Propositional matrix equality as the proof workhorse
+
+Use `matrix_eq` (propositional, `forall i j. a i j = b i j`) for
+proofs. Use `matrix_eq_bool` (decidable bool) only for the `equatable`
+instance. Provide column-wise and row-wise intro/elim lemmas so
+callers never need to manually quantify over indices.
 
 ## 2. Workflow rules
 

@@ -26,31 +26,12 @@ module L = FStar.List.Tot
 open Core.Algebra
 open Core.Permutation
 open Core.Matrix
-open Core.Polynomial.Class
+open Core.Polynomial
 
 unfold let nat_add (a b: nat) : nat = Prims.op_Addition a b
 unfold let nat_sub (a: nat) (b: nat{b <= a}) : nat = Prims.op_Subtraction a b
 unfold let int_add (a b: int) : int = Prims.op_Addition a b
 unfold let int_sub (a b: int) : int = Prims.op_Subtraction a b
-
-(* ------------------------------------------------------------------ *)
-(*  Safe coefficient lookup with int index (returns zero for i < 0).  *)
-(* ------------------------------------------------------------------ *)
-
-let safe_coeff (#t: Type) {| cr: commutative_ring t |}
-               (p: polynomial t) (i: int) : t
-  = if i >= 0 then coeff p i else (zero <: t)
-
-let safe_coeff_neg (#t: Type) {| cr: commutative_ring t |}
-                   (p: polynomial t) (i: int)
-  : Lemma (requires i < 0)
-          (ensures safe_coeff p i == (zero <: t))
-  = ()
-
-let safe_coeff_nonneg (#t: Type) {| cr: commutative_ring t |}
-                      (p: polynomial t) (i: nat)
-  : Lemma (safe_coeff p i == coeff p i)
-  = ()
 
 (* ------------------------------------------------------------------ *)
 (*  Sylvester matrix                                                  *)
@@ -67,20 +48,20 @@ let safe_coeff_nonneg (#t: Type) {| cr: commutative_ring t |}
 (*  with descending column degrees):                                  *)
 (*    S[i][j] = p_{m_deg + i - j}   for 0 <= i < n_deg                *)
 (*    S[i][j] = q_{i - j}           for n_deg <= i                    *)
-(*  (with `safe_coeff` returning zero outside [0, deg]).              *)
+(*  (with `coeff` returning zero outside [0, deg] and for i < 0).    *)
 (* ------------------------------------------------------------------ *)
 
 let sylvester_matrix
   (#t: Type) {| cr: commutative_ring t |}
-  (m_deg n_deg: nat) (p q: polynomial t)
+  (m_deg n_deg: nat{nat_add m_deg n_deg > 0}) (p q: polynomial t)
   : square_matrix t (nat_add m_deg n_deg)
   = fun (i: fin (nat_add m_deg n_deg)) (j: fin (nat_add m_deg n_deg)) ->
       let i_nat : nat = i in
       let j_nat : nat = j in
       if i_nat < n_deg then
-        safe_coeff p (int_sub (int_add m_deg i_nat) j_nat)
+        coeff p (int_sub (int_add m_deg i_nat) j_nat)
       else
-        safe_coeff q (int_sub i_nat j_nat)
+        coeff q (int_sub i_nat j_nat)
 
 (* ------------------------------------------------------------------ *)
 (*  Lookup lemmas                                                     *)
@@ -88,25 +69,25 @@ let sylvester_matrix
 
 let sylvester_p_block_lookup
   (#t: Type) {| cr: commutative_ring t |}
-  (m_deg n_deg: nat) (p q: polynomial t)
+  (m_deg n_deg: nat{nat_add m_deg n_deg > 0}) (p q: polynomial t)
   (i j: fin (nat_add m_deg n_deg))
   : Lemma (requires (i <: nat) < n_deg)
           (ensures sylvester_matrix m_deg n_deg p q i j
-                == safe_coeff p (int_sub (int_add m_deg i) j))
+                == coeff p (int_sub (int_add m_deg i) j))
   = ()
 
 let sylvester_q_block_lookup
   (#t: Type) {| cr: commutative_ring t |}
-  (m_deg n_deg: nat) (p q: polynomial t)
+  (m_deg n_deg: nat{nat_add m_deg n_deg > 0}) (p q: polynomial t)
   (i j: fin (nat_add m_deg n_deg))
   : Lemma (requires (i <: nat) >= n_deg)
           (ensures sylvester_matrix m_deg n_deg p q i j
-                == safe_coeff q (int_sub i j))
+                == coeff q (int_sub i j))
   = ()
 
 let sylvester_p_block_in_range
   (#t: Type) {| cr: commutative_ring t |}
-  (m_deg n_deg: nat) (p q: polynomial t)
+  (m_deg n_deg: nat{nat_add m_deg n_deg > 0}) (p q: polynomial t)
   (i j: fin (nat_add m_deg n_deg))
   : Lemma (requires (i <: nat) < n_deg /\
                     (j <: nat) <= (i <: nat) + m_deg /\
@@ -117,7 +98,7 @@ let sylvester_p_block_in_range
 
 let sylvester_p_block_right_zero
   (#t: Type) {| cr: commutative_ring t |}
-  (m_deg n_deg: nat) (p q: polynomial t)
+  (m_deg n_deg: nat{nat_add m_deg n_deg > 0}) (p q: polynomial t)
   (i j: fin (nat_add m_deg n_deg))
   : Lemma (requires (i <: nat) < n_deg /\
                     (j <: nat) > (i <: nat) + m_deg)
@@ -126,7 +107,7 @@ let sylvester_p_block_right_zero
 
 let sylvester_p_block_left_zero
   (#t: Type) {| cr: commutative_ring t |}
-  (m_deg n_deg: nat) (p q: polynomial t)
+  (m_deg n_deg: nat{nat_add m_deg n_deg > 0}) (p q: polynomial t)
   (i j: fin (nat_add m_deg n_deg))
   : Lemma (requires (i <: nat) < n_deg /\
                     (j <: nat) < i /\
@@ -142,7 +123,7 @@ let sylvester_p_block_left_zero
 
 let sylvester_q_block_in_range
   (#t: Type) {| cr: commutative_ring t |}
-  (m_deg n_deg: nat) (p q: polynomial t)
+  (m_deg n_deg: nat{nat_add m_deg n_deg > 0}) (p q: polynomial t)
   (i j: fin (nat_add m_deg n_deg))
   : Lemma (requires (i <: nat) >= n_deg /\
                     (j <: nat) <= (i <: nat) - n_deg + n_deg /\
@@ -153,7 +134,7 @@ let sylvester_q_block_in_range
 
 let sylvester_q_block_right_zero
   (#t: Type) {| cr: commutative_ring t |}
-  (m_deg n_deg: nat) (p q: polynomial t)
+  (m_deg n_deg: nat{nat_add m_deg n_deg > 0}) (p q: polynomial t)
   (i j: fin (nat_add m_deg n_deg))
   : Lemma (requires (i <: nat) >= n_deg /\
                     (j <: nat) > (i <: nat))
@@ -162,7 +143,7 @@ let sylvester_q_block_right_zero
 
 let sylvester_q_block_left_zero
   (#t: Type) {| cr: commutative_ring t |}
-  (m_deg n_deg: nat) (p q: polynomial t)
+  (m_deg n_deg: nat{nat_add m_deg n_deg > 0}) (p q: polynomial t)
   (i j: fin (nat_add m_deg n_deg))
   : Lemma (requires (i <: nat) >= n_deg /\
                     (j <: nat) + n_deg < (i <: nat) /\

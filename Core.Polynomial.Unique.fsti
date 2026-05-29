@@ -1,10 +1,10 @@
-module Core.Polynomial.Class.Unique
+module Core.Polynomial.Unique
 
 (*
    Uniqueness of Euclidean division for univariate polynomials over a field.
 
    Ported from legacy `FStar.CAS.Polynomial.Euclidean.poly_divmod_unique`
-   (lines 1158–1226) to the new `Core.Polynomial.Class` tower.
+   (lines 1158–1226) to the new `Core.Polynomial` tower.
 
    Supporting lemmas:
      - degree_well_defined
@@ -22,8 +22,8 @@ module TC = FStar.Tactics.Typeclasses
 
 open Core.Algebra
 open Core.Algebra.Notation
-open Core.Polynomial.Class
-open Core.Polynomial.Class.Div
+open Core.Polynomial
+open Core.Polynomial.Div
 
 (* ------------------------------------------------------------------ *)
 

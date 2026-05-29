@@ -1,4 +1,4 @@
-module Core.Polynomial.Class
+module Core.Polynomial
 
 (*  Design probe for the new polynomial typeclass architecture.
 
@@ -195,11 +195,14 @@ class polynomial_euclidean_domain (t: Type) {| f: field t |}
 (* From now, we start constructing the poly operations. Those should NOT use {| polynomial_commutative_ring |},
    because they will be used to finally construct one *)
 
-(* coeff — out-of-bounds reads return ring zero *)
-let coeff (#t:Type) {| cr: commutative_ring t |} (p: polynomial t) (i: nat)
-  : (c:t{(i >= L.length p ==> c == (zero <: t)) /\
-         (i <  L.length p ==> c == L.index p i)})
-  = if i < L.length p then L.index p i else (zero <: t)
+(* coeff — out-of-bounds reads (including negative indices) return ring zero *)
+let coeff (#t:Type) {| cr: commutative_ring t |} (p: polynomial t) (i: int)
+  : (c:t{(i < 0 ==> c == (zero <: t)) /\
+         (i >= 0 /\ i >= L.length p ==> c == (zero <: t)) /\
+         (i >= 0 /\ i <  L.length p ==> c == L.index p i)})
+  = if i < 0 then (zero <: t)
+    else if i < L.length p then L.index p i
+    else (zero <: t)
 
 (* poly_zero — canonical empty list at type polynomial t *)
 unfold let poly_zero (#t:Type) {| cr: commutative_ring t |} : polynomial t = []
@@ -1940,7 +1943,7 @@ let poly_domain_law #t {| id: integral_domain t |}
 
    In an integral_domain coefficient ring, multiplying two nonzero
    polynomials yields a nonzero polynomial whose degree is the sum
-   of the degrees. Used by Core.Polynomial.Class.Unique.
+   of the degrees. Used by Core.Polynomial.Unique.
    ---------------------------------------------------------------- *)
 #push-options "--z3rlimit 80 --fuel 2 --ifuel 2"
 let poly_deg_mul #t {| id: integral_domain t |}

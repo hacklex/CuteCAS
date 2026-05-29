@@ -48,34 +48,34 @@ open Core.Tactics.CanonRing
 
 (* Inner expansion term: a(i,k) * b(k, sigma i).
    Used inside `fin_sum` for matrix_mul_eq_at expansion. *)
-let ab_k (#t: Type) {| cr: commutative_ring t |} (#n: nat)
+let ab_k (#t: Type) {| cr: commutative_ring t |} (#n: pos)
   (a b: square_matrix t n) (sigma: permutation n) (i: fin n) (k: fin n) : t
   = a i k * b k (sigma.fwd i)
 
 (* Outer Leibniz term, expanded via matrix_mul:
    if i<n then (AB)(i, sigma i) else one. *)
-let ab_perm_body (#t: Type) {| cr: commutative_ring t |} (#n: nat)
+let ab_perm_body (#t: Type) {| cr: commutative_ring t |} (#n: pos)
   (a b: square_matrix t n) (sigma: permutation n) (i: nat) : t
   = if i < n then (matrix_mul a b) (i <: fin n) (sigma.fwd (i <: fin n))
     else one
 
 (* Same outer term but expanded as fin_sum:
    if i<n then sum_k a(i,k) b(k, sigma i) else one. *)
-let finsum_perm_body (#t: Type) {| cr: commutative_ring t |} (#n: nat)
+let finsum_perm_body (#t: Type) {| cr: commutative_ring t |} (#n: pos)
   (a b: square_matrix t n) (sigma: permutation n) (i: nat) : t
   = if i < n then fin_sum (ab_k a b sigma (i <: fin n))
     else one
 
 (* Multi-distrib expansion: pick a representative φ for each factor.
    if i<n then a(i, φ i) * b(φ i, sigma i) else one. *)
-let phi_inner_body (#t: Type) {| cr: commutative_ring t |} (#n: nat)
+let phi_inner_body (#t: Type) {| cr: commutative_ring t |} (#n: pos)
   (a b: square_matrix t n) (sigma: permutation n) (phi: fin_map n n) (i: nat) : t
   = if i < n then ab_k a b sigma (i <: fin n) (phi (i <: fin n))
     else one
 
 (* prod_range of phi_inner_body — one summand of the multi-distrib sum
    over fin_map n n. *)
-let phi_outer (#t: Type) {| cr: commutative_ring t |} (#n: nat)
+let phi_outer (#t: Type) {| cr: commutative_ring t |} (#n: pos)
   (a b: square_matrix t n) (sigma: permutation n) (phi: fin_map n n) : t
   = prod_range (phi_inner_body a b sigma phi) 0 n
 
@@ -90,7 +90,7 @@ let phi_outer (#t: Type) {| cr: commutative_ring t |} (#n: nat)
    matrix_mul_eq_at.  Then prod_range_congruence. *)
 #push-options "--fuel 2 --ifuel 1 --z3rlimit 60"
 let perm_product_as_finsum_prod
-  (#t: Type) {| cr: commutative_ring t |} (#n: nat)
+  (#t: Type) {| cr: commutative_ring t |} (#n: pos)
   (a b: square_matrix t n) (sigma: permutation n)
   : Lemma (perm_product (matrix_mul a b) sigma
            = prod_range (finsum_perm_body a b sigma) 0 n)
@@ -120,7 +120,7 @@ let perm_product_as_finsum_prod
      = sum_over_fns_to n n (phi_outer a b sigma).                         *)
 #push-options "--fuel 2 --ifuel 1 --z3rlimit 60"
 let prod_range_finsum_to_sum_over_fns
-  (#t: Type) {| cr: commutative_ring t |} (#n: nat)
+  (#t: Type) {| cr: commutative_ring t |} (#n: pos)
   (a b: square_matrix t n) (sigma: permutation n)
   : Lemma (prod_range (finsum_perm_body a b sigma) 0 n
            = sum_over_fns_to n n (phi_outer a b sigma))
@@ -146,7 +146,7 @@ let prod_range_finsum_to_sum_over_fns
 (* Step B.3: Compose B.1 + B.2.
    perm_product (matrix_mul a b) sigma = sum_over_fns_to n n (phi_outer a b sigma).  *)
 let perm_product_to_sum_over_fns
-  (#t: Type) {| cr: commutative_ring t |} (#n: nat)
+  (#t: Type) {| cr: commutative_ring t |} (#n: pos)
   (a b: square_matrix t n) (sigma: permutation n)
   : Lemma (perm_product (matrix_mul a b) sigma
            = sum_over_fns_to n n (phi_outer a b sigma))
@@ -161,17 +161,17 @@ let perm_product_to_sum_over_fns
 (* ============================================================ *)
 
 (* Named: prod_i a(i, phi i), via fin_prod over apply_along.   *)
-let phi_prod (#t: Type) {| cr: commutative_ring t |} (#n: nat)
+let phi_prod (#t: Type) {| cr: commutative_ring t |} (#n: pos)
   (a: square_matrix t n) (phi: fin_map n n) : t
   = fin_prod (apply_along a phi)
 
 (* Named: matrix whose row i is row (phi i) of b.               *)
-let phi_matrix (#t: Type) (#n: nat)
+let phi_matrix (#t: Type) (#n: pos)
   (b: square_matrix t n) (phi: fin_map n n) : square_matrix t n
   = fun i j -> b (phi i) j
 
 (* Named: ab_perm_body for the phi_matrix:                       *)
-let phi_matrix_perm_body (#t: Type) {| cr: commutative_ring t |} (#n: nat)
+let phi_matrix_perm_body (#t: Type) {| cr: commutative_ring t |} (#n: pos)
   (b: square_matrix t n) (phi: fin_map n n) (sigma: permutation n) (i: nat) : t
   = if i < n then (phi_matrix b phi) (i <: fin n) (sigma.fwd (i <: fin n))
     else one
@@ -246,17 +246,17 @@ let rec prod_range_factor
     end
 #pop-options
 (* The two named factors of phi_inner_body: the a-side and the b-side. *)
-let phi_a_part (#t: Type) {| cr: commutative_ring t |} (#n: nat)
+let phi_a_part (#t: Type) {| cr: commutative_ring t |} (#n: pos)
   (a: square_matrix t n) (phi: fin_map n n) (i: nat) : t
   = if i < n then a (i <: fin n) (phi (i <: fin n)) else one
 
-let phi_b_part (#t: Type) {| cr: commutative_ring t |} (#n: nat)
+let phi_b_part (#t: Type) {| cr: commutative_ring t |} (#n: pos)
   (b: square_matrix t n) (phi: fin_map n n) (sigma: permutation n) (i: nat) : t
   = if i < n then b (phi (i <: fin n)) (sigma.fwd (i <: fin n)) else one
 
 (* phi_inner_body = pw_mul (phi_a_part a phi) (phi_b_part b phi sigma). *)
 let phi_inner_body_def
-  (#t: Type) {| cr: commutative_ring t |} (#n: nat)
+  (#t: Type) {| cr: commutative_ring t |} (#n: pos)
   (a b: square_matrix t n) (sigma: permutation n) (phi: fin_map n n)
   : Lemma (forall (i: nat). phi_inner_body a b sigma phi i =
                             pw_mul (phi_a_part a phi) (phi_b_part b phi sigma) i)
@@ -276,7 +276,7 @@ let phi_inner_body_def
 (* Factor lemma: prod_range phi_inner_body = prod a-part * prod b-part. *)
 #push-options "--fuel 2 --ifuel 1 --z3rlimit 60"
 let phi_outer_factored
-  (#t: Type) {| cr: commutative_ring t |} (#n: nat)
+  (#t: Type) {| cr: commutative_ring t |} (#n: pos)
   (a b: square_matrix t n) (sigma: permutation n) (phi: fin_map n n)
   : Lemma (phi_outer a b sigma phi =
            prod_range (phi_a_part a phi) 0 n
@@ -294,7 +294,7 @@ let phi_outer_factored
 (* Compose: phi_outer = phi_prod * perm_product (phi_matrix b phi).        *)
 #push-options "--fuel 2 --ifuel 1 --z3rlimit 60"
 let phi_outer_eq_a_prod_perm_product
-  (#t: Type) {| cr: commutative_ring t |} (#n: nat)
+  (#t: Type) {| cr: commutative_ring t |} (#n: pos)
   (a b: square_matrix t n) (sigma: permutation n) (phi: fin_map n n)
   : Lemma (phi_outer a b sigma phi =
            phi_prod a phi * perm_product (phi_matrix b phi) sigma)
@@ -325,7 +325,7 @@ let phi_outer_eq_a_prod_perm_product
 
 #push-options "--fuel 2 --ifuel 1 --z3rlimit 40"
 let det_phi_matrix_non_inj
-  (#t: Type) {| cr: commutative_ring t |} (#n: nat)
+  (#t: Type) {| cr: commutative_ring t |} (#n: pos)
   (b: square_matrix t n) (phi: fin_map n n) (i j: fin n)
   : Lemma (requires ~(i == j) /\ phi i == phi j)
           (ensures  det (phi_matrix b phi) = zero)
@@ -346,13 +346,13 @@ let det_phi_matrix_non_inj
 (*  inverse_fn, perm_of_injective_fn, is_injective_b.           *)
 (* ============================================================ *)
 
-private let rec search_preimage (#n: nat) (f: fin_map n n) (target: fin n) (k: nat)
+private let rec search_preimage (#n: pos) (f: fin_map n n) (target: fin n) (k: nat)
   : Tot (option (fin n)) (decreases (n - k))
   = if k >= n then None
     else if f (k <: fin n) = target then Some (k <: fin n)
     else search_preimage f target (Prims.op_Addition k 1)
 
-private let rec search_preimage_spec (#n: nat) (f: fin_map n n) (target: fin n) (k: nat)
+private let rec search_preimage_spec (#n: pos) (f: fin_map n n) (target: fin n) (k: nat)
   : Lemma (ensures (match search_preimage f target k with
                     | Some j -> f j == target
                     | None -> forall (j: fin n). (j <: nat) >= k ==> ~(f j == target)))
@@ -372,7 +372,7 @@ private let compress_val_injective (n: nat{n >= 2}) (gap: fin n) (v1 v2: fin n)
   = ()
 
 #push-options "--fuel 2 --ifuel 1 --z3rlimit 80"
-private let rec injective_surjective (#n: nat) (f: fin_map n n) (target: fin n)
+private let rec injective_surjective (#n: pos) (f: fin_map n n) (target: fin n)
   : Lemma (requires forall (i j: fin n). f i == f j ==> i == j)
           (ensures Some? (search_preimage f target 0))
           (decreases n)
@@ -401,21 +401,21 @@ private let rec injective_surjective (#n: nat) (f: fin_map n n) (target: fin n)
     end
 #pop-options
 
-private let inverse_fn (#n: nat) (f: fin_map n n)
+private let inverse_fn (#n: pos) (f: fin_map n n)
   (f_inj: squash (forall (i j: fin n). f i == f j ==> i == j))
   (target: fin n) : fin n
   = injective_surjective f target;
     search_preimage_spec f target 0;
     Some?.v (search_preimage f target 0)
 
-private let inverse_fn_spec (#n: nat) (f: fin_map n n)
+private let inverse_fn_spec (#n: pos) (f: fin_map n n)
   (f_inj: squash (forall (i j: fin n). f i == f j ==> i == j))
   (target: fin n) : Lemma (f (inverse_fn f f_inj target) == target)
   = injective_surjective f target;
     search_preimage_spec f target 0
 
 #push-options "--fuel 1 --ifuel 1 --z3rlimit 40"
-let perm_of_injective_fn (#n: nat) (f: fin_map n n)
+let perm_of_injective_fn (#n: pos) (f: fin_map n n)
   (f_inj: squash (forall (i j: fin n). f i == f j ==> i == j))
   : (p: permutation n { forall (i: fin n). p.fwd i == f i })
   = let bwd = inverse_fn f f_inj in
@@ -427,7 +427,7 @@ let perm_of_injective_fn (#n: nat) (f: fin_map n n)
     { fwd = f; bwd = bwd; fwd_bwd_id = fwd_bwd; bwd_fwd_id = bwd_fwd }
 #pop-options
 
-private let rec is_injective_from (#n: nat) (f: fin_map n n) (k: nat)
+private let rec is_injective_from (#n: pos) (f: fin_map n n) (k: nat)
   : Tot bool (decreases (n - k))
   = if k >= n then true
     else
@@ -437,11 +437,11 @@ private let rec is_injective_from (#n: nat) (f: fin_map n n) (k: nat)
       | Some j -> if (j <: nat) = k then is_injective_from f (Prims.op_Addition k 1)
                   else false
 
-let is_injective_b (#n: nat) (f: fin_map n n) : bool
+let is_injective_b (#n: pos) (f: fin_map n n) : bool
   = is_injective_from f 0
 
 #push-options "--fuel 2 --ifuel 1 --z3rlimit 60"
-private let rec is_injective_from_true (#n: nat) (f: fin_map n n) (k: nat)
+private let rec is_injective_from_true (#n: pos) (f: fin_map n n) (k: nat)
   : Lemma (requires is_injective_from f k)
           (ensures forall (i: fin n). (i <: nat) >= k ==>
                    search_preimage f (f i) 0 == Some i)
@@ -453,13 +453,13 @@ private let rec is_injective_from_true (#n: nat) (f: fin_map n n) (k: nat)
     end
 #pop-options
 
-let is_injective_true (#n: nat) (f: fin_map n n)
+let is_injective_true (#n: pos) (f: fin_map n n)
   : Lemma (requires is_injective_b f)
           (ensures forall (i j: fin n). f i == f j ==> i == j)
   = is_injective_from_true f 0
 
 #push-options "--fuel 2 --ifuel 1 --z3rlimit 60"
-private let rec is_injective_from_false (#n: nat) (f: fin_map n n) (k: nat)
+private let rec is_injective_from_false (#n: pos) (f: fin_map n n) (k: nat)
   : Lemma (requires not (is_injective_from f k) /\ k < n)
           (ensures exists (a b: fin n). ~(a == b) /\ f a == f b)
           (decreases (n - k))
@@ -474,7 +474,7 @@ private let rec is_injective_from_false (#n: nat) (f: fin_map n n) (k: nat)
         else ()
 #pop-options
 
-let is_injective_false (#n: nat) (f: fin_map n n)
+let is_injective_false (#n: pos) (f: fin_map n n)
   : Lemma (requires not (is_injective_b f) /\ n > 0)
           (ensures exists (a b: fin n). ~(a == b) /\ f a == f b)
   = is_injective_from_false f 0
@@ -484,7 +484,7 @@ let is_injective_false (#n: nat) (f: fin_map n n)
 
 #push-options "--fuel 2 --ifuel 1 --z3rlimit 60"
 let det_phi_matrix_inj
-  (#t: Type) {| cr: commutative_ring t |} (#n: nat)
+  (#t: Type) {| cr: commutative_ring t |} (#n: pos)
   (b: square_matrix t n) (phi: fin_map n n)
   (phi_inj: squash (forall (i j: fin n). phi i == phi j ==> i == j))
   : Lemma (det (phi_matrix b phi) =
@@ -655,13 +655,13 @@ let sum_over_fns_to_pointwise
 (*  Section G: perm_product_expand                              *)
 (* ============================================================ *)
 
-let phi_pp_term (#t: Type) {| cr: commutative_ring t |} (#n: nat)
+let phi_pp_term (#t: Type) {| cr: commutative_ring t |} (#n: pos)
   (a b: square_matrix t n) (sigma: permutation n) (phi: fin_map n n) : t
   = phi_prod a phi * perm_product (phi_matrix b phi) sigma
 
 #push-options "--fuel 2 --ifuel 1 --z3rlimit 60"
 let perm_product_expand
-  (#t: Type) {| cr: commutative_ring t |} (#n: nat)
+  (#t: Type) {| cr: commutative_ring t |} (#n: pos)
   (a b: square_matrix t n) (sigma: permutation n)
   : Lemma (perm_product (matrix_mul a b) sigma
            = sum_over_fns_to n n (phi_pp_term a b sigma))
@@ -683,17 +683,17 @@ let perm_product_expand
 (*  Section H: leibniz_expand                                   *)
 (* ============================================================ *)
 
-let phi_lt_term (#t: Type) {| cr: commutative_ring t |} (#n: nat)
+let phi_lt_term (#t: Type) {| cr: commutative_ring t |} (#n: pos)
   (a b: square_matrix t n) (sigma: permutation n) (phi: fin_map n n) : t
   = phi_prod a phi * leibniz_term (phi_matrix b phi) sigma
 
-let neg_phi_pp_term (#t: Type) {| cr: commutative_ring t |} (#n: nat)
+let neg_phi_pp_term (#t: Type) {| cr: commutative_ring t |} (#n: pos)
   (a b: square_matrix t n) (sigma: permutation n) (phi: fin_map n n) : t
   = -(phi_pp_term a b sigma phi)
 
 #push-options "--fuel 2 --ifuel 1 --z3rlimit 80"
 let leibniz_expand
-  (#t: Type) {| cr: commutative_ring t |} (#n: nat)
+  (#t: Type) {| cr: commutative_ring t |} (#n: pos)
   (a b: square_matrix t n) (sigma: permutation n)
   : Lemma (leibniz_term (matrix_mul a b) sigma
            = sum_over_fns_to n n (phi_lt_term a b sigma))
@@ -768,7 +768,7 @@ let leibniz_expand
 (*  Section I: factor_inner_perm_sum + det_expand               *)
 (* ============================================================ *)
 
-let phi_det_term (#t: Type) {| cr: commutative_ring t |} (#n: nat)
+let phi_det_term (#t: Type) {| cr: commutative_ring t |} (#n: pos)
   (a b: square_matrix t n) (phi: fin_map n n) : t
   = phi_prod a phi * det (phi_matrix b phi)
 
@@ -776,7 +776,7 @@ let phi_det_term (#t: Type) {| cr: commutative_ring t |} (#n: nat)
    equals phi_det_term. *)
 #push-options "--fuel 2 --ifuel 1 --z3rlimit 80"
 let factor_inner_perm_sum
-  (#t: Type) {| cr: commutative_ring t |} (#n: nat)
+  (#t: Type) {| cr: commutative_ring t |} (#n: pos)
   (a b: square_matrix t n) (phi: fin_map n n)
   : Lemma (sum_list (L.map (swap_args (phi_lt_term a b) phi) (all_permutations n))
            = phi_det_term a b phi)
@@ -829,7 +829,7 @@ let factor_inner_perm_sum
 
 #push-options "--fuel 2 --ifuel 1 --z3rlimit 80"
 let det_expand
-  (#t: Type) {| cr: commutative_ring t |} (#n: nat)
+  (#t: Type) {| cr: commutative_ring t |} (#n: pos)
   (a b: square_matrix t n)
   : Lemma (det (matrix_mul a b) = sum_over_fns_to n n (phi_det_term a b))
   = H.elim_equatable_laws t ();
@@ -933,9 +933,9 @@ private let rec fn_eq_count (#n #m: nat) (f: fin_map n m) (xs: list (fin_map n m
     | [] -> 0
     | h :: tl -> Prims.op_Addition (if fn_to_eq_b f h then 1 else 0) (fn_eq_count f tl)
 
-private let all_funs (n: nat) : list (fin_map n n) = all_fns_to n n
+private let all_funs (n: pos) : list (fin_map n n) = all_fns_to n n
 
-private let sum_over_funs (#t: Type) {| g: add_comm_group t |} (n: nat)
+private let sum_over_funs (#t: Type) {| g: add_comm_group t |} (n: pos)
   (h: fin_map n n -> t) : t
   = sum_over_fns_to n n h
 
@@ -1035,19 +1035,19 @@ private let rec all_fns_to_count_one (n m: nat) (f: fin_map n m)
     end
 #pop-options
 
-private let is_injective_b_of_injective (#n: nat) (phi: fin_map n n)
+private let is_injective_b_of_injective (#n: pos) (phi: fin_map n n)
   : Lemma (requires forall (i j: fin n). phi i == phi j ==> i == j)
           (ensures is_injective_b phi == true)
   = if n = 0 then ()
     else if is_injective_b phi then ()
     else begin is_injective_false phi; assert False end
 
-private let perm_of_inj_fn (#n: nat) (phi: fin_map n n{is_injective_b phi})
+private let perm_of_inj_fn (#n: pos) (phi: fin_map n n{is_injective_b phi})
   : (q: permutation n{forall (i: fin n). q.fwd i == phi i})
   = is_injective_true phi;
     perm_of_injective_fn phi ()
 
-private let rec perm_list_from_funs (#n: nat) (xs: list (fin_map n n))
+private let rec perm_list_from_funs (#n: pos) (xs: list (fin_map n n))
   : Tot (list (permutation n)) (decreases xs)
   = match xs with
     | [] -> []
@@ -1056,21 +1056,21 @@ private let rec perm_list_from_funs (#n: nat) (xs: list (fin_map n n))
       then perm_of_inj_fn phi :: perm_list_from_funs tl
       else perm_list_from_funs tl
 
-private let perm_list_from_funs_cons_inj (#n: nat) (phi: fin_map n n)
+private let perm_list_from_funs_cons_inj (#n: pos) (phi: fin_map n n)
   (tl: list (fin_map n n))
   : Lemma (requires is_injective_b phi)
           (ensures perm_list_from_funs (phi :: tl) ==
                    perm_of_inj_fn phi :: perm_list_from_funs tl)
   = ()
 
-private let perm_list_from_funs_cons_non (#n: nat) (phi: fin_map n n)
+private let perm_list_from_funs_cons_non (#n: pos) (phi: fin_map n n)
   (tl: list (fin_map n n))
   : Lemma (requires not (is_injective_b phi))
           (ensures perm_list_from_funs (phi :: tl) == perm_list_from_funs tl)
   = ()
 
 #push-options "--fuel 2 --ifuel 1 --z3rlimit 60"
-private let fn_eq_perm_eq_bridge (#n: nat) (p: permutation n)
+private let fn_eq_perm_eq_bridge (#n: pos) (p: permutation n)
   (phi: fin_map n n) (q: permutation n{forall (i: fin n). q.fwd i == phi i})
   : Lemma (fn_to_eq_b p.fwd phi == perm_eq p q)
   = fn_to_eq_b_spec p.fwd phi 0;
@@ -1087,18 +1087,21 @@ private let fn_eq_perm_eq_bridge (#n: nat) (p: permutation n)
 #pop-options
 
 #push-options "--fuel 2 --ifuel 1 --z3rlimit 40"
-private let fn_eq_implies_injective (#n: nat) (p: permutation n)
+private let fn_eq_implies_injective (#n: pos) (p: permutation n)
   (phi: fin_map n n)
   : Lemma (requires forall (i: fin n). p.fwd i == phi i)
           (ensures forall (i j: fin n). phi i == phi j ==> i == j)
   = let aux (i j: fin n) : Lemma (requires phi i == phi j) (ensures i == j) =
       p.bwd_fwd_id i; p.bwd_fwd_id j
     in
-    Classical.forall_intro_2 (fun i j -> Classical.move_requires (aux i) j)
+    let aux2 (i j: fin n) : Lemma (phi i == phi j ==> i == j) =
+      Classical.move_requires (aux i) j
+    in
+    Classical.forall_intro_2 aux2
 #pop-options
 
 #push-options "--fuel 4 --ifuel 2 --z3rlimit 80"
-private let rec perm_count_from_funs (#n: nat) (p: permutation n)
+private let rec perm_count_from_funs (#n: pos) (p: permutation n)
   (xs: list (fin_map n n))
   : Lemma (ensures perm_eq_count p (perm_list_from_funs xs) ==
                    fn_eq_count p.fwd xs)
@@ -1127,7 +1130,7 @@ private let rec perm_count_from_funs (#n: nat) (p: permutation n)
 
 #push-options "--fuel 4 --ifuel 2 --z3rlimit 80"
 private let rec sum_filter_eq
-  (#t: Type) {| cr: commutative_ring t |} (#n: nat)
+  (#t: Type) {| cr: commutative_ring t |} (#n: pos)
   (f: permutation n -> t) (g: fin_map n n -> t) (xs: list (fin_map n n))
   : Lemma
       (requires forall (phi: fin_map n n).
@@ -1162,7 +1165,7 @@ private let rec sum_filter_eq
 
 #push-options "--fuel 2 --ifuel 1 --z3rlimit 60"
 private let sum_funs_eq_perms
-  (#t: Type) {| cr: commutative_ring t |} (#n: nat)
+  (#t: Type) {| cr: commutative_ring t |} (#n: pos)
   (f: permutation n -> t) (g: fin_map n n -> t)
   : Lemma
       (requires respects_perm_eq #t f /\
@@ -1188,7 +1191,7 @@ private let sum_funs_eq_perms
 
 #push-options "--fuel 2 --ifuel 1 --z3rlimit 60"
 private let phi_term_non_inj
-  (#t: Type) {| cr: commutative_ring t |} (#n: nat)
+  (#t: Type) {| cr: commutative_ring t |} (#n: pos)
   (a b: square_matrix t n) (phi: fin_map n n)
   : Lemma (requires is_injective_b phi = false)
           (ensures phi_det_term a b phi = zero)
@@ -1203,7 +1206,10 @@ private let phi_term_non_inj
                 (ensures det (phi_matrix b phi) = zero)
         = det_phi_matrix_non_inj b phi i j
       in
-      Classical.forall_intro_2 (fun i -> Classical.move_requires (wit i));
+      let wit2 (i: fin n) : (j: fin n) -> Lemma ((~(i == j) /\ phi i == phi j) ==> det (phi_matrix b phi) = zero) =
+        Classical.move_requires (wit i)
+      in
+      Classical.forall_intro_2 wit2;
       H.x_mul_zero (phi_prod a phi);
       reflexivity (phi_prod a phi);
       mul_congruence (phi_prod a phi) (det (phi_matrix b phi))
@@ -1217,7 +1223,7 @@ private let phi_term_non_inj
 
 #push-options "--fuel 2 --ifuel 1 --z3rlimit 60"
 private let pa_eq_perm_product
-  (#t: Type) {| cr: commutative_ring t |} (#n: nat)
+  (#t: Type) {| cr: commutative_ring t |} (#n: pos)
   (a: square_matrix t n) (phi: fin_map n n)
   : Lemma (requires is_injective_b phi = true)
           (ensures phi_prod a phi = perm_product a (perm_of_inj_fn phi))
@@ -1234,7 +1240,7 @@ private let pa_eq_perm_product
 
 #push-options "--fuel 2 --ifuel 1 --z3rlimit 60"
 private let phi_term_inj
-  (#t: Type) {| cr: commutative_ring t |} (#n: nat)
+  (#t: Type) {| cr: commutative_ring t |} (#n: pos)
   (a b: square_matrix t n) (phi: fin_map n n)
   : Lemma (requires is_injective_b phi = true)
           (ensures phi_det_term a b phi =
@@ -1266,7 +1272,7 @@ private let phi_term_inj
 
 #push-options "--fuel 2 --ifuel 1 --z3rlimit 60"
 private let phi_term_value
-  (#t: Type) {| cr: commutative_ring t |} (#n: nat)
+  (#t: Type) {| cr: commutative_ring t |} (#n: pos)
   (a b: square_matrix t n) (phi: fin_map n n)
   : Lemma (phi_det_term a b phi =
            (if is_injective_b phi
@@ -1282,12 +1288,12 @@ private let phi_term_value
 (* ============================================================ *)
 
 private let lt_det_b
-  (#t: Type) {| cr: commutative_ring t |} (#n: nat)
+  (#t: Type) {| cr: commutative_ring t |} (#n: pos)
   (a b: square_matrix t n) (sigma: permutation n) : t
   = leibniz_term a sigma * det b
 
 private let lt_det_b_filtered
-  (#t: Type) {| cr: commutative_ring t |} (#n: nat)
+  (#t: Type) {| cr: commutative_ring t |} (#n: pos)
   (a b: square_matrix t n) (phi: fin_map n n) : t
   = if is_injective_b phi
     then lt_det_b a b (perm_of_inj_fn phi)
@@ -1295,7 +1301,7 @@ private let lt_det_b_filtered
 
 #push-options "--fuel 2 --ifuel 1 --z3rlimit 60"
 private let det_expand_to_perms
-  (#t: Type) {| cr: commutative_ring t |} (#n: nat)
+  (#t: Type) {| cr: commutative_ring t |} (#n: pos)
   (a b: square_matrix t n)
   : Lemma (sum_over_fns_to n n (phi_det_term a b)
            = sum_over_perms n (lt_det_b a b))
@@ -1319,7 +1325,10 @@ private let det_expand_to_perms
         reflexivity (det b);
         mul_congruence (leibniz_term a p) (det b) (leibniz_term a q) (det b)
     in
-    Classical.forall_intro_2 (fun p -> Classical.move_requires (rpe_prod p));
+    let rpe_prod2 (p: permutation n) : (q: permutation n) -> Lemma (perm_eq p q ==> f p = f q) =
+      Classical.move_requires (rpe_prod p)
+    in
+    Classical.forall_intro_2 rpe_prod2;
     respects_perm_eq_intro f (fun _ _ -> ());
     sum_funs_eq_perms #t #cr #n f h;
     transitivity
@@ -1333,13 +1342,13 @@ private let det_expand_to_perms
 (* ============================================================ *)
 
 private let db_lt_a
-  (#t: Type) {| cr: commutative_ring t |} (#n: nat)
+  (#t: Type) {| cr: commutative_ring t |} (#n: pos)
   (a b: square_matrix t n) (sigma: permutation n) : t
   = det b * leibniz_term a sigma
 
 #push-options "--fuel 2 --ifuel 1 --z3rlimit 80"
 let det_mul
-  (#t: Type) {| cr: commutative_ring t |} (#n: nat)
+  (#t: Type) {| cr: commutative_ring t |} (#n: pos)
   (a b: square_matrix t n)
   : Lemma (det (matrix_mul a b) = det a * det b)
   = H.elim_equatable_laws t ();

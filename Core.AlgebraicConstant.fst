@@ -20,9 +20,9 @@ module ID = FStar.IndefiniteDescription
 open Core.Algebra
 open Core.Algebra.Notation
 open Core.Algebra.Divisibility
-open Core.Polynomial.Class
-open Core.Polynomial.Class.Div
-open Core.Polynomial.Class.Unique
+open Core.Polynomial
+open Core.Polynomial.Div
+open Core.Polynomial.Unique
 
 (* ---------------------------------------------------------------- *)
 (*  Internal: a local CR helper for canon_ring identities over a    *)

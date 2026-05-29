@@ -1,8 +1,8 @@
-module Core.Polynomial.Class.GCD
+module Core.Polynomial.GCD
 
 (*
    Polynomial GCD via the Euclidean algorithm, ported to the
-   `Core.Polynomial.Class` tower.
+   `Core.Polynomial` tower.
 
    Currently exposed (all proven, zero admits/assumes):
      - degree_measure                  (termination measure)
@@ -30,8 +30,8 @@ module L  = FStar.List.Tot
 open Core.Algebra
 open Core.Algebra.Notation
 open Core.Algebra.Divisibility
-open Core.Polynomial.Class
-open Core.Polynomial.Class.Div
+open Core.Polynomial
+open Core.Polynomial.Div
 
 (* ------------------------------------------------------------------ *)
 (*  Termination measure                                               *)

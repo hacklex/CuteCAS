@@ -1,11 +1,11 @@
-module Core.Polynomial.Class.Div
+module Core.Polynomial.Div
 
 module L  = FStar.List.Tot
 module TC = FStar.Tactics.Typeclasses
 
 open Core.Algebra
 open Core.Algebra.Notation
-open Core.Polynomial.Class
+open Core.Polynomial
 
 module H = Core.Algebra.Helpers
 

@@ -161,6 +161,23 @@ val fin_prod_congruence
   (h: (k: fin n) -> Lemma (f k = g k))
   : Lemma (ensures fin_prod f = fin_prod g)
 
+(* Propositional-equality (==) variants of congruence.
+   These use pointwise `==` instead of equatable `=`, bridging
+   definitional equality to fin_sum/sum_range equality. *)
+
+val sum_range_eq_pointwise
+  (#t: Type) {| acg: add_comm_group t |}
+  (f g: nat -> t) (from: nat) (to: nat{from < to})
+  : Lemma (requires (forall (k: nat{k >= from /\ k < to}). f k == g k))
+          (ensures sum_range f from to == sum_range g from to)
+          (decreases (to - from))
+
+val fin_sum_eq_pointwise
+  (#t: Type) {| acg: add_comm_group t |}
+  (#n: pos) (f g: fin n -> t)
+  : Lemma (requires (forall (k: fin n). f k == g k))
+          (ensures fin_sum f == fin_sum g)
+
 (* ================================================================= *)
 (*  Path A refactor: pointwise-congruence bridges + combinator-shape *)
 (*  algebraic identities. All declarations below this banner use the *)

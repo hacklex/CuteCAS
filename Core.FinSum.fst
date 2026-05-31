@@ -156,6 +156,132 @@ let rec sum_range_unfold_right
     end
 #pop-options
 
+#push-options "--fuel 8 --ifuel 4 --z3rlimit 80"
+let rec sum_range_split (#t:Type) {| m: add_comm_group t |}
+  (f: nat -> t) (lo mid hi: nat)
+  : Lemma (requires lo <= mid /\ mid <= hi)
+          (ensures sum_range f lo hi = sum_range f lo mid + sum_range f mid hi)
+          (decreases (mid - lo))
+  = elim_equatable_laws t ();
+    trans_for_calc t ();
+    if lo = mid then begin
+      sum_range_empty f lo mid;
+      reflexivity (sum_range f mid hi);
+      add_congruence (sum_range f lo mid) (sum_range f mid hi)
+                     (zero <: t) (sum_range f mid hi);
+      zero_plus_x (sum_range f mid hi);
+      symmetry (zero + sum_range f mid hi) (sum_range f mid hi);
+      reflexivity (sum_range f lo hi);
+      transitivity (sum_range f lo hi)
+                   (sum_range f mid hi)
+                   (zero + sum_range f mid hi);
+      transitivity (sum_range f lo hi)
+                   (zero + sum_range f mid hi)
+                   (sum_range f lo mid + sum_range f mid hi)
+    end else begin
+      sum_range_unfold_left f lo hi;
+      sum_range_unfold_left f lo mid;
+      sum_range_split f (nat_succ lo) mid hi;
+      reflexivity (f lo);
+      add_congruence (f lo) (sum_range f (nat_succ lo) hi)
+                     (f lo) (sum_range f (nat_succ lo) mid + sum_range f mid hi);
+      add_associativity (f lo) (sum_range f (nat_succ lo) mid) (sum_range f mid hi);
+      reflexivity (sum_range f mid hi);
+      add_congruence (f lo + sum_range f (nat_succ lo) mid) (sum_range f mid hi)
+                     (sum_range f lo mid) (sum_range f mid hi);
+      trans4 (sum_range f lo hi)
+             (f lo + sum_range f (nat_succ lo) hi)
+             (f lo + (sum_range f (nat_succ lo) mid + sum_range f mid hi))
+             ((f lo + sum_range f (nat_succ lo) mid) + sum_range f mid hi)
+             (sum_range f lo mid + sum_range f mid hi)
+    end
+#pop-options
+
+#push-options "--fuel 4 --ifuel 2 --z3rlimit 40"
+let rec sum_range_shift (#t:Type) {| m: add_comm_group t |}
+  (f: nat -> t) (offset lo hi: nat)
+  : Lemma (ensures sum_range (fun (j:nat) -> f (Prims.op_Addition j offset)) lo hi
+                 = sum_range f (Prims.op_Addition lo offset) (Prims.op_Addition hi offset))
+          (decreases (hi - lo))
+  = elim_equatable_laws t ();
+    trans_for_calc t ();
+    if lo >= hi then begin
+      sum_range_empty (fun (j:nat) -> f (Prims.op_Addition j offset)) lo hi;
+      sum_range_empty f (Prims.op_Addition lo offset) (Prims.op_Addition hi offset);
+      reflexivity (zero <: t)
+    end
+    else begin
+      sum_range_unfold_left (fun (j:nat) -> f (Prims.op_Addition j offset)) lo hi;
+      sum_range_unfold_left f (Prims.op_Addition lo offset) (Prims.op_Addition hi offset);
+      assert (Prims.op_Addition (nat_succ lo) offset == nat_succ (Prims.op_Addition lo offset));
+      sum_range_shift f offset (nat_succ lo) hi;
+      reflexivity (f (Prims.op_Addition lo offset));
+      add_congruence (f (Prims.op_Addition lo offset))
+                     (sum_range (fun (j:nat) -> f (Prims.op_Addition j offset)) (nat_succ lo) hi)
+                     (f (Prims.op_Addition lo offset))
+                     (sum_range f (Prims.op_Addition (nat_succ lo) offset) (Prims.op_Addition hi offset))
+    end
+#pop-options
+
+#push-options "--fuel 8 --ifuel 4 --z3rlimit 80"
+let rec sum_range_reverse (#t:Type) {| m: add_comm_group t |}
+  (f: int -> t) (n: nat)
+  : Lemma (ensures sum_range (fun (j:nat) -> f (n - 1 - j)) 0 n
+                 = sum_range (fun (j:nat) -> f j) 0 n)
+          (decreases n)
+  = elim_equatable_laws t ();
+    trans_for_calc t ();
+    let g : nat -> t = fun (j:nat) -> f (n - 1 - j) in
+    let f' : nat -> t = fun (j:nat) -> f j in
+    if n = 0 then begin
+      sum_range_empty g 0 0;
+      sum_range_empty f' 0 0
+    end else begin
+      let n1 = nat_pred n in
+      sum_range_unfold_left g 0 n;
+      sum_range_shift g 1 0 n1;
+      let h : nat -> t = fun (j:nat) -> f (Prims.op_Subtraction (Prims.op_Subtraction n1 1) j) in
+      sum_range_congruence_forall
+        (fun (j:nat) -> g (Prims.op_Addition j 1)) h 0 n1;
+      sum_range_reverse f n1;
+      trans3 (sum_range g 1 n)
+             (sum_range (fun (j:nat) -> g (Prims.op_Addition j 1)) 0 n1)
+             (sum_range h 0 n1)
+             (sum_range f' 0 n1);
+      reflexivity (f' n1);
+      add_congruence (f' n1) (sum_range g 1 n)
+                     (f' n1) (sum_range f' 0 n1);
+      add_commutativity (f' n1) (sum_range f' 0 n1);
+      sum_range_unfold_right f' 0 n
+    end
+#pop-options
+
+#push-options "--fuel 4 --ifuel 2 --z3rlimit 40"
+let rec sum_range_all_zero (#t:Type) {| m: add_comm_group t |}
+  (f: nat -> t) (lo hi: nat)
+  (h: (k: nat{lo <= k /\ k < hi}) -> Lemma (f k = (zero <: t)))
+  : Lemma (ensures sum_range f lo hi = (zero <: t))
+          (decreases (hi - lo))
+  = if lo >= hi then begin
+      sum_range_empty f lo hi;
+      reflexivity (zero <: t)
+    end
+    else begin
+      sum_range_unfold_left f lo hi;
+      h lo;
+      sum_range_all_zero f (nat_succ lo) hi
+        (fun (k: nat{nat_succ lo <= k /\ k < hi}) -> h k);
+      elim_equatable_laws t ();
+      trans_for_calc t ();
+      reflexivity (zero <: t);
+      add_congruence (f lo) (sum_range f (nat_succ lo) hi)
+                     (zero <: t) (zero <: t);
+      zero_plus_x (zero <: t);
+      transitivity (sum_range f lo hi) (f lo + sum_range f (nat_succ lo) hi) (zero + zero);
+      transitivity (sum_range f lo hi) (zero + zero) (zero <: t)
+    end
+#pop-options
+
 (* ----------------------------------------------------------------- *)
 (*  Product over an integer range  [lo, hi)                          *)
 (* ----------------------------------------------------------------- *)
@@ -1105,7 +1231,6 @@ let rec sum_list_map_congruence
   (f g: a -> t) (xs: list a)
   (h: (x:a) -> Lemma (requires memP x xs) (ensures f x = g x))
   : Lemma (ensures sum_list (map f xs) = sum_list (map g xs))
-          (decreases xs)
   = elim_equatable_laws t ();
     trans_for_calc t ();
     match xs with
@@ -1537,6 +1662,7 @@ let sum_range_kronecker_legacy
                  (sum_range lam lo hi)
                  (if lo <= i0 && i0 < hi then g i0 else zero #t)
 
+
 let fin_sum_kronecker
   (#t:Type) {| r: ring t |}
   (#n: nat) (i0: fin n) (g: fin n -> t)
@@ -1643,3 +1769,89 @@ let sum_range_kronecker_out_of_range
   : Lemma (requires i0 < lo \/ i0 >= hi)
           (ensures sum_range (pointwise_mul (kronecker_delta i0) g) lo hi = zero #t)
   = sum_range_kronecker_legacy i0 g lo hi
+
+(* ================================================================= *)
+(*  sum_range_neg: neg distributes over sum_range                     *)
+(* ================================================================= *)
+
+#push-options "--z3rlimit 40 --fuel 1 --ifuel 0"
+let rec sum_range_neg (#t:Type) {| g: add_comm_group t |}
+  (f: nat -> t) (lo hi: nat)
+  : Lemma (ensures sum_range (fun (k:nat) -> neg (f k)) lo hi
+                 = neg (sum_range f lo hi))
+          (decreases (hi - lo))
+  = elim_equatable_laws t ();
+    trans_for_calc t ();
+    let nf : nat -> t = fun (k:nat) -> neg (f k) in
+    if lo >= hi then (
+      sum_range_empty nf lo hi;
+      sum_range_empty f lo hi;
+      neg_zero #t ();
+      symmetry (zero <: t) (neg (zero <: t))
+    ) else (
+      let lo1 : nat = Prims.op_Addition lo 1 in
+      sum_range_unfold_left nf lo hi;
+      sum_range_unfold_left f lo hi;
+      sum_range_neg f lo1 hi;
+      let rest = sum_range f lo1 hi in
+      neg_of_sum (f lo) rest;
+      add_commutativity (neg rest) (neg (f lo));
+      transitivity (neg (f lo + rest)) (neg rest + neg (f lo)) (neg (f lo) + neg rest);
+      symmetry (neg (f lo) + neg rest) (neg (f lo + rest));
+      reflexivity (neg (f lo));
+      add_congruence (neg (f lo)) (sum_range nf lo1 hi)
+                     (neg (f lo)) (neg rest);
+      transitivity (neg (f lo) + sum_range nf lo1 hi)
+                   (neg (f lo) + neg rest)
+                   (neg (f lo + rest))
+    )
+#pop-options
+
+(* ================================================================= *)
+(*  fin_sum_eq_sum_range: bridge fin_sum to sum_range                  *)
+(* ================================================================= *)
+
+#push-options "--z3rlimit 40 --fuel 0 --ifuel 0"
+let fin_sum_eq_sum_range (#t:Type) {| acg: add_comm_group t |} (#n: pos)
+  (f: fin n -> t) (g: nat -> t)
+  : Lemma (requires (forall (k: nat{k < n}). g k = f (k <: fin n)))
+          (ensures fin_sum f = sum_range g 0 n)
+  = sum_range_congruence (fun (k:nat) -> if k < n then f (k <: fin n) else zero) g 0 n
+    (fun k -> symmetry (g k) (f (k <: fin n)))
+#pop-options
+
+(* ================================================================= *)
+(*  sum_range_reverse_named: reversal for named functions              *)
+(* ================================================================= *)
+
+#push-options "--z3rlimit 60 --fuel 1 --ifuel 0"
+let rec sum_range_reverse_named (#t:Type) {| acg: add_comm_group t |}
+  (f g: nat -> t) (n: nat)
+  (h: (j: nat{j < n}) -> Lemma (f j = g (Prims.op_Subtraction (Prims.op_Subtraction n 1) j)))
+  : Lemma (ensures sum_range f 0 n = sum_range g 0 n)
+          (decreases n)
+  = elim_equatable_laws t ();
+    trans_for_calc t ();
+    if n = 0 then (
+      sum_range_empty f 0 0;
+      sum_range_empty g 0 0;
+      transitivity (sum_range f 0 0) (zero <: t) (sum_range g 0 0)
+    ) else (
+      let n1 : nat = Prims.op_Subtraction n 1 in
+      sum_range_unfold_left f 0 n;
+      sum_range_unfold_right g 0 n;
+      h 0;
+      let f_sh : nat -> t = fun (j:nat) -> f (Prims.op_Addition j 1) in
+      sum_range_reverse_named f_sh g n1
+        (fun (j: nat{j < n1}) -> h (Prims.op_Addition j 1));
+      sum_range_shift f 1 0 n1;
+      symmetry (sum_range f_sh 0 n1) (sum_range f 1 n);
+      transitivity (sum_range f 1 n) (sum_range f_sh 0 n1) (sum_range g 0 n1);
+      add_congruence (f 0) (sum_range f 1 n) (g n1) (sum_range g 0 n1);
+      add_commutativity (sum_range g 0 n1) (g n1);
+      symmetry (sum_range g 0 n) (sum_range g 0 n1 + g n1);
+      transitivity (sum_range g 0 n) (sum_range g 0 n1 + g n1) (g n1 + sum_range g 0 n1);
+      symmetry (g n1 + sum_range g 0 n1) (sum_range g 0 n);
+      transitivity (sum_range f 0 n) (g n1 + sum_range g 0 n1) (sum_range g 0 n)
+    )
+#pop-options

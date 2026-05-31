@@ -781,7 +781,7 @@ private let fr_mic (t:Type) (d: integral_domain t)
 
 private let fr_skewfield (t:Type) (d: integral_domain t)
   : skewfield (fraction d) = {
-    sf_d   = fr_domain t d;
+    sf_r   = fr_ring t d;
     sf_mig = fr_mig t d;
   }
 

@@ -62,6 +62,34 @@ val sum_range_unfold_right
           (ensures sum_range f lo hi = sum_range f lo (nat_pred hi) + f (nat_pred hi))
           (decreases nat_minus hi lo)
 
+val sum_range_split
+  (#t:Type) {| m: add_comm_group t |}
+  (f: nat -> t) (lo mid hi: nat)
+  : Lemma (requires lo <= mid /\ mid <= hi)
+          (ensures sum_range f lo hi = sum_range f lo mid + sum_range f mid hi)
+          (decreases (mid - lo))
+
+val sum_range_shift
+  (#t:Type) {| m: add_comm_group t |}
+  (f: nat -> t) (offset lo hi: nat)
+  : Lemma (ensures sum_range (fun (j:nat) -> f (Prims.op_Addition j offset)) lo hi
+                 = sum_range f (Prims.op_Addition lo offset) (Prims.op_Addition hi offset))
+          (decreases (hi - lo))
+
+val sum_range_reverse
+  (#t:Type) {| m: add_comm_group t |}
+  (f: int -> t) (n: nat)
+  : Lemma (ensures sum_range (fun (j:nat) -> f (n - 1 - j)) 0 n
+                 = sum_range (fun (j:nat) -> f j) 0 n)
+          (decreases n)
+
+val sum_range_all_zero
+  (#t:Type) {| m: add_comm_group t |}
+  (f: nat -> t) (lo hi: nat)
+  (h: (k: nat{lo <= k /\ k < hi}) -> Lemma (f k = (zero <: t)))
+  : Lemma (ensures sum_range f lo hi = (zero <: t))
+          (decreases (hi - lo))
+
 (* ----------------------------------------------------------------- *)
 (*  Product over an integer range  [lo, hi)                          *)
 (* ----------------------------------------------------------------- *)
@@ -334,3 +362,27 @@ val sum_range_kronecker_out_of_range
   (i0: nat) (g: nat -> t) (lo hi: nat)
   : Lemma (requires i0 < lo \/ i0 >= hi)
           (ensures sum_range (pointwise_mul (kronecker_delta i0) g) lo hi = zero #t)
+
+(* Negation distributes over sum_range. *)
+val sum_range_neg
+  (#t:Type) {| g: add_comm_group t |}
+  (f: nat -> t) (lo hi: nat)
+  : Lemma (ensures sum_range (fun (k:nat) -> neg (f k)) lo hi
+                 = neg (sum_range f lo hi))
+          (decreases (hi - lo))
+
+(* Bridge fin_sum to sum_range when g agrees with f on [0,n). *)
+val fin_sum_eq_sum_range
+  (#t:Type) {| acg: add_comm_group t |} (#n: pos)
+  (f: fin n -> t) (g: nat -> t)
+  : Lemma (requires (forall (k: nat{k < n}). g k = f (k <: fin n)))
+          (ensures fin_sum f = sum_range g 0 n)
+
+(* Reversal bridge for named functions:
+   if f j = g (n-1-j) for all j < n, then sum_range f 0 n = sum_range g 0 n. *)
+val sum_range_reverse_named
+  (#t:Type) {| acg: add_comm_group t |}
+  (f g: nat -> t) (n: nat)
+  (h: (j: nat{j < n}) -> Lemma (f j = g (Prims.op_Subtraction (Prims.op_Subtraction n 1) j)))
+  : Lemma (ensures sum_range f 0 n = sum_range g 0 n)
+          (decreases n)

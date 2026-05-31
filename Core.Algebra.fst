@@ -190,9 +190,9 @@ class skewfield (t:Type) = {
   [@@@TC.no_method] sf_mig: mul_is_group t #sf_r;
 }
 
-instance mig_of_sf (t:Type) {| sf: skewfield t |} : mul_is_group t = sf.sf_mig
+unfold instance mig_of_sf (t:Type) {| sf: skewfield t |} : mul_is_group t = sf.sf_mig
 
-instance r_of_sf (t:Type) {| sf: skewfield t |} : ring t = sf.sf_r
+unfold instance r_of_sf (t:Type) {| sf: skewfield t |} : ring t = sf.sf_r
 
 private let zero_mul_z (#t:Type) {|r: ring t|} (z: t) : Lemma (eq (mul zero z) zero)
   = 
@@ -314,7 +314,7 @@ class field (t:Type) = {
 }
 
 
-instance sf_of_f (t:Type) {| f: field t |} : skewfield t = f.f_sf
+unfold instance sf_of_f (t:Type) {| f: field t |} : skewfield t = f.f_sf
 
 
 instance id_of_f (t:Type) {| f: field t |} : integral_domain t = {

@@ -29,7 +29,7 @@ open Core.Matrix
 (*  but we keep this alias name to minimize diff vs. the original file.   *)
 (* -------------------------------------------------------------------- *)
 
-unfold let acg_of_ring_local (t: Type) (r: ring t) : add_comm_group t = r.r_add
+(* `acg_of_ring_local` is defined in the .fsti; do not redefine here. *)
 
 (* -------------------------------------------------------------------- *)
 (*  Private ring-level helpers missing from Core.Algebra.Helpers.        *)
@@ -107,32 +107,13 @@ let ring_neg_xy_is_neg_x_times_y (#t: Type) {| cr: commutative_ring t |} (x y: t
 (* -------------------------------------------------------------------- *)
 (*  Product along a permutation: ∏_{i=0..n-1} M(i, p.fwd i).            *)
 (* -------------------------------------------------------------------- *)
-let perm_product (#t: Type) {| cr: commutative_ring t |} (#n: pos)
-  (m: square_matrix t n) (p: permutation n) : t
-  = prod_range
-      (fun i -> if i < n then m i (p.fwd i) else one)
-      0 n
+(* perm_product, leibniz_term, det defined in .fsti *)
 
 let perm_product_unfold (#t: Type) {| cr: commutative_ring t |} (#n: pos)
   (m: square_matrix t n) (p: permutation n)
   : Lemma (perm_product m p ==
            prod_range (fun k -> if k < n then m k (p.fwd k) else one) 0 n)
   = ()
-
-(* -------------------------------------------------------------------- *)
-(*  Signed Leibniz summand.                                             *)
-(* -------------------------------------------------------------------- *)
-let leibniz_term (#t: Type) {| cr: commutative_ring t |} (#n: pos)
-  (m: square_matrix t n) (p: permutation n) : t
-  = if parity p
-    then perm_product m p
-    else (-(perm_product m p))
-
-(* -------------------------------------------------------------------- *)
-(*  Determinant.                                                         *)
-(* -------------------------------------------------------------------- *)
-let det (#t: Type) {| cr: commutative_ring t |} (#n: pos) (m: square_matrix t n) : t
-  = sum_over_perms n (leibniz_term m)
 
 let det_unfold (#t: Type) {| cr: commutative_ring t |} (#n: pos) (m: square_matrix t n)
   : Lemma (det m == sum_over_perms n (leibniz_term m))
@@ -244,18 +225,10 @@ let perm_product_id_respects_perm_eq (#t: Type) {| cr: commutative_ring t |} (n:
   : Lemma (requires perm_eq p q)
           (ensures  perm_product (id_matrix #t) p = perm_product (id_matrix #t) q)
   = elim_equatable_laws t ();
-    trans_for_calc t ();
-    let aux (k: nat) : Lemma (0 <= k /\ k < n ==>
-        (if k < n then id_matrix #t k (p.fwd k) else one)
-      = (if k < n then id_matrix #t k (q.fwd k) else one))
-      = if k < n then perm_eq_elim p q k
-    in
-    Classical.forall_intro aux;
+    Classical.forall_intro (Classical.move_requires (perm_eq_elim p q));    
     prod_range_congruence
-      (fun i ->
-        if i < n then id_matrix #t i (p.fwd i) else one)
-      (fun i ->
-        if i < n then id_matrix #t i (q.fwd i) else one)
+      (fun i -> if i < n then id_matrix #t i (p.fwd i) else one)
+      (fun i -> if i < n then id_matrix #t i (q.fwd i) else one)
       0 n (fun _ -> ());
     perm_product_unfold (id_matrix #t) p;
     perm_product_unfold (id_matrix #t) q
@@ -1343,9 +1316,7 @@ let col_scale (#t: Type) {| ring t |} (#n: pos)
   (m: square_matrix t n) (i: fin n) (c: t) : square_matrix t n
   = fun (a: fin n) (b: fin n) -> if Prims.op_Equality b i then m a b * c else m a b
 
-let col_add (#t: Type) {| ring t |} (#n: pos)
-  (m: square_matrix t n) (i j: fin n) (c: t) : square_matrix t n
-  = fun (a: fin n) (b: fin n) -> if Prims.op_Equality b i then m a b + m a j * c else m a b
+(* col_add defined in .fsti *)
 
 let transpose_col_swap_pointwise (#t: Type) (#n: pos)
   (m: square_matrix t n) (i j: fin n) (a b: fin n)
@@ -1730,9 +1701,7 @@ let det_permute_rows
 (*  expansion theorem.                                                    *)
 (* ====================================================================== *)
 
-(* (-1)^k as a ring element. *)
-let minus_one_pow (#t: Type) {| cr: commutative_ring t |} (k: nat) : t
-  = if Prims.op_Modulus k 2 = 0 then one else (- (one))
+(* (-1)^k, skip, minor are defined in .fsti *)
 
 let minus_one_pow_zero (#t: Type) {| cr: commutative_ring t |}
   : Lemma (minus_one_pow #t 0 == one)
@@ -1751,10 +1720,6 @@ let minus_one_pow_odd (#t: Type) {| cr: commutative_ring t |} (k: nat)
   : Lemma (requires Prims.op_Modulus k 2 = 1)
           (ensures  minus_one_pow #t k == (- (one)))
   = ()
-
-(* Skip the index `i` when injecting fin (n-1) into fin n. *)
-let skip (#n: pos) (i: fin n) (a: fin (Prims.op_Subtraction n 1)) : fin n
-  = if (a <: nat) < (i <: nat) then (a <: nat) else Prims.op_Addition a 1
 
 let skip_lt (#n: pos) (i: fin n) (a: fin (Prims.op_Subtraction n 1))
   : Lemma (requires (a <: nat) < (i <: nat))
@@ -1776,12 +1741,6 @@ let skip_injective (#n: pos) (i: fin n) (a b: fin (Prims.op_Subtraction n 1))
 let skip_avoids (#n: pos) (i: fin n) (a: fin (Prims.op_Subtraction n 1))
   : Lemma (~((skip i a <: nat) == (i <: nat)))
   = ()
-
-(* The (n-1) x (n-1) minor of m at row i, column j: delete row i and column j. *)
-let minor (#t: Type) (#n: pos{ n > 1 }) (m: square_matrix t n) (i j: fin n)
-  : square_matrix t (Prims.op_Subtraction n 1)
-  = fun (a: fin (Prims.op_Subtraction n 1)) (b: fin (Prims.op_Subtraction n 1))
-      -> m (skip i a) (skip j b)
 
 let minor_at (#t: Type) (#n: pos{ n > 1 }) (m: square_matrix t n) (i j: fin n)
              (a b: fin (Prims.op_Subtraction n 1))
@@ -3122,11 +3081,7 @@ let leibniz_inject_factor
 (* ====================================================================== *)
 
 (* Module-level cofactor function *)
-let cofactor_term (#t: Type) {| cr: commutative_ring t |} (#n: pos{ n > 1 })
-  (m: square_matrix t n) (i j: fin n) : t
-  = minus_one_pow #t #cr (Prims.op_Addition (i <: nat) (j <: nat))
-    * m i j
-    * det #t #cr #(Prims.op_Subtraction n 1) (minor m i j)
+(* cofactor_term defined in .fsti *)
 
 (* Helper: the per-fiber sum equals the cofactor expansion term. *)
 

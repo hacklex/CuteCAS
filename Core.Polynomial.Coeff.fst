@@ -21,37 +21,6 @@ open Core.Polynomial
 open Core.Polynomial.Div
 open Core.FinSum
 
-(* ================================================================ *)
-(*  Helpers                                                          *)
-(* ================================================================ *)
-
-(* Index shift for sum_range:
-   sum_range (fun j -> f (j + offset)) lo hi = sum_range f (lo+offset) (hi+offset) *)
-let rec sum_range_shift
-  (#t:Type) {| m: add_comm_group t |}
-  (f: nat -> t) (offset lo hi: nat)
-  : Lemma (ensures sum_range (fun (j:nat) -> f (Prims.op_Addition j offset)) lo hi
-                 = sum_range f (Prims.op_Addition lo offset) (Prims.op_Addition hi offset))
-          (decreases (hi - lo))
-  = elim_equatable_laws t ();
-    trans_for_calc t ();
-    if lo >= hi then begin
-      sum_range_empty (fun (j:nat) -> f (Prims.op_Addition j offset)) lo hi;
-      sum_range_empty f (Prims.op_Addition lo offset) (Prims.op_Addition hi offset);
-      reflexivity (zero <: t)
-    end
-    else begin
-      sum_range_unfold_left (fun (j:nat) -> f (Prims.op_Addition j offset)) lo hi;
-      sum_range_unfold_left f (Prims.op_Addition lo offset) (Prims.op_Addition hi offset);
-      assert (Prims.op_Addition (nat_succ lo) offset == nat_succ (Prims.op_Addition lo offset));
-      sum_range_shift f offset (nat_succ lo) hi;
-      reflexivity (f (Prims.op_Addition lo offset));
-      add_congruence (f (Prims.op_Addition lo offset))
-                     (sum_range (fun (j:nat) -> f (Prims.op_Addition j offset)) (nat_succ lo) hi)
-                     (f (Prims.op_Addition lo offset))
-                     (sum_range f (Prims.op_Addition (nat_succ lo) offset) (Prims.op_Addition hi offset))
-    end
-
 (* Coefficient of zero-cons: coeff (zero @ p) 0 = zero *)
 private let coeff_zero_cons_at_zero (#t:Type) {| cr: commutative_ring t |}
   (p: polynomial t)
@@ -63,35 +32,6 @@ private let coeff_zero_cons_at_succ (#t:Type) {| cr: commutative_ring t |}
   (p: polynomial t) (k: nat{k >= 1})
   : Lemma (coeff ((zero <: t) @ p) k = coeff p (Prims.op_Subtraction k 1))
   = zero_shift_coeff p (Prims.op_Subtraction k 1)
-
-(* sum_range of all-zero function = zero *)
-let rec sum_range_all_zero
-  (#t:Type) {| m: add_comm_group t |}
-  (f: nat -> t) (lo hi: nat)
-  (h: (k: nat{lo <= k /\ k < hi}) -> Lemma (f k = (zero <: t)))
-  : Lemma (ensures sum_range f lo hi = (zero <: t))
-          (decreases (hi - lo))
-  = if lo >= hi then begin
-      sum_range_empty f lo hi;
-      reflexivity (zero <: t)
-    end
-    else begin
-      sum_range_unfold_left f lo hi;
-      h lo;
-      sum_range_all_zero f (nat_succ lo) hi
-        (fun (k: nat{nat_succ lo <= k /\ k < hi}) -> h k);
-      elim_equatable_laws t ();
-      trans_for_calc t ();
-      m.add_zero (zero <: t);
-      add_congruence (f lo) (sum_range f (nat_succ lo) hi)
-                     (zero <: t) (zero <: t);
-      transitivity (sum_range f lo hi)
-                   (f lo + sum_range f (nat_succ lo) hi)
-                   ((zero <: t) + (zero <: t));
-      transitivity (sum_range f lo hi)
-                   ((zero <: t) + (zero <: t))
-                   (zero <: t)
-    end
 
 (* ================================================================ *)
 (*  Convolution identity: coeff (poly_mul p q) k                    *)
@@ -409,4 +349,27 @@ let monomial_decomposition (#t:Type) {| cr: commutative_ring t |}
     in
     Classical.forall_intro aux;
     equal_coeffs_means_poly_eq decomp p
+#pop-options
+
+(* ================================================================ *)
+(*  Named-function variant of coeff_poly_mul                         *)
+(* ================================================================ *)
+
+#push-options "--z3rlimit 40 --fuel 0 --ifuel 0"
+let coeff_poly_mul_named (#t:Type) {| cr: commutative_ring t |}
+  (p q: polynomial t) (k: nat) (g: nat -> t)
+  (h: (i:nat) -> Lemma (g i = coeff p i * coeff q (Prims.op_Subtraction k i)))
+  : Lemma (ensures coeff (poly_mul p q) k = sum_range g 0 (L.length p))
+  = elim_equatable_laws t ();
+    trans_for_calc t ();
+    coeff_poly_mul p q k;
+    let conv (i:nat) : t = coeff p i * coeff q (Prims.op_Subtraction k i) in
+    let pw (i: nat{0 <= i /\ i < L.length p}) : Lemma (conv i = g i)
+      = h i;
+        symmetry (g i) (coeff p i * coeff q (Prims.op_Subtraction k i))
+    in
+    sum_range_congruence conv g 0 (L.length p) pw;
+    transitivity (coeff (poly_mul p q) k)
+                 (sum_range (fun (i:nat) -> coeff p i * coeff q (Prims.op_Subtraction k i)) 0 (L.length p))
+                 (sum_range g 0 (L.length p))
 #pop-options

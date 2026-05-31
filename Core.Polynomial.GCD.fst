@@ -368,6 +368,10 @@ instance polynomial_euclidean_domain_chain_instance
 let coprime (#t:Type) {| f: field t |} (p q: polynomial t) : bool
   = poly_deg (poly_gcd #t #f p q) = Some 0
 
+let coprime_reveal (#t:Type) {| f: field t |} (p q: polynomial t)
+  : Lemma (coprime #t #f p q = (poly_deg (poly_gcd #t #f p q) = Some 0))
+  = ()
+
 
 (* ================================================================== *)
 (*  Euclid's lemma: coprime(p, q) /\ p | a*q  ⟹  p | a                *)
@@ -375,7 +379,7 @@ let coprime (#t:Type) {| f: field t |} (p q: polynomial t) : bool
 
 (* When poly_deg p = Some 0, the polynomial is a singleton list whose
    sole element is its leading coefficient and is nonzero. *)
-private let degree_zero_is_singleton
+let degree_zero_is_singleton
     (#t:Type) {| cr: commutative_ring t |} (p: polynomial t)
   : Lemma (requires poly_deg p == Some 0)
           (ensures  p == [poly_lc p] /\ not ((poly_lc p) = (zero <: t)))
@@ -387,7 +391,7 @@ private let degree_zero_is_singleton
 (* For c <> zero, the singleton [inv c] times the singleton [c] equals
    poly_one (the polynomial-ring identity).  Proven via direct list
    inspection and the field inversion law. *)
-private let singleton_inv_mul_singleton
+let singleton_inv_mul_singleton
     (#t:Type) {| f: field t |} (c: t)
   : Lemma (requires not (c = (zero <: t)))
           (ensures  (let cinv = f.f_sf.sf_mig.inv c in

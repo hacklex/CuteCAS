@@ -670,6 +670,22 @@ let poly_divmod (#t:Type) {| f: field t |} (p q: polynomial t)
   : polynomial t & polynomial t
   = poly_divmod_fuel #t #f p q (Prims.op_Addition (L.length p) 1)
 
+let poly_div (#t:Type) {| f: field t |} (p q: polynomial t)
+  : polynomial t
+  = fst (poly_divmod #t #f p q)
+
+let poly_rem (#t:Type) {| f: field t |} (p q: polynomial t)
+  : polynomial t
+  = snd (poly_divmod #t #f p q)
+
+let poly_div_reveal (#t:Type) {| f: field t |} (p q: polynomial t)
+  : Lemma (poly_div #t #f p q == fst (poly_divmod #t #f p q))
+  = ()
+
+let poly_rem_reveal (#t:Type) {| f: field t |} (p q: polynomial t)
+  : Lemma (poly_rem #t #f p q == snd (poly_divmod #t #f p q))
+  = ()
+
 let poly_divmod_correct (#t:Type) {| f: field t |}
                         (p q: polynomial t)
   : Lemma (let (quot, rem) = poly_divmod #t #f p q in

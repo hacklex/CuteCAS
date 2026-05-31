@@ -138,6 +138,28 @@ val polynomial_euclidean_domain_chain_instance
 (* `coprime p q` iff gcd(p, q) is a nonzero constant (degree 0). *)
 val coprime (#t:Type) {| f: field t |} (p q: polynomial t) : bool
 
+val coprime_reveal (#t:Type) {| f: field t |} (p q: polynomial t)
+  : Lemma (coprime #t #f p q = (poly_deg (poly_gcd #t #f p q) = Some 0))
+
+(* ------------------------------------------------------------------ *)
+(*  Singleton characterization and inverse                             *)
+(* ------------------------------------------------------------------ *)
+
+(* A polynomial of degree 0 is exactly [lc p] with lc p ≠ zero. *)
+val degree_zero_is_singleton
+    (#t:Type) {| cr: commutative_ring t |} (p: polynomial t)
+  : Lemma (requires poly_deg p == Some 0)
+          (ensures  p == [poly_lc p] /\ not ((poly_lc p) = (zero <: t)))
+
+(* For c ≠ zero, [inv c] * [c] ≈ poly_one (field inverse at poly level). *)
+val singleton_inv_mul_singleton
+    (#t:Type) {| f: field t |} (c: t)
+  : Lemma (requires not (c = (zero <: t)))
+          (ensures  (let cinv = f.f_sf.sf_mig.inv c in
+                     let lhs : polynomial t = [cinv] in
+                     let rhs : polynomial t = [c] in
+                     poly_eq (poly_mul lhs rhs) (poly_one #t)))
+
 (* Euclid's lemma: if p and q are coprime and p divides a*q, then p
    divides a. *)
 val euclid_lemma (#t:Type) {| f: field t |} (p q a: polynomial t)

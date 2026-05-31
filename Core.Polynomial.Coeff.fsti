@@ -14,25 +14,8 @@ module L = FStar.List.Tot
 open Core.Algebra
 open Core.Algebra.Notation
 open Core.Polynomial
+open Core.Polynomial.Div
 open Core.FinSum
-
-(* ================================================================ *)
-(*  Helpers                                                          *)
-(* ================================================================ *)
-
-val sum_range_shift
-  (#t:Type) {| m: add_comm_group t |}
-  (f: nat -> t) (offset lo hi: nat)
-  : Lemma (ensures sum_range (fun (j:nat) -> f (Prims.op_Addition j offset)) lo hi
-                 = sum_range f (Prims.op_Addition lo offset) (Prims.op_Addition hi offset))
-          (decreases (hi - lo))
-
-val sum_range_all_zero
-  (#t:Type) {| m: add_comm_group t |}
-  (f: nat -> t) (lo hi: nat)
-  (h: (k: nat{lo <= k /\ k < hi}) -> Lemma (f k = (zero <: t)))
-  : Lemma (ensures sum_range f lo hi = (zero <: t))
-          (decreases (hi - lo))
 
 (* ================================================================ *)
 (*  Convolution identity                                             *)
@@ -65,3 +48,12 @@ val monomial_decomposition (#t:Type) {| cr: commutative_ring t |}
              (sum_range #(polynomial t) #(polynomial_acg cr)
                 (fun (i:nat) -> monomial (coeff p i) i) 0 n)
              p)
+
+(* ================================================================ *)
+(*  Named-function variant of coeff_poly_mul                         *)
+(* ================================================================ *)
+
+val coeff_poly_mul_named (#t:Type) {| cr: commutative_ring t |}
+  (p q: polynomial t) (k: nat) (g: nat -> t)
+  (h: (i:nat) -> Lemma (g i = coeff p i * coeff q (Prims.op_Subtraction k i)))
+  : Lemma (ensures coeff (poly_mul p q) k = sum_range g 0 (L.length p))

@@ -127,6 +127,18 @@ val poly_sub_degree_bound (#t:Type) {| cr: commutative_ring t |}
 val poly_divmod (#t:Type) {| f: field t |} (p q: polynomial t)
   : polynomial t & polynomial t
 
+val poly_div (#t:Type) {| f: field t |} (p q: polynomial t)
+  : polynomial t
+
+val poly_rem (#t:Type) {| f: field t |} (p q: polynomial t)
+  : polynomial t
+
+val poly_div_reveal (#t:Type) {| f: field t |} (p q: polynomial t)
+  : Lemma (poly_div #t #f p q == fst (poly_divmod #t #f p q))
+
+val poly_rem_reveal (#t:Type) {| f: field t |} (p q: polynomial t)
+  : Lemma (poly_rem #t #f p q == snd (poly_divmod #t #f p q))
+
 val poly_divmod_correct (#t:Type) {| f: field t |}
                         (p q: polynomial t)
   : Lemma (let (quot, rem) = poly_divmod #t #f p q in

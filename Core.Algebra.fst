@@ -143,7 +143,7 @@ class mul_is_commutative (t:Type) {| r: ring t |} = {
 unfold let is_nonzero (#t:Type) {| add_comm_group t |} (x:t) : bool =
   not (eq x zero)
 
-class mul_is_group (t:Type) (r: ring t) = {
+class mul_is_group (t:Type) {| r: ring t |} = {
   inv:               (x:t) -> Pure t (requires is_nonzero x)
                                      (ensures fun y -> is_nonzero y);
   inv_congr:         (a: t) -> (b: t) ->
@@ -180,12 +180,89 @@ let domain_nonzero_mul_nonzero (#t:Type) {| d: domain t |}
 (* skewfield                                                        *)
 (* ---------------------------------------------------------------- *)
 
+(* A skewfield is a ring where nonzero elements form a multiplicative
+   group.  The domain law (no zero divisors) follows from the existence
+   of inverses: if a·b = 0 and a ≠ 0 then b = inv(a)·(a·b) = inv(a)·0 = 0.
+   We derive the domain instance rather than storing it redundantly. *)
+
 class skewfield (t:Type) = {
-  [@@@TC.no_method] sf_d:   domain t;
-  [@@@TC.no_method] sf_mig: mul_is_group t sf_d.d_r;
+  [@@@TC.no_method] sf_r:   ring t;
+  [@@@TC.no_method] sf_mig: mul_is_group t #sf_r;
 }
 
-instance d_of_sf (t:Type) {| sf: skewfield t |} : domain t = sf.sf_d
+instance mig_of_sf (t:Type) {| sf: skewfield t |} : mul_is_group t = sf.sf_mig
+
+instance r_of_sf (t:Type) {| sf: skewfield t |} : ring t = sf.sf_r
+
+private let zero_mul_z (#t:Type) {|r: ring t|} (z: t) : Lemma (eq (mul zero z) zero)
+  = 
+  Classical.forall_intro #t reflexivity;
+  Classical.forall_intro_2 #t symmetry; 
+  Classical.forall_intro_3 #t (Classical.move_requires_3 transitivity);  
+  let (+), ( * ), op_Minus = add, mul, neg in  
+  add_zero #t zero;
+  mul_congruence zero z (zero + zero) z;
+  right_distributivity z zero zero;
+  add_congruence (zero*z) (-(zero*z)) ((zero*z)+(zero*z)) (-(zero*z));
+  add_negation (zero*z);
+  add_associativity (zero*z) (zero*z) (-(zero*z));
+  add_congruence (zero*z) (zero*z + (-(zero*z))) (zero*z) zero;
+  add_zero (zero*z)
+
+private let z_mul_zero (#t:Type) {|r: ring t|} (z: t) : Lemma (eq (mul z zero) zero)
+  = 
+  Classical.forall_intro #t reflexivity;
+  Classical.forall_intro_2 #t symmetry; 
+  Classical.forall_intro_3 #t (Classical.move_requires_3 transitivity);
+  let (+), ( * ), op_Minus = add, mul, neg in
+  add_zero #t zero;
+  mul_congruence z zero z (zero + zero);
+  left_distributivity z zero zero;
+  add_congruence (z*zero) (-(z*zero)) ((z*zero)+(z*zero)) (-(z*zero));
+  add_negation (z*zero);
+  add_associativity (z*zero) (z*zero) (-(z*zero));
+  add_congruence (z*zero) (z*zero + (-(z*zero))) (z*zero) zero;
+  add_zero (z*zero)
+
+private let mul_zero (#t:Type) {|r: ring t|} (z: t) : Lemma (eq (mul z zero) zero /\ eq (mul zero z) zero)
+  = z_mul_zero z; zero_mul_z z
+
+(* Proof that mul_is_group implies the no-zero-divisors law.
+   Self-contained: uses only ring/equatable axiom fields directly. *)
+private let mul_is_group_means_domain (#t:Type) (#r: ring t) (mig: mul_is_group t #r) (x y: t)
+  : Lemma ((eq (mul x y) zero) <==> ((eq x zero) \/ (eq y zero))) =   
+  Classical.forall_intro #t reflexivity;
+  Classical.forall_intro_2 #t symmetry; 
+  Classical.forall_intro_3 #t (Classical.move_requires_3 transitivity);
+(* Step 2: backward direction — x=0 ∨ y=0 → xy=0 *)
+  let backward () : Lemma (requires (eq x zero) \/ (eq y zero))
+                          (ensures eq (mul x y) zero) =
+    mul_zero x;
+    mul_zero y;
+    if (eq x zero) 
+    then mul_congruence x y zero y 
+    else mul_congruence x y x zero
+  in
+  (* Step 3: forward direction — xy=0 ∧ x≠0 → y=0 *)
+  let forward () : Lemma (requires eq (mul x y) zero)
+                          (ensures (eq x zero) \/ (eq y zero)) =
+    if not (eq x (zero <: t)) then (
+      mig.inversion_lemma x;
+      let ix = mig.inv x in
+      mul_associativity ix x y;
+      mul_congruence (mul ix x) y one y;
+      mul_one y;
+      mul_congruence ix (mul x y) ix (zero <: t);
+      z_mul_zero ix
+    ) else ()
+  in
+  Classical.move_requires backward ();
+  Classical.move_requires forward ()
+
+instance d_of_sf (t:Type) {| sf: skewfield t |} : domain t = {
+  d_r = sf.sf_r;
+  domain_law = mul_is_group_means_domain #t #sf.sf_r sf.sf_mig;
+}
 
 (* ---------------------------------------------------------------- *)
 (* commutative_ring                                                 *)
@@ -232,7 +309,7 @@ unfold instance cr_of_id (t:Type) {| id: integral_domain t |} : commutative_ring
 
 class field (t:Type) = {
   [@@@TC.no_method] f_sf:  skewfield t;
-  [@@@TC.no_method] f_mic: mul_is_commutative t #f_sf.sf_d.d_r; 
+  [@@@TC.no_method] f_mic: mul_is_commutative t #f_sf.sf_r; 
   [@@@TC.no_method] f_one_ne_zero: squash (not (one `eq` zero #t)); 
 }
 
@@ -241,7 +318,7 @@ instance sf_of_f (t:Type) {| f: field t |} : skewfield t = f.f_sf
 
 
 instance id_of_f (t:Type) {| f: field t |} : integral_domain t = {
-  id_d           = f.f_sf.sf_d;
+  id_d           = d_of_sf t;
   id_mic         = f.f_mic;
   id_one_ne_zero = f.f_one_ne_zero;
 }

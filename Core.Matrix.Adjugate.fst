@@ -375,22 +375,22 @@ let adj_mul_diagonal (#t: Type) {| cr: commutative_ring t |} (#n: pos{n > 1})
   : Lemma (matrix_mul (adjugate m) m i i = det m)
   = H.elim_equatable_laws t ();
     H.trans_for_calc t ();
-    matrix_mul_eq_at #t #cr.cr_r (adjugate m) m i i;
+    matrix_mul_to_fin_sum #t #cr.cr_r (adjugate m) m i i;
     H.leibniz_to_eq (matrix_mul (adjugate m) m i i)
                     (fin_sum #t #(acg_of_r t #cr.cr_r) #n
-                      (fun (k: fin n) -> adjugate m i k * m k i));
+                      (pointwise_mul (row (adjugate m) i) (col m i)));
     let pw (k: fin n)
-      : Lemma ((fun (k': fin n) -> adjugate m i k' * m k' i) k
+      : Lemma (pointwise_mul (row (adjugate m) i) (col m i) k
              = col_cofactor_summand m i k)
       = mul_commutativity #t #cr.cr_r (signed_cofactor m k i) (m k i)
     in
     Classical.forall_intro pw;
     fin_sum_congruence #t #(acg_of_r t #cr.cr_r) #n
-      (fun (k: fin n) -> adjugate m i k * m k i)
+      (pointwise_mul (row (adjugate m) i) (col m i))
       (col_cofactor_summand m i) (fun _ -> ());
     transitivity (matrix_mul (adjugate m) m i i)
                  (fin_sum #t #(acg_of_r t #cr.cr_r) #n
-                   (fun (k: fin n) -> adjugate m i k * m k i))
+                   (pointwise_mul (row (adjugate m) i) (col m i)))
                  (fin_sum (col_cofactor_summand m i));
     det_laplace_col m i;
     symmetry (det m) (fin_sum (col_cofactor_summand m i));
@@ -406,22 +406,22 @@ let adj_mul_off_diagonal (#t: Type) {| cr: commutative_ring t |} (#n: pos{n > 1}
           (ensures  matrix_mul (adjugate m) m i j = (zero <: t))
   = H.elim_equatable_laws t ();
     H.trans_for_calc t ();
-    matrix_mul_eq_at #t #cr.cr_r (adjugate m) m i j;
+    matrix_mul_to_fin_sum #t #cr.cr_r (adjugate m) m i j;
     H.leibniz_to_eq (matrix_mul (adjugate m) m i j)
                     (fin_sum #t #(acg_of_r t #cr.cr_r) #n
-                      (fun (k: fin n) -> adjugate m i k * m k j));
+                      (pointwise_mul (row (adjugate m) i) (col m j)));
     let pw (k: fin n)
-      : Lemma ((fun (k': fin n) -> adjugate m i k' * m k' j) k
+      : Lemma (pointwise_mul (row (adjugate m) i) (col m j) k
              = fake_laplace_summand m j i k)
       = mul_commutativity #t #cr.cr_r (signed_cofactor m k i) (m k j)
     in
     Classical.forall_intro pw;
     fin_sum_congruence #t #(acg_of_r t #cr.cr_r) #n
-      (fun (k: fin n) -> adjugate m i k * m k j)
+      (pointwise_mul (row (adjugate m) i) (col m j))
       (fake_laplace_summand m j i) (fun _ -> ());
     transitivity (matrix_mul (adjugate m) m i j)
                  (fin_sum #t #(acg_of_r t #cr.cr_r) #n
-                   (fun (k: fin n) -> adjugate m i k * m k j))
+                   (pointwise_mul (row (adjugate m) i) (col m j)))
                  (fin_sum (fake_laplace_summand m j i));
     fake_laplace_zero m j i;
     transitivity (matrix_mul (adjugate m) m i j)

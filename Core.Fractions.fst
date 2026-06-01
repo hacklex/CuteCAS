@@ -766,7 +766,7 @@ private let fr_domain (t:Type) (d: integral_domain t)
   }
 
 private let fr_mig (t:Type) (d: integral_domain t)
-  : mul_is_group (fraction d) (fr_ring t d) = {
+  : mul_is_group (fraction d) #(fr_ring t d) = {
     inv             = (fun x -> fraction_inv x);
     inv_congr       = (fun a b -> fraction_inv_congruence a b);
     inversion_lemma = (fun x ->

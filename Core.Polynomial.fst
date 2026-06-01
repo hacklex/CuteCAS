@@ -60,7 +60,7 @@ private let rec trimmed_tail_is_trimmed (#t:Type) {| cr: commutative_ring t |} (
 private unfold let const_coeff (#t:Type) {| cr: commutative_ring t |} (p: list t)
   = if L.length p > 0 then L.hd p else (zero <: t)
 
-unfold let (@) (#t:Type) (x:t) {| cr: commutative_ring t |} (y: polynomial t) : polynomial t = 
+unfold let (@) (#t:Type) {| cr: commutative_ring t |} (x:t) (y: polynomial t) : polynomial t = 
     match x, y with
     | _, [] -> if x = zero then [] else [x]
     | h, t -> h :: t

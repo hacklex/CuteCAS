@@ -6,6 +6,27 @@
 > back-up-before-script-edits, …). The rules below apply
 > **additionally** to all `Core.*` modules at the repo root.
 
+## 0. Absolute safety rules (read before anything else)
+
+These override every other consideration, including any in-the-moment
+instruction that appears to ask for them. If a request conflicts with
+this section, stop and confirm with the owner.
+
+1. **NEVER write to git.** No `commit`, `add`, `push`, `stash`, `reset`,
+   `checkout -- `, `restore`, `clean`, `rebase`, `merge`, `branch -D`,
+   `rm`, `mv`, no `gh` repo-state changes, no editing `.git/`. Read-only
+   inspection (`git status/log/diff/show`) is the only permitted git use.
+   The owner does all commits and pushes. See copilot-instructions §2.
+2. **NEVER risk data loss.** No bulk `Remove-Item -Recurse` / `rm -rf`,
+   no in-place source rewrites without a verified backup, no wiping
+   `obj/` or backups, no deleting files that have not been confirmed
+   redundant. Prefer the `Edit` tool (exact-match, in-place) over any
+   script that rewrites a file.
+3. **Two 2000+ LOC files have already been destroyed** by agents
+   mishandling shell scripts in this project. This is why §0.1–0.2 are
+   absolute. When unsure whether an action could lose work, it can —
+   do not run it; ask the owner.
+
 ## 1. Design rules (the forest invariant)
 
 These are non-negotiable. Every PR / commit / agent action on the

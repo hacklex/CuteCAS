@@ -16,7 +16,10 @@ All actively developed modules live under the **`Core.*`** namespace
 (e.g. `Core.Algebra`, `Core.Algebra.Notation`, `Core.FinSum`,
 `Core.Permutation`, `Core.Permutation.Enum`, `Core.Permutation.Sum`,
 `Core.Matrix`, `Core.Matrix.Ring`, `Core.Matrix.Determinant`,
-`Core.Polynomial.Class`, `Core.Polynomial.Class.Div`, `Core.Fractions`,
+`Core.Polynomial`, `Core.Polynomial.Div`, `Core.Polynomial.GCD`,
+`Core.Polynomial.Derivative`, `Core.Polynomial.SquareFree`,
+`Core.Fractions`, `Core.AlgebraicConstant`, `Core.Derivation`,
+`Core.Risch.Hermite`, `Core.Risch.LRT`, `Core.Risch.Rational`,
 `Core.Tactics.CanonRing`, `Core.Tactics.CanonCommGroup`, …).
 New modules MUST use this namespace.
 
@@ -63,6 +66,12 @@ source files (`.fst`, `.fsti`), documentation (`.md`), scripts, everything.
 
 ## 1.5. Script edits: back up first, verify after
 
+> **This rule has already been violated at a cost.** Two large (2000+ LOC)
+> source files were destroyed by agents mishandling shell scripts. Treat
+> every script-driven edit as live ordnance. If you cannot guarantee a file
+> survives an operation, do not run the operation — use the `Edit` tool
+> (exact-match, in-place) or hand the step to the owner.
+
 When making **script-driven** edits to source files (e.g., PowerShell loops,
 `Set-Content`, regex passes, mass rename), follow this rule **strictly**:
 
@@ -83,18 +92,47 @@ When making **script-driven** edits to source files (e.g., PowerShell loops,
 If you skip the backup and corrupt a file, the user will (rightly) be upset.
 Treat any non-trivial script edit as destructive until proven otherwise.
 
-## 2. Git: never run git commands
+## 2. Git: NEVER write — this is an absolute, non-negotiable prohibition
 
-**The agent does not interact with git.** The repository owner reviews and
-commits changes manually.
+**The agent NEVER performs any git operation that writes, moves, or could
+destroy data.** The repository owner — and ONLY the owner — stages, commits,
+pushes, and manages branches. This is not a preference; it is a hard safety
+boundary.
 
-- Do **not** run `git add`, `git commit`, `git push`, `git stash`, `git reset`,
-  `git checkout`, `git rebase`, or any other git subcommand.
-- Do not create or switch branches.
-- Do not invoke GitHub CLI (`gh`) for repo state changes.
-- You may *read* state passively only if strictly necessary (e.g., `git status`
-  to answer a question the user asked), but prefer not to. The user knows
-  what's in their working tree.
+> **Why this rule is absolute.** AI agents have *already destroyed two large
+> (2000+ LOC) source files* in this project through careless shell handling.
+> Lost work is unacceptable. Every rule below exists to make a repeat
+> impossible. When in doubt, do nothing and ask the owner.
+
+**FORBIDDEN — never run any of these, under any circumstance, even if asked
+mid-flow without an explicit, deliberate confirmation:**
+
+- `git commit`, `git add`, `git push`, `git stash`, `git stash pop`
+- `git reset` (any mode — `--soft`, `--mixed`, and especially `--hard`)
+- `git checkout -- <path>` / `git restore` (discards working-tree edits)
+- `git clean` (deletes untracked files — this is how uncommitted work vanishes)
+- `git rebase`, `git merge`, `git cherry-pick`, `git revert`
+- `git branch -D` / `git branch -d`, creating or switching branches
+- `git rm`, `git mv`
+- `gh` (GitHub CLI) for any repo-state change (PRs, pushes, branch ops)
+- Editing anything under `.git/` directly.
+
+**ALSO FORBIDDEN — non-git operations that risk the same data loss:**
+
+- Bulk file deletion / overwrite via shell (`Remove-Item -Recurse`, `rm -rf`,
+  `del /s`) without first confirming, per item, that the content is redundant.
+- The `Get-Content | Set-Content -NoNewline` footgun (see §1.5) and any
+  pipeline that rewrites a source file in place without a backup.
+- Wiping `obj/`, deleting backups, or removing scratch files that have not
+  been confirmed redundant.
+
+**ALLOWED (read-only):** passive inspection only — `git status`, `git log`,
+`git diff`, `git show`, `git stash list`. Use these solely to answer a
+question; never as a step toward a write. The owner knows their working tree.
+
+If a task seems to require a git write (e.g. "commit this", "undo my changes"),
+**stop and tell the owner to run it themselves** (they can use `! <command>`
+in the session). Do not run it for them.
 
 ## 3. Resource budget when running F\*
 

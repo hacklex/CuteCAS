@@ -1,0 +1,5 @@
+{
+  "fstar_exe": "C://FStar//bin//fstar.exe",
+  "include_dirs": ["C://Projects//CuteCAS"],
+  "options": ["--cache_checked_modules", "--cache_dir", "C://Projects//CuteCAS//obj"]
+}

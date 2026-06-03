@@ -104,9 +104,9 @@ private let extract_r_helper
 
 #push-options "--z3rlimit 60 --fuel 1 --ifuel 1"
 let sub_zero_implies_eq #t #cr (a b: polynomial t)
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     poly_sub_reveal a b;
-    sub_zero_implies_eq_h #(polynomial t) #cr_p a b
+    sub_zero_implies_eq_h  a b
 #pop-options
 
 (* ================================================================ *)
@@ -135,18 +135,18 @@ let only_mul_zero_decreases_poly_degree #t #f (q d s: polynomial t)
 
 #push-options "--z3rlimit 60 --fuel 1 --ifuel 1"
 let poly_mul_sub_distrib #t #cr (q a b: polynomial t)
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     poly_sub_reveal a b;
     poly_sub_reveal (poly_mul q a) (poly_mul q b);
-    mul_sub_distrib_h #(polynomial t) #cr_p q a b
+    mul_sub_distrib_h  q a b
 #pop-options
 
 #push-options "--z3rlimit 60 --fuel 1 --ifuel 1"
 let add_rearrange #t #cr (x y r1 r2: polynomial t)
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     poly_sub_reveal x y;
     poly_sub_reveal r2 r1;
-    add_rearrange_h #(polynomial t) #cr_p x y r1 r2
+    add_rearrange_h  x y r1 r2
 #pop-options
 
 (* ================================================================ *)
@@ -155,7 +155,7 @@ let add_rearrange #t #cr (x y r1 r2: polynomial t)
 
 #push-options "--z3rlimit 80 --fuel 1 --ifuel 1"
 let poly_divmod_unique #t #f (q a1 a2 r1 r2: polynomial t)
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     let qa1 = poly_mul q a1 in
     let qa2 = poly_mul q a2 in
     (* Part A: prove poly_eq a1 a2 *)
@@ -186,5 +186,5 @@ let poly_divmod_unique #t #f (q a1 a2 r1 r2: polynomial t)
        Identity: at carrier polynomial t,
          eq (add qa1 r1) (add qa2 r2) ∧ eq qa1 qa2 ⟹ eq r1 r2.
        Goes through (add r1 (neg r1)) = zero + cancellation. *)
-    extract_r_helper #(polynomial t) #cr_p qa1 qa2 r1 r2
+    extract_r_helper  qa1 qa2 r1 r2
 #pop-options

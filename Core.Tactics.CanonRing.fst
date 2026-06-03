@@ -626,40 +626,27 @@ private let cr_neg_mul_l (#t:Type) {| r: ring t |} (x y: t)
     r.right_distributivity y nx x;
     (* nx + x = 0 ; so (nx+x)*y = 0*y = 0 *)
     H.neg_x_plus_x x;
-    reflexivity y;
     mul_congruence (nx + x) y (zero #t) y;
     H.zero_mul_x y;
     H.trans2 nxx_y (zero * y) (zero #t);
     (* so 0 = (nx+x)*y = nx*y + x*y *)
-    symmetry nxx_y nxy_xy;
-    symmetry nxx_y (zero #t);
     H.trans2 (zero #t) nxx_y nxy_xy;
     (* nxy + xy = 0 *)
     H.neg_x_plus_x xy;
     (* nx*y + xy = nxy + xy: both equal to zero *)
-    symmetry (zero #t) (nxy + xy);
     H.trans2 nxy_xy (zero #t) (nxy + xy);
     (* cancel xy on right *)
     add_associativity (nx * y) xy (neg xy);
     add_associativity nxy xy (neg xy);
     H.x_plus_neg_x xy;
-    reflexivity (nx * y);
-    reflexivity nxy;
     add_congruence (nx * y) (xy + neg xy) (nx * y) (zero #t);
     add_congruence nxy (xy + neg xy) nxy (zero #t);
     H.x_plus_zero (nx * y);
     H.x_plus_zero nxy;
-    reflexivity (neg xy);
     add_congruence nxy_xy (neg xy) (nxy + xy) (neg xy);
     transitivity ((nx * y) + xy + neg xy) (nxy + xy + neg xy)
                  (nxy + (xy + neg xy));
-    transitivity ((nx * y) + xy + neg xy) (nxy + (xy + neg xy)) (nxy + zero);
-    transitivity ((nx * y) + xy + neg xy) (nxy + zero) nxy;
     (* Also nx*y + xy + (-xy) = nx*y + (xy + -xy) = nx*y + 0 = nx*y *)
-    symmetry ((nx * y) + xy + neg xy) ((nx * y) + (xy + neg xy));
-    transitivity (nx * y) ((nx * y) + zero) ((nx * y) + (xy + neg xy));
-    symmetry ((nx * y) + zero) (nx * y);
-    transitivity (nx * y) ((nx * y) + (xy + neg xy)) ((nx * y) + xy + neg xy);
     transitivity (nx * y) ((nx * y) + xy + neg xy) nxy
 #pop-options
 
@@ -673,26 +660,14 @@ private let cr_double_neg (#t:Type) {| r: ring t |} (x: t)
     (* nnx + nx = 0 ; x + nx = 0 ; so nnx = x by right-cancellation *)
     H.neg_x_plus_x nx;
     H.x_plus_neg_x x;
-    symmetry (x + nx) (zero #t);
-    transitivity (nnx + nx) (zero #t) (x + nx);
     add_associativity nnx nx (neg nx);
     add_associativity x nx (neg nx);
     H.x_plus_neg_x nx;
-    reflexivity nnx;
-    reflexivity x;
     add_congruence nnx (nx + neg nx) nnx (zero #t);
     add_congruence x (nx + neg nx) x (zero #t);
     H.x_plus_zero nnx;
     H.x_plus_zero x;
-    reflexivity (neg nx);
     add_congruence (nnx + nx) (neg nx) (x + nx) (neg nx);
-    transitivity (nnx + nx + neg nx) (x + nx + neg nx) (x + (nx + neg nx));
-    transitivity (nnx + nx + neg nx) (x + (nx + neg nx)) (x + zero);
-    transitivity (nnx + nx + neg nx) (x + zero) x;
-    symmetry (nnx + nx + neg nx) (nnx + (nx + neg nx));
-    transitivity nnx (nnx + zero) (nnx + (nx + neg nx));
-    symmetry (nnx + zero) nnx;
-    transitivity nnx (nnx + (nx + neg nx)) (nnx + nx + neg nx);
     transitivity nnx (nnx + nx + neg nx) x
 #pop-options
 

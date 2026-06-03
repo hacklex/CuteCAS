@@ -137,9 +137,9 @@ let rec gcd_is_maximal
         divides_sub d p (poly_mul q qot);
         let pcrc : polynomial_commutative_ring t =
           polynomial_commutative_ring_instance #t #(cr_of_id t #(id_of_f t)) in
-        let cr_p : commutative_ring (polynomial t) = TC.solve in
-        cancel_helper #(polynomial t) #cr_p (poly_mul q qot) r p;
-        divides_congruence_right #(polynomial t) #cr_p
+        
+        cancel_helper  (poly_mul q qot) r p;
+        divides_congruence_right 
           d (add p (neg (mul q qot))) r;
         gcd_is_maximal #t #f q r d
 
@@ -211,10 +211,10 @@ let rec ext_gcd_correct (#t:Type) {| f: field t |} (p q: polynomial t)
   : Lemma (ensures (let (a, b, g) = poly_ext_gcd #t #f p q in
                     poly_eq (add (mul a p) (mul b q)) g))
           (decreases (degree_measure q))
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     match poly_deg q with
     | None ->
-        bezout_base_helper #(polynomial t) #cr_p p q
+        bezout_base_helper  p q
     | Some _ ->
         let (quot, r) = poly_divmod #t #f p q in
         degree_measure_decreases #t #f p q;
@@ -222,7 +222,7 @@ let rec ext_gcd_correct (#t:Type) {| f: field t |} (p q: polynomial t)
         let (a', b', gv) = poly_ext_gcd #t #f q r in
         poly_divmod_correct #t #f p q;
         (* poly_divmod_correct: poly_eq p (poly_add (poly_mul q quot) r) *)
-        bezout_step_helper #(polynomial t) #cr_p q quot r b' a' p gv
+        bezout_step_helper  q quot r b' a' p gv
 
 let rec ext_gcd_is_gcd (#t:Type) {| f: field t |} (p q: polynomial t)
   : Lemma (ensures (let (_, _, g) = poly_ext_gcd #t #f p q in

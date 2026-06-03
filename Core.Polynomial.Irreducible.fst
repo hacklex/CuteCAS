@@ -39,11 +39,11 @@ open Core.Polynomial.SquareFree
 let poly_power_divides (#t:Type) {| f: field t |}
   (p: polynomial t) (n: pos)
   : Lemma (ensures divides p (poly_power p n))
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     (* poly_power p n = poly_mul p (poly_power p (n-1)) definitionally for n ≥ 1.
        Witness: poly_power p (n-1). *)
     poly_eq_reflexivity (poly_mul p (poly_power p (n - 1)));
-    divides_intro #(polynomial t) #cr_p p (poly_mul p (poly_power p (n - 1))) (poly_power p (n - 1))
+    divides_intro  p (poly_mul p (poly_power p (n - 1))) (poly_power p (n - 1))
 
 (* ================================================================ *)
 (*  Derivative of product rule (Leibniz) — available from Derivative *)
@@ -66,12 +66,12 @@ let poly_power_divides (#t:Type) {| f: field t |}
 let one_divides_all (#t:Type) {| f: field t |}
   (x: polynomial t)
   : Lemma (divides (poly_one #t) x)
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     poly_mul_one x;
     (* poly_mul_one gives: poly_eq (poly_mul poly_one x) x *)
     poly_eq_symmetry (poly_mul (poly_one #t) x) x;
     (* poly_eq x (poly_mul poly_one x) *)
-    divides_intro #(polynomial t) #cr_p (poly_one #t) x x
+    divides_intro  (poly_one #t) x x
 
 (* ================================================================ *)
 (*  Helper: d|a ⟹ (c·d) | (c·a)                                  *)
@@ -81,7 +81,7 @@ private let divides_mul_both_sides (#t:Type) {| f: field t |}
   (d a c: polynomial t)
   : Lemma (requires divides d a)
           (ensures  divides (poly_mul c d) (poly_mul c a))
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     H.elim_equatable_laws (polynomial t) ();
     H.trans_for_calc (polynomial t) ();
     eliminate exists (s: polynomial t). poly_eq a (poly_mul d s)
@@ -92,11 +92,10 @@ private let divides_mul_both_sides (#t:Type) {| f: field t |}
       poly_mul_right_congruence c a (poly_mul d s);
       (* c·(d·s) ≈ (c·d)·s by assoc (reversed) *)
       poly_mul_associativity c d s;
-      poly_eq_symmetry (poly_mul (poly_mul c d) s) (poly_mul c (poly_mul d s));
       poly_eq_transitivity (poly_mul c a)
         (poly_mul c (poly_mul d s))
         (poly_mul (poly_mul c d) s);
-      divides_intro #(polynomial t) #cr_p (poly_mul c d) (poly_mul c a) s
+      divides_intro  (poly_mul c d) (poly_mul c a) s
     end
 
 (* ================================================================ *)
@@ -107,7 +106,7 @@ let rec deriv_power_divisibility (#t:Type) {| f: field t |}
   (q: polynomial t) (k: pos)
   : Lemma (ensures divides (poly_power q (k - 1)) (poly_deriv (poly_power q k)))
           (decreases k)
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     H.elim_equatable_laws (polynomial t) ();
     H.trans_for_calc (polynomial t) ();
     if k = 1 then
@@ -133,9 +132,8 @@ let rec deriv_power_divisibility (#t:Type) {| f: field t |}
       (* --- Summand 1: qk1 | dq·qk1 --- *)
       poly_mul_commutativity dq qk1;
       (* poly_eq (poly_mul dq qk1) (poly_mul qk1 dq) *)
-      poly_eq_symmetry (poly_mul dq qk1) (poly_mul qk1 dq);
       (* poly_eq (poly_mul qk1 dq) sum1 *)
-      divides_intro #(polynomial t) #cr_p qk1 sum1 dq;
+      divides_intro  qk1 sum1 dq;
 
       (* --- Summand 2: qk1 | q·D(q^(k-1)) --- *)
       (* IH: q^(k-2) | D(q^(k-1)) *)
@@ -147,14 +145,13 @@ let rec deriv_power_divisibility (#t:Type) {| f: field t |}
          And poly_mul q (poly_power q (k-2)) == poly_power q (k-1) == qk1 [definitional] *)
 
       (* --- Combine: qk1 | sum1 + sum2 --- *)
-      divides_add #(polynomial t) #cr_p qk1 sum1 sum2;
+      divides_add  qk1 sum1 sum2;
 
       (* --- Transfer via poly_eq to poly_deriv (poly_power q k) --- *)
       (* poly_power q k == poly_mul q qk1 definitionally, so
          poly_deriv (poly_power q k) == poly_deriv (poly_mul q qk1)
          ≈ poly_add sum1 sum2 [product rule above] *)
-      poly_eq_symmetry (poly_deriv (poly_mul q qk1)) (poly_add sum1 sum2);
-      divides_congruence_right #(polynomial t) #cr_p qk1
+      divides_congruence_right  qk1
         (poly_add sum1 sum2)
         (poly_deriv (poly_power q k))
     end
@@ -168,7 +165,7 @@ let repeated_factor_divides_deriv (#t:Type) {| f: field t |}
   (q p: polynomial t) (k: nat{k >= 2})
   : Lemma (requires divides (poly_power q k) p)
           (ensures  divides (poly_power q (k - 1)) (poly_deriv p))
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     H.elim_equatable_laws (polynomial t) ();
     H.trans_for_calc (polynomial t) ();
     let qk   = poly_power q k in
@@ -193,22 +190,22 @@ let repeated_factor_divides_deriv (#t:Type) {| f: field t |}
       (* --- Term 1: qk1 | D(q^k)·r --- *)
       deriv_power_divisibility #t #f q k;
       (* qk1 | D(q^k) *)
-      divides_mul_right #(polynomial t) #cr_p qk1 dqk r;
+      divides_mul_right  qk1 dqk r;
       (* qk1 | dqk · r = sum1 *)
 
       (* --- Term 2: qk1 | q^k · D(r) --- *)
       (* qk1 | qk because q^k = q · q^(k-1) ≈ q^(k-1) · q *)
       poly_mul_commutativity q qk1;
       (* poly_eq (poly_mul q qk1) (poly_mul qk1 q), i.e. poly_eq qk (poly_mul qk1 q) *)
-      divides_intro #(polynomial t) #cr_p qk1 qk q;
+      divides_intro  qk1 qk q;
       (* qk1 | qk *)
-      divides_mul_right #(polynomial t) #cr_p qk1 qk dr;
+      divides_mul_right  qk1 qk dr;
       (* qk1 | qk · dr = sum2 *)
 
       (* --- Combine --- *)
-      divides_add #(polynomial t) #cr_p qk1 sum1 sum2;
+      divides_add  qk1 sum1 sum2;
       (* qk1 | poly_add sum1 sum2 *)
-      divides_congruence_right #(polynomial t) #cr_p qk1
+      divides_congruence_right  qk1
         (poly_add sum1 sum2)
         (poly_deriv p)
     end
@@ -223,15 +220,15 @@ let repeated_factor_divides_gcd (#t:Type) {| f: field t |}
   : Lemma (requires divides (poly_power q k) p /\ Some? (poly_deg p))
           (ensures  divides (poly_power q (k - 1))
                             (poly_gcd #t #f p (poly_deriv p)))
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     let qk1 = poly_power q (k - 1) in
     let dp  = poly_deriv p in
     let g   = poly_gcd #t #f p dp in
     (* qk1 | p: by transitivity, qk1 | q^k | p *)
     (* q^k = q · q^(k-1) ≈ q^(k-1) · q *)
     poly_mul_commutativity q qk1;
-    divides_intro #(polynomial t) #cr_p qk1 (poly_power q k) q;
-    divides_trans #(polynomial t) #cr_p qk1 (poly_power q k) p;
+    divides_intro  qk1 (poly_power q k) q;
+    divides_trans  qk1 (poly_power q k) p;
     (* qk1 | p *)
     (* qk1 | D(p) *)
     repeated_factor_divides_deriv #t #f q p k;
@@ -351,7 +348,7 @@ let coprime_quotients (#t:Type) {| f: field t |}
                      let b = poly_div #t #f p g in
                      let c = poly_div #t #f q g in
                      coprime #t #f b c))
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     H.elim_equatable_laws (polynomial t) ();
     H.trans_for_calc (polynomial t) ();
     let g = poly_gcd #t #f p q in
@@ -371,11 +368,11 @@ let coprime_quotients (#t:Type) {| f: field t |}
     (* g*d | g*b via divides_mul_both_sides *)
     divides_mul_both_sides d b g;              // (g*d) | (g*b)
     (* g*b ≈ p, so g*d | p *)
-    divides_congruence_right #(polynomial t) #cr_p
+    divides_congruence_right 
       (poly_mul g d) (poly_mul g b) p;
     (* g*d | g*c similarly *)
     divides_mul_both_sides d c g;              // (g*d) | (g*c)
-    divides_congruence_right #(polynomial t) #cr_p
+    divides_congruence_right 
       (poly_mul g d) (poly_mul g c) q;
     (* By maximality of gcd: g*d | gcd(p,q) = g *)
     gcd_is_maximal #t #f p q (poly_mul g d);
@@ -425,7 +422,7 @@ let divides_degree_le (#t:Type) {| f: field t |}
   (d p: polynomial t)
   : Lemma (requires divides d p /\ Some? (poly_deg d) /\ Some? (poly_deg p))
           (ensures  Some?.v (poly_deg d) <= Some?.v (poly_deg p))
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     H.elim_equatable_laws (polynomial t) ();
     H.trans_for_calc (polynomial t) ();
     let aux (c: polynomial t)
@@ -436,8 +433,6 @@ let divides_degree_le (#t:Type) {| f: field t |}
             (* c = 0, so d*c ≈ 0, but poly_eq p (d*c) and p nonzero: contradiction *)
             assert (c == (poly_zero #t));
             H.x_mul_zero #(polynomial t) d;
-            poly_eq_symmetry (poly_mul d c) (poly_zero #t);
-            poly_eq_transitivity p (poly_mul d c) (poly_zero #t);
             degree_well_defined p (poly_zero #t)
         | Some _ ->
             degree_mul #t #(id_of_f t) d c;
@@ -454,7 +449,7 @@ let coprime_divisor (#t:Type) {| f: field t |}
   (a b d: polynomial t)
   : Lemma (requires coprime #t #f a b /\ divides d a /\ Some? (poly_deg d))
           (ensures  coprime #t #f d b)
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     H.elim_equatable_laws (polynomial t) ();
     H.trans_for_calc (polynomial t) ();
     coprime_reveal #t #f a b;
@@ -463,7 +458,7 @@ let coprime_divisor (#t:Type) {| f: field t |}
     gcd_divides_left #t #f d b;              // e | d
     gcd_divides_right #t #f d b;             // e | b
     (* e | d and d | a, so e | a by transitivity *)
-    divides_trans #(polynomial t) #cr_p e d a;
+    divides_trans  e d a;
     (* e | a and e | b, so e | gcd(a, b) *)
     gcd_is_maximal #t #f a b e;
     (* coprime(a, b) means deg(gcd(a,b)) = 0. And e | gcd(a,b).
@@ -495,7 +490,7 @@ let rec irreducible_factor_exists (#t:Type) {| f: field t |}
   : Lemma (requires Some? (poly_deg p) /\ Some?.v (poly_deg p) >= 1)
           (ensures exists (q: polynomial t). poly_irreducible q /\ divides q p)
           (decreases (if Some? (poly_deg p) then Some?.v (poly_deg p) else 0))
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     H.elim_equatable_laws (polynomial t) ();
     H.trans_for_calc (polynomial t) ();
     Classical.excluded_middle (poly_irreducible p);
@@ -504,7 +499,7 @@ let rec irreducible_factor_exists (#t:Type) {| f: field t |}
       : Lemma (requires poly_irreducible p)
               (ensures exists (q: polynomial t). poly_irreducible q /\ divides q p)
       = poly_mul_one p;
-        divides_intro #(polynomial t) #cr_p p p (poly_one #t)
+        divides_intro  p p (poly_one #t)
     in
     (* Case 2: p is not irreducible — factor and recurse *)
     let case_factor (a b: polynomial t)
@@ -520,13 +515,12 @@ let rec irreducible_factor_exists (#t:Type) {| f: field t |}
         irreducible_factor_exists a;
         (* Now: exists q. poly_irreducible q /\ divides q a *)
         (* a | p because p ≈ a*b *)
-        poly_eq_symmetry p (poly_mul a b);
-        divides_intro #(polynomial t) #cr_p a p b;
+        divides_intro  a p b;
         (* Chain: q | a and a | p → q | p *)
         let chain (q: polynomial t)
           : Lemma (requires poly_irreducible q /\ divides q a)
                   (ensures exists (q: polynomial t). poly_irreducible q /\ divides q p)
-          = divides_trans #(polynomial t) #cr_p q a p
+          = divides_trans  q a p
         in
         Classical.forall_intro (Classical.move_requires chain)
     in
@@ -790,7 +784,7 @@ private let g_ascent_step (#t:Type) {| f: field t |}
                      Some? (poly_deg p)))
           (ensures  (let g = poly_gcd #t #f p (poly_deriv p) in
                      divides (poly_power q (Prims.op_Addition n 1)) g))
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     H.elim_equatable_laws (polynomial t) ();
     H.trans_for_calc (polynomial t) ();
     let g  = poly_gcd #t #f p (poly_deriv p) in
@@ -806,12 +800,12 @@ private let g_ascent_step (#t:Type) {| f: field t |}
     poly_power_add q n 2;
     poly_eq_symmetry (poly_power q (Prims.op_Addition n 2))
                      (poly_mul (poly_power q n) (poly_power q 2));
-    divides_congruence_left #(polynomial t) #cr_p
+    divides_congruence_left 
       (poly_mul (poly_power q n) (poly_power q 2))
       (poly_power q (Prims.op_Addition n 2))
       (poly_mul g b0);
     (* divides (poly_power q (n+2)) (poly_mul g b0) *)
-    divides_congruence_right #(polynomial t) #cr_p
+    divides_congruence_right 
       (poly_power q (Prims.op_Addition n 2))
       (poly_mul g b0) p;
     (* divides (poly_power q (n+2)) p *)
@@ -838,7 +832,7 @@ let rec g_ascent (#t:Type) {| f: field t |}
           (ensures  (let g = poly_gcd #t #f p (poly_deriv p) in
                      divides (poly_power q n) g))
           (decreases n)
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     let g  = poly_gcd #t #f p (poly_deriv p) in
     let b0 = poly_div #t #f p g in
     if n = 1 then begin
@@ -847,8 +841,7 @@ let rec g_ascent (#t:Type) {| f: field t |}
          poly_mul q poly_one ≈ q by mul_one. *)
       H.elim_equatable_laws (polynomial t) ();
       poly_mul_one q;
-      poly_eq_symmetry (poly_mul q (poly_one #t)) q;
-      divides_congruence_left #(polynomial t) #cr_p q (poly_power q 1) g
+      divides_congruence_left  q (poly_power q 1) g
     end else begin
       (* IH: poly_power q (n-1) | g *)
       g_ascent #t #f q p (n - 1);
@@ -889,25 +882,22 @@ private let divides_of_sum (#t:Type) {| f: field t |}
   (d a b: polynomial t)
   : Lemma (requires divides d (poly_add a b) /\ divides d b)
           (ensures  divides d a)
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     H.elim_equatable_laws (polynomial t) ();
     H.trans_for_calc (polynomial t) ();
     (* d | (a+b) and d | b → d | (a+b) + (-b) [divides_neg + divides_add] *)
-    divides_neg #(polynomial t) #cr_p d b;
-    divides_add #(polynomial t) #cr_p d (poly_add a b) (poly_neg b);
+    divides_neg  d b;
+    divides_add  d (poly_add a b) (poly_neg b);
     (* Now: divides d (poly_add (poly_add a b) (poly_neg b)) *)
     (* (a+b) + (-b) ≈ a + (b + (-b)) ≈ a + 0 ≈ a *)
     poly_add_associativity a b (poly_neg b);
     poly_add_negation b;
-    poly_eq_reflexivity a;
     poly_add_congruence a (poly_add b (poly_neg b)) a (poly_zero #t);
     poly_add_zero a;
     let s1 = poly_add (poly_add a b) (poly_neg b) in
     let s2 = poly_add a (poly_add b (poly_neg b)) in
     let s3 = poly_add a (poly_zero #t) in
-    poly_eq_transitivity s1 s2 s3;
-    poly_eq_transitivity s1 s3 a;
-    divides_congruence_right #(polynomial t) #cr_p d
+    divides_congruence_right  d
       (poly_add (poly_add a b) (poly_neg b)) a
 
 (* ================================================================ *)
@@ -920,7 +910,7 @@ private let q_squared_divides_b0 (#t:Type) {| f: field t |}
   : Lemma (requires char_zero f /\ poly_irreducible q /\
                     divides q b0 /\ divides q (poly_deriv b0))
           (ensures  divides (poly_power q 2) b0)
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     H.elim_equatable_laws (polynomial t) ();
     H.trans_for_calc (polynomial t) ();
     (* q | b₀ means ∃r. b₀ ≈ q·r *)
@@ -933,17 +923,15 @@ private let q_squared_divides_b0 (#t:Type) {| f: field t |}
         let dq  = poly_deriv q in
         let dr  = poly_deriv r in
         let sum = poly_add (poly_mul dq r) (poly_mul q dr) in
-        poly_eq_transitivity (poly_deriv b0) (poly_deriv (poly_mul q r)) sum;
         (* q | D(b₀), transfer to: q | sum *)
-        divides_congruence_right #(polynomial t) #cr_p q (poly_deriv b0) sum;
+        divides_congruence_right  q (poly_deriv b0) sum;
         (* q | poly_mul q dr: q divides its own product *)
-        poly_eq_reflexivity (poly_mul q dr);
-        divides_intro #(polynomial t) #cr_p q (poly_mul q dr) dr;
+        divides_intro  q (poly_mul q dr) dr;
         (* q | sum and q | poly_mul q dr → q | poly_mul dq r *)
         divides_of_sum #t #f q (poly_mul dq r) (poly_mul q dr);
         (* Need: q | poly_mul r dq (commuted) for euclid_lemma *)
         poly_mul_commutativity dq r;
-        divides_congruence_right #(polynomial t) #cr_p q (poly_mul dq r) (poly_mul r dq);
+        divides_congruence_right  q (poly_mul dq r) (poly_mul r dq);
         (* coprime(q, D(q)) → by euclid: q | r·D(q) → q | r *)
         irreducible_coprime_deriv #t #f q;
         euclid_lemma #t #f q dq r;
@@ -954,7 +942,6 @@ private let q_squared_divides_b0 (#t:Type) {| f: field t |}
           = (* b₀ ≈ q·r ≈ q·(q·s) = (q·q)·s = poly_power q 2 · s *)
             poly_mul_right_congruence q r (poly_mul q s);
             poly_mul_associativity q q s;
-            poly_eq_symmetry (poly_mul (poly_mul q q) s) (poly_mul q (poly_mul q s));
             poly_eq_transitivity (poly_mul q r) (poly_mul q (poly_mul q s))
                                  (poly_mul (poly_mul q q) s);
             (* poly_mul q q == poly_power q 2 [definitionally: poly_mul q (poly_power q 1)
@@ -962,7 +949,6 @@ private let q_squared_divides_b0 (#t:Type) {| f: field t |}
                Need: poly_eq (poly_mul q q) (poly_power q 2) *)
             poly_mul_one q;
             poly_mul_right_congruence q q (poly_mul q (poly_one #t));
-            poly_eq_symmetry (poly_mul q q) (poly_mul q (poly_mul q (poly_one #t)));
             (* Now poly_power q 2 = poly_mul q (poly_power q 1) = poly_mul q (poly_mul q (poly_one))
                which is == poly_mul q (poly_mul q poly_one) definitionally.
                And poly_mul q q ≈ poly_mul q (poly_mul q poly_one) [by mul_one on q] *)
@@ -971,9 +957,7 @@ private let q_squared_divides_b0 (#t:Type) {| f: field t |}
             poly_eq_transitivity (poly_mul q r) (poly_mul (poly_mul q q) s)
                                  (poly_mul (poly_power q 2) s);
             (* b₀ ≈ q·r ≈ (poly_power q 2)·s *)
-            poly_eq_transitivity b0 (poly_mul q r) (poly_mul (poly_power q 2) s);
-            poly_eq_symmetry b0 (poly_mul (poly_power q 2) s);
-            divides_intro #(polynomial t) #cr_p (poly_power q 2) b0 s
+            divides_intro  (poly_power q 2) b0 s
         in
         Classical.forall_intro (Classical.move_requires aux2)
     in
@@ -1072,7 +1056,7 @@ let b0_is_square_free (#t:Type) {| f: field t |}
          (ensures  (let g = poly_gcd #t #f p (poly_deriv p) in
                     let b0 = poly_div #t #f p g in
                     square_free #t #f b0))
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     H.elim_equatable_laws (polynomial t) ();
     H.trans_for_calc (polynomial t) ();
     let g  = poly_gcd #t #f p (poly_deriv p) in
@@ -1092,8 +1076,7 @@ let b0_is_square_free (#t:Type) {| f: field t |}
         coprime_reveal #t #f b0 (poly_deriv b0);
         (* Need: Some? (poly_deg b0) — from p ≈ g·b0, deg p = deg g + deg b0 *)
         poly_mul_commutativity g b0;
-        poly_eq_transitivity (poly_mul b0 g) (poly_mul g b0) p;
-        divides_intro #(polynomial t) #cr_p b0 p g;
+        divides_intro  b0 p g;
         divides_degree_le b0 p;
         (* gcd_has_degree for b0 and D(b0): *)
         gcd_has_degree #t #f b0 (poly_deriv b0);
@@ -1107,31 +1090,30 @@ let b0_is_square_free (#t:Type) {| f: field t |}
           = (* Step 1: q | b0 and q | D(b0) *)
             gcd_divides_left #t #f b0 (poly_deriv b0);
             gcd_divides_right #t #f b0 (poly_deriv b0);
-            divides_trans #(polynomial t) #cr_p q gb b0;
-            divides_trans #(polynomial t) #cr_p q gb (poly_deriv b0);
+            divides_trans  q gb b0;
+            divides_trans  q gb (poly_deriv b0);
             (* Step 2: q² | b0 via q_squared_divides_b0 *)
             q_squared_divides_b0 #t #f q b0;
             (* Step 3: Show q | g *)
             (* 3a: q | p (from q | b0 and b0 | p) *)
-            divides_trans #(polynomial t) #cr_p q b0 p;
+            divides_trans  q b0 p;
             (* 3b: q | D(p) via product rule on p ≈ g·b0 *)
             let dg  = poly_deriv g in
             let db0 = poly_deriv b0 in
             poly_deriv_mul g b0;
             poly_deriv_congruence (poly_mul g b0) p;
-            poly_eq_symmetry (poly_deriv (poly_mul g b0)) (poly_deriv p);
             poly_eq_transitivity (poly_deriv p) (poly_deriv (poly_mul g b0))
               (poly_add (poly_mul dg b0) (poly_mul g db0));
             (* q | (dg · b0): from q | b0 *)
-            divides_mul_left #(polynomial t) #cr_p q dg b0;
+            divides_mul_left  q dg b0;
             (* q | (g · D(b0)): from q | D(b0) *)
-            divides_mul_left #(polynomial t) #cr_p q g db0;
+            divides_mul_left  q g db0;
             (* q | (dg·b0 + g·D(b0)) *)
-            divides_add #(polynomial t) #cr_p q (poly_mul dg b0) (poly_mul g db0);
+            divides_add  q (poly_mul dg b0) (poly_mul g db0);
             (* q | D(p) by congruence *)
             poly_eq_symmetry (poly_deriv p)
               (poly_add (poly_mul dg b0) (poly_mul g db0));
-            divides_congruence_right #(polynomial t) #cr_p q
+            divides_congruence_right  q
               (poly_add (poly_mul dg b0) (poly_mul g db0))
               (poly_deriv p);
             (* 3c: q | p and q | D(p) → q | gcd(p, D(p)) = g *)
@@ -1161,7 +1143,7 @@ let divisor_of_square_free (#t:Type) {| f: field t |}
   : Lemma (requires char_zero f /\ square_free #t #f b0 /\
                    divides d b0 /\ Some? (poly_deg d) /\ Some? (poly_deg b0))
           (ensures  square_free #t #f d)
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     H.elim_equatable_laws (polynomial t) ();
     H.trans_for_calc (polynomial t) ();
     Classical.excluded_middle (square_free #t #f d = true);
@@ -1178,21 +1160,20 @@ let divisor_of_square_free (#t:Type) {| f: field t |}
           = (* q | d and q | D(d) *)
             gcd_divides_left #t #f d (poly_deriv d);
             gcd_divides_right #t #f d (poly_deriv d);
-            divides_trans #(polynomial t) #cr_p q gd d;
-            divides_trans #(polynomial t) #cr_p q gd (poly_deriv d);
+            divides_trans  q gd d;
+            divides_trans  q gd (poly_deriv d);
             (* q² | d via q_squared_divides_b0 applied to d *)
             q_squared_divides_b0 #t #f q d;
             (* q² | b₀ by transitivity *)
-            divides_trans #(polynomial t) #cr_p (poly_power q 2) d b0;
+            divides_trans  (poly_power q 2) d b0;
             (* q | D(b₀) via repeated_factor_divides_deriv *)
             repeated_factor_divides_deriv #t #f q b0 2;
             (* poly_power q 1 | D(b₀), bridge to q | D(b₀) *)
             poly_mul_one q;
-            poly_eq_symmetry (poly_mul q (poly_one #t)) q;
-            divides_congruence_left #(polynomial t) #cr_p
+            divides_congruence_left 
               (poly_power q 1) q (poly_deriv b0);
             (* q | b₀ (from q | d | b₀) *)
-            divides_trans #(polynomial t) #cr_p q d b0;
+            divides_trans  q d b0;
             (* q | gcd(b₀, D(b₀)) *)
             gcd_is_maximal #t #f b0 (poly_deriv b0) q;
             (* But square_free b₀ means deg(gcd(b₀, D(b₀))) = 0 *)
@@ -1221,7 +1202,7 @@ let square_free_coprime_factors (#t:Type) {| f: field t |}
                     poly_eq p (poly_mul a b) /\
                     Some? (poly_deg p) /\ Some? (poly_deg a) /\ Some? (poly_deg b))
           (ensures  coprime #t #f a b)
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     H.elim_equatable_laws (polynomial t) ();
     H.trans_for_calc (polynomial t) ();
     coprime_reveal #t #f a b;
@@ -1237,8 +1218,8 @@ let square_free_coprime_factors (#t:Type) {| f: field t |}
                   (ensures  False)
           = gcd_divides_left #t #f a b;
             gcd_divides_right #t #f a b;
-            divides_trans #(polynomial t) #cr_p q gab a;
-            divides_trans #(polynomial t) #cr_p q gab b;
+            divides_trans  q gab a;
+            divides_trans  q gab b;
             (* q|a and q|b → q²|a·b via divides_product *)
             divides_product #t #f q a q b;
             (* Bridge: poly_eq (poly_mul q q) (poly_power q 2) *)
@@ -1247,29 +1228,26 @@ let square_free_coprime_factors (#t:Type) {| f: field t |}
             (* poly_mul_one q: poly_eq (poly_mul q poly_one) q *)
             poly_mul_one q;
             (* symmetry: poly_eq q (poly_mul q poly_one) *)
-            poly_eq_symmetry (poly_mul q (poly_one #t)) q;
             (* poly_mul_right_congruence q q (poly_mul q poly_one):
                requires poly_eq q (poly_mul q poly_one)
                gives poly_eq (poly_mul q q) (poly_mul q (poly_mul q poly_one)) *)
             poly_mul_right_congruence q q (poly_mul q (poly_one #t));
             (* So: poly_eq (poly_mul q q) (poly_power q 2) *)
-            divides_congruence_left #(polynomial t) #cr_p
+            divides_congruence_left 
               (poly_mul q q) (poly_power q 2) (poly_mul a b);
             (* q² | a·b, transfer to: q² | p *)
-            poly_eq_symmetry p (poly_mul a b);
-            divides_congruence_right #(polynomial t) #cr_p
+            divides_congruence_right 
               (poly_power q 2) (poly_mul a b) p;
             (* q² | p → poly_power q 1 | D(p) *)
             repeated_factor_divides_deriv #t #f q p 2;
             (* Bridge: poly_power q 1 ≈ q, so divides q (poly_deriv p) *)
             poly_mul_one q;
-            divides_congruence_left #(polynomial t) #cr_p
+            divides_congruence_left 
               (poly_power q 1) q (poly_deriv p);
             (* q | p: from q | a, a | a·b ≈ p *)
-            poly_eq_reflexivity (poly_mul a b);
-            divides_intro #(polynomial t) #cr_p a (poly_mul a b) b;
-            divides_trans #(polynomial t) #cr_p q a (poly_mul a b);
-            divides_congruence_right #(polynomial t) #cr_p
+            divides_intro  a (poly_mul a b) b;
+            divides_trans  q a (poly_mul a b);
+            divides_congruence_right 
               q (poly_mul a b) p;
             (* q | gcd(p, D(p)) *)
             gcd_is_maximal #t #f p (poly_deriv p) q;
@@ -1291,7 +1269,7 @@ let coprime_of_divisor (#t:Type) {| f: field t |}
   (a b d: polynomial t)
   : Lemma (requires coprime #t #f a b /\ divides d b /\ Some? (poly_deg a))
           (ensures  coprime #t #f a d)
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     H.elim_equatable_laws (polynomial t) ();
     H.trans_for_calc (polynomial t) ();
     coprime_reveal #t #f a d;
@@ -1301,7 +1279,7 @@ let coprime_of_divisor (#t:Type) {| f: field t |}
     gcd_divides_left #t #f a d;
     gcd_divides_right #t #f a d;
     (* gad | b (transitivity: gad | d | b) *)
-    divides_trans #(polynomial t) #cr_p gad d b;
+    divides_trans  gad d b;
     (* gad | gcd(a, b) by maximality *)
     gcd_is_maximal #t #f a b gad;
     (* deg(gcd(a, b)) = 0 from coprime(a, b) *)
@@ -1323,7 +1301,7 @@ let yun_step_coprime (#t:Type) {| f: field t |}
           (ensures  (let a = poly_gcd #t #f b d in
                      let b' = poly_div #t #f b a in
                      coprime #t #f a b'))
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     H.elim_equatable_laws (polynomial t) ();
     H.trans_for_calc (polynomial t) ();
     let a = poly_gcd #t #f b d in
@@ -1334,7 +1312,6 @@ let yun_step_coprime (#t:Type) {| f: field t |}
     poly_div_nonzero #t #f b a;
     (* poly_eq (poly_mul a b') b *)
     (* b is square-free, so coprime(a, b') *)
-    poly_eq_symmetry (poly_mul a b') b;
     square_free_coprime_factors #t #f b a b'
 
 (* ================================================================ *)
@@ -1346,7 +1323,7 @@ let coprime_symmetric (#t:Type) {| f: field t |}
   (a b: polynomial t)
   : Lemma (requires coprime #t #f a b /\ Some? (poly_deg a) /\ Some? (poly_deg b))
           (ensures  coprime #t #f b a)
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     coprime_reveal #t #f a b;
     coprime_reveal #t #f b a;
     let gab = poly_gcd #t #f a b in
@@ -1449,7 +1426,7 @@ private let rec yun_loop_old_coprime_new (#t:Type) {| f: field t |}
                     coprime #t #f (L.index acc k) b)
           (ensures  coprime #t #f (L.index acc k) (L.index (yun_loop #t #f b d acc fuel) j))
           (decreases fuel)
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     H.elim_equatable_laws (polynomial t) ();
     H.trans_for_calc (polynomial t) ();
     if fuel = 0 then begin
@@ -1492,10 +1469,8 @@ private let rec yun_loop_old_coprime_new (#t:Type) {| f: field t |}
         poly_div_correct #t #f b a;
         poly_div_nonzero #t #f b a;
         (* b' | b: from b ≈ a · b' *)
-        poly_eq_symmetry (poly_mul a b') b;
         poly_mul_commutativity a b';
-        poly_eq_transitivity b (poly_mul a b') (poly_mul b' a);
-        divides_intro #(polynomial t) #cr_p b' b a;
+        divides_intro  b' b a;
         (* square_free b' by divisor_of_square_free *)
         divisor_of_square_free #t #f b' b;
         (* coprime(acc[k], b') by coprime_of_divisor *)
@@ -1521,7 +1496,7 @@ private let rec yun_loop_new_coprime_later (#t:Type) {| f: field t |}
           (ensures  coprime #t #f (L.index (yun_loop #t #f b d acc fuel) (L.length acc))
                                   (L.index (yun_loop #t #f b d acc fuel) j))
           (decreases fuel)
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     H.elim_equatable_laws (polynomial t) ();
     H.trans_for_calc (polynomial t) ();
     if fuel = 0 then begin
@@ -1550,10 +1525,8 @@ private let rec yun_loop_new_coprime_later (#t:Type) {| f: field t |}
       poly_div_correct #t #f b a;
       poly_div_nonzero #t #f b a;
       (* b' divides b: from b ≈ a · b' → b ≈ b' · a *)
-      poly_eq_symmetry (poly_mul a b') b;
       poly_mul_commutativity a b';
-      poly_eq_transitivity b (poly_mul a b') (poly_mul b' a);
-      divides_intro #(polynomial t) #cr_p b' b a;
+      divides_intro  b' b a;
       (* square_free b' by divisor_of_square_free *)
       divisor_of_square_free #t #f b' b;
       (* coprime(a, b') from yun_step_coprime *)
@@ -1576,7 +1549,7 @@ private let rec yun_loop_square_free (#t:Type) {| f: field t |}
                     k >= L.length acc /\ k < L.length (yun_loop #t #f b d acc fuel))
           (ensures  square_free #t #f (L.index (yun_loop #t #f b d acc fuel) k))
           (decreases fuel)
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     H.elim_equatable_laws (polynomial t) ();
     H.trans_for_calc (polynomial t) ();
     if fuel = 0 then begin
@@ -1623,10 +1596,8 @@ private let rec yun_loop_square_free (#t:Type) {| f: field t |}
         poly_div_nonzero #t #f b a;
         (* Some? (poly_deg b') *)
         (* divides b' b: from poly_eq (poly_mul a b') b *)
-        poly_eq_symmetry (poly_mul a b') b;
         poly_mul_commutativity a b';
-        poly_eq_transitivity b (poly_mul a b') (poly_mul b' a);
-        divides_intro #(polynomial t) #cr_p b' b a;
+        divides_intro  b' b a;
         (* square_free b' by divisor_of_square_free *)
         divisor_of_square_free #t #f b' b;
         (* Apply IH *)
@@ -1677,7 +1648,7 @@ private let rec yun_loop_pairwise_coprime (#t:Type) {| f: field t |}
           (ensures  coprime #t #f (L.index (yun_loop #t #f b d acc fuel) i)
                                   (L.index (yun_loop #t #f b d acc fuel) j))
           (decreases fuel)
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     H.elim_equatable_laws (polynomial t) ();
     H.trans_for_calc (polynomial t) ();
     if fuel = 0 then begin
@@ -1708,10 +1679,8 @@ private let rec yun_loop_pairwise_coprime (#t:Type) {| f: field t |}
         gcd_divides_left #t #f b d;
         poly_div_correct #t #f b a;
         poly_div_nonzero #t #f b a;
-        poly_eq_symmetry (poly_mul a b') b;
         poly_mul_commutativity a b';
-        poly_eq_transitivity b (poly_mul a b') (poly_mul b' a);
-        divides_intro #(polynomial t) #cr_p b' b a;
+        divides_intro  b' b a;
         divisor_of_square_free #t #f b' b;
         yun_loop_pairwise_coprime #t #f b' d' acc' (fuel - 1) i j
       end
@@ -1800,9 +1769,6 @@ let rec poly_power_mul (#t:Type) {| cr: commutative_ring t |}
       let m2 = poly_mul (poly_mul b an1) bn1 in
       let m3 = poly_mul (poly_mul an1 b) bn1 in
       let m4 = poly_mul an1 (poly_mul b bn1) in
-      poly_eq_symmetry m2 m1;
-      poly_eq_transitivity m1 m2 m3;
-      poly_eq_transitivity m1 m3 m4;
       poly_mul_right_congruence a m1 m4;
       poly_mul_associativity a an1 (poly_mul b bn1);
       poly_eq_symmetry (poly_mul (poly_mul a an1) (poly_mul b bn1))
@@ -1813,8 +1779,6 @@ let rec poly_power_mul (#t:Type) {| cr: commutative_ring t |}
       let s2 = poly_mul a m1 in
       let s3 = poly_mul a m4 in
       let rhs = poly_mul (poly_mul a an1) (poly_mul b bn1) in
-      poly_eq_transitivity lhs s1 s2;
-      poly_eq_transitivity lhs s2 s3;
       poly_eq_transitivity lhs s3 rhs
     end
 #pop-options
@@ -1880,7 +1844,7 @@ let coprime_mul_right (#t:Type) {| f: field t |}
   (a b c: polynomial t)
   : Lemma (requires coprime #t #f a b /\ coprime #t #f a c /\ Some? (poly_deg a))
           (ensures  coprime #t #f a (poly_mul b c))
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     H.elim_equatable_laws (polynomial t) ();
     H.trans_for_calc (polynomial t) ();
     coprime_reveal #t #f a (poly_mul b c);
@@ -1892,7 +1856,7 @@ let coprime_mul_right (#t:Type) {| f: field t |}
     coprime_divisor a b g;
     (* g | b·c, need g | c·b for euclid_lemma g b c *)
     poly_mul_commutativity b c;
-    divides_congruence_right #(polynomial t) #cr_p g (poly_mul b c) (poly_mul c b);
+    divides_congruence_right  g (poly_mul b c) (poly_mul c b);
     (* euclid_lemma g b c: coprime(g,b) ∧ g|(c·b) ⟹ g|c *)
     euclid_lemma #t #f g b c;
     (* g | a and g | c → g | gcd(a, c) *)
@@ -1965,7 +1929,6 @@ let coprime_divides_product (#t:Type) {| f: field t |}
     with _.
     begin
       (* d1 | x ≈ d2·s, so d1 | d2·s *)
-      poly_eq_symmetry x (poly_mul d2 s);
       divides_congruence_right #(polynomial t) #cr_p d1 x (poly_mul d2 s);
       (* For euclid_lemma: need d1 | s·d2. Comm: d2·s ≈ s·d2 *)
       poly_mul_commutativity d2 s;
@@ -1980,16 +1943,12 @@ let coprime_divides_product (#t:Type) {| f: field t |}
         (* x ≈ d2·s ≈ d2·(d1·u) ≈ (d2·d1)·u ≈ (d1·d2)·u *)
         poly_mul_right_congruence d2 s (poly_mul d1 u);
         poly_mul_associativity d2 d1 u;
-        poly_eq_symmetry (poly_mul (poly_mul d2 d1) u) (poly_mul d2 (poly_mul d1 u));
         poly_eq_transitivity (poly_mul d2 s) (poly_mul d2 (poly_mul d1 u))
                              (poly_mul (poly_mul d2 d1) u);
         poly_mul_commutativity d2 d1;
         poly_mul_left_congruence (poly_mul d2 d1) (poly_mul d1 d2) u;
         poly_eq_transitivity (poly_mul d2 s) (poly_mul (poly_mul d2 d1) u)
                              (poly_mul (poly_mul d1 d2) u);
-        poly_eq_symmetry x (poly_mul d2 s);
-        poly_eq_transitivity x (poly_mul d2 s) (poly_mul (poly_mul d1 d2) u);
-        poly_eq_symmetry x (poly_mul (poly_mul d1 d2) u);
         divides_intro #(polynomial t) #cr_p (poly_mul d1 d2) x u
       end
     end
@@ -2039,7 +1998,7 @@ let rec pairwise_coprime_divides (#t:Type) {| f: field t |}
                       coprime #t #f (L.index ds i) (L.index ds j)))
           (ensures  divides (flat_product ds) x)
           (decreases ds)
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     H.elim_equatable_laws (polynomial t) ();
     H.trans_for_calc (polynomial t) ();
     match ds with
@@ -2049,9 +2008,8 @@ let rec pairwise_coprime_divides (#t:Type) {| f: field t |}
         (* flat_product [d] = poly_mul d poly_one. divides d x. Bridge. *)
         assert (divides d x);
         poly_mul_one d;
-        poly_eq_symmetry (poly_mul d (poly_one #t)) d;
         (* poly_eq d (poly_mul d (poly_one #t)). Use divides_congruence_left d (flat_product[d]) x *)
-        divides_congruence_left #(polynomial t) #cr_p d (poly_mul d (poly_one #t)) x
+        divides_congruence_left  d (poly_mul d (poly_one #t)) x
     | d :: rest ->
         (* Shift quantifiers for rest *)
         assert (forall (k:nat). k < L.length rest ==>
@@ -2094,7 +2052,7 @@ let power_factor_divides_deriv_product (#t:Type) {| f: field t |}
   (q r: polynomial t) (k: pos)
   : Lemma (ensures divides (poly_power q (k - 1))
                            (poly_deriv (poly_mul (poly_power q k) r)))
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     H.elim_equatable_laws (polynomial t) ();
     H.trans_for_calc (polynomial t) ();
     let qk = poly_power q k in
@@ -2107,18 +2065,17 @@ let power_factor_divides_deriv_product (#t:Type) {| f: field t |}
     poly_deriv_mul qk r;
     (* Summand 1: q^(k-1) | D(q^k)·r *)
     deriv_power_divisibility q k;
-    divides_mul_right #(polynomial t) #cr_p qk1 dqk r;
+    divides_mul_right  qk1 dqk r;
     (* Summand 2: q^(k-1) | q^k·D(r).
        First establish q^(k-1) | q^k: q^k = q · q^(k-1) definitionally,
        and poly_mul q qk1 = poly_mul qk1 q by commutativity *)
     poly_mul_commutativity q qk1;
-    divides_intro #(polynomial t) #cr_p qk1 qk q;
-    divides_mul_right #(polynomial t) #cr_p qk1 qk dr;
+    divides_intro  qk1 qk q;
+    divides_mul_right  qk1 qk dr;
     (* Combine: q^(k-1) | sum1 + sum2 *)
-    divides_add #(polynomial t) #cr_p qk1 sum1 sum2;
+    divides_add  qk1 sum1 sum2;
     (* Transfer via congruence: D(q^k·r) ≈ sum1 + sum2 *)
-    poly_eq_symmetry (poly_deriv (poly_mul qk r)) (poly_add sum1 sum2);
-    divides_congruence_right #(polynomial t) #cr_p qk1
+    divides_congruence_right  qk1
       (poly_add sum1 sum2) (poly_deriv (poly_mul qk r))
 #pop-options
 
@@ -2131,15 +2088,15 @@ let power_factor_divides_gcd (#t:Type) {| f: field t |}
   : Lemma (ensures divides (poly_power q (k - 1))
                            (poly_gcd #t #f (poly_mul (poly_power q k) r)
                                            (poly_deriv (poly_mul (poly_power q k) r))))
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     H.elim_equatable_laws (polynomial t) ();
     let p = poly_mul (poly_power q k) r in
     let dp = poly_deriv p in
     let qk1 = poly_power q (k - 1) in
     (* q^(k-1) | p: q^k = q·q^(k-1), so q^(k-1) | q^k, hence q^(k-1) | q^k·r = p *)
     poly_mul_commutativity q qk1;
-    divides_intro #(polynomial t) #cr_p qk1 (poly_power q k) q;
-    divides_mul_right #(polynomial t) #cr_p qk1 (poly_power q k) r;
+    divides_intro  qk1 (poly_power q k) q;
+    divides_mul_right  qk1 (poly_power q k) r;
     (* q^(k-1) | D(p) *)
     power_factor_divides_deriv_product #t #f q r k;
     (* q^(k-1) divides both p and D(p), so it divides their gcd *)
@@ -2159,7 +2116,7 @@ let power_factor_divides_gcd_of_eq (#t:Type) {| f: field t |}
   : Lemma (requires poly_eq p (poly_mul (poly_power q k) r))
           (ensures  divides (poly_power q (k - 1))
                             (poly_gcd #t #f p (poly_deriv p)))
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     H.elim_equatable_laws (polynomial t) ();
     H.trans_for_calc (polynomial t) ();
     let qkr = poly_mul (poly_power q k) r in
@@ -2168,11 +2125,9 @@ let power_factor_divides_gcd_of_eq (#t:Type) {| f: field t |}
     (* D(p) ≈ D(q^k·r) via congruence *)
     poly_deriv_congruence p qkr;
     (* gcd(p, D(p)) ≈ gcd(q^k·r, D(q^k·r)) via gcd_congruence *)
-    poly_eq_symmetry p qkr;
-    poly_eq_symmetry (poly_deriv p) (poly_deriv qkr);
     gcd_congruence #t #f qkr p (poly_deriv qkr) (poly_deriv p);
     (* Transfer divisibility via congruence *)
-    divides_congruence_right #(polynomial t) #cr_p (poly_power q (k - 1))
+    divides_congruence_right  (poly_power q (k - 1))
       (poly_gcd #t #f qkr (poly_deriv qkr))
       (poly_gcd #t #f p (poly_deriv p))
 #pop-options
@@ -2339,11 +2294,11 @@ let divides_same_degree (#t:Type) {| f: field t |}
   : Lemma (requires divides d p /\
                     Some? (poly_deg d) /\ Some? (poly_deg p) /\
                     Some?.v (poly_deg d) == Some?.v (poly_deg p))
-          (ensures  (let cr_p : commutative_ring (polynomial t) = TC.solve in
+          (ensures  (
                      exists (c: polynomial t).
                        poly_eq p (poly_mul d c) /\
                        poly_deg c == Some 0))
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     H.elim_equatable_laws (polynomial t) ();
     H.trans_for_calc (polynomial t) ();
     let aux (c: polynomial t)
@@ -2354,8 +2309,6 @@ let divides_same_degree (#t:Type) {| f: field t |}
             (* c ≈ zero → d·c ≈ zero → p ≈ zero. But Some?(deg p). Contradiction. *)
             assert (c == (poly_zero #t));
             H.x_mul_zero #(polynomial t) d;
-            poly_eq_symmetry (poly_mul d c) (poly_zero #t);
-            poly_eq_transitivity p (poly_mul d c) (poly_zero #t);
             degree_well_defined p (poly_zero #t)
         | Some dc ->
             (* deg(d·c) = deg(d) + deg(c). poly_eq p (d·c) → deg(p) = deg(d) + deg(c). *)
@@ -2399,7 +2352,7 @@ let poly_div_has_degree (#t:Type) {| f: field t |}
   (p d: polynomial t)
   : Lemma (requires Some? (poly_deg d) /\ Some? (poly_deg p) /\ divides d p)
           (ensures  Some? (poly_deg (poly_div p d)))
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     H.elim_equatable_laws (polynomial t) ();
     H.trans_for_calc (polynomial t) ();
     poly_div_correct p d;
@@ -2408,13 +2361,8 @@ let poly_div_has_degree (#t:Type) {| f: field t |}
     | Some _ -> ()
     | None ->
         degree_none_poly_eq_zero q;
-        poly_eq_reflexivity d;
         poly_mul_congruence d q d (poly_zero #t);
         H.x_mul_zero #(polynomial t) d;
-        poly_eq_transitivity (poly_mul d q) (poly_mul d (poly_zero #t)) (poly_zero #t);
-        poly_eq_symmetry (poly_mul d q) p;
-        poly_eq_transitivity (poly_zero #t) (poly_mul d q) p;
-        poly_eq_symmetry (poly_zero #t) p;
         degree_well_defined p (poly_zero #t)
 
 (* ================================================================ *)
@@ -2446,7 +2394,7 @@ let irreducible_coprime_or_divides (#t:Type) {| f: field t |}
   (q r: polynomial t)
   : Lemma (requires poly_irreducible q /\ Some? (poly_deg r))
           (ensures  coprime q r \/ divides q r)
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     H.elim_equatable_laws (polynomial t) ();
     H.trans_for_calc (polynomial t) ();
     let g = poly_gcd #t #f q r in
@@ -2468,11 +2416,8 @@ let irreducible_coprime_or_divides (#t:Type) {| f: field t |}
           (* Eliminate None: h ≈ 0 → q ≈ 0. Contradiction. *)
           (if None? (poly_deg h) then (
             degree_none_poly_eq_zero h;
-            poly_eq_reflexivity g;
             poly_mul_congruence g h g (poly_zero #t);
             H.x_mul_zero #(polynomial t) g;
-            poly_eq_transitivity (poly_mul g h) (poly_mul g (poly_zero #t)) (poly_zero #t);
-            poly_eq_transitivity q (poly_mul g h) (poly_zero #t);
             degree_well_defined q (poly_zero #t)
           ) else ());
           assert (poly_deg h == Some 0);
@@ -2492,7 +2437,6 @@ let irreducible_coprime_or_divides (#t:Type) {| f: field t |}
           poly_mul_commutativity d h;
           poly_mul_right_congruence g (poly_mul d h) (poly_mul h d);
           poly_mul_associativity g h d;
-          poly_eq_symmetry q (poly_mul g h);
           poly_mul_left_congruence (poly_mul g h) q d;
           let rh = poly_mul r h in
           let gdh = poly_mul (poly_mul g d) h in
@@ -2500,12 +2444,7 @@ let irreducible_coprime_or_divides (#t:Type) {| f: field t |}
           let g_hd = poly_mul g (poly_mul h d) in
           let ghd = poly_mul (poly_mul g h) d in
           let qd = poly_mul q d in
-          poly_eq_transitivity rh gdh g_dh;
-          poly_eq_transitivity rh g_dh g_hd;
-          poly_eq_transitivity rh g_hd ghd;
-          poly_eq_transitivity rh ghd qd;
-          poly_eq_symmetry rh qd;
-          divides_intro #(polynomial t) #cr_p q rh d;
+          divides_intro  q rh d;
           (* euclid_lemma: coprime(q, h) ∧ q | (r·h) → q | r *)
           euclid_lemma q h r
       in
@@ -2529,23 +2468,20 @@ let rec factor_out_irreducible (#t:Type) {| f: field t |}
             coprime q r /\
             Some? (poly_deg r))
           (decreases (if Some? (poly_deg p) then Some?.v (poly_deg p) else 0))
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     H.elim_equatable_laws (polynomial t) ();
     H.trans_for_calc (polynomial t) ();
     poly_div_correct p q;
     poly_div_has_degree p q;
     poly_div_degree p q;
     let p1 = poly_div p q in
-    poly_eq_symmetry (poly_mul q p1) p;
     assert (Some?.v (poly_deg p1) < Some?.v (poly_deg p));
     irreducible_coprime_or_divides q p1;
     if coprime q p1 then begin
       (* Base: e = 1, r = p1. poly_power q 1 = q. *)
       poly_mul_one q;
-      poly_eq_symmetry (poly_mul q (poly_one #t)) q;
       assert (poly_eq (poly_power q 1) q);
       poly_mul_left_congruence q (poly_power q 1) p1;
-      poly_eq_symmetry (poly_mul q p1) (poly_mul (poly_power q 1) p1);
       poly_eq_transitivity p (poly_mul q p1) (poly_mul (poly_power q 1) p1)
     end else begin
       (* Inductive: q | p1, recurse *)
@@ -2567,7 +2503,6 @@ let rec factor_out_irreducible (#t:Type) {| f: field t |}
                                (poly_mul q (poly_mul (poly_power q e') r'))
                                (poly_mul (poly_mul q (poly_power q e')) r');
           (* poly_power q e == poly_mul q (poly_power q e') *)
-          poly_eq_reflexivity (poly_mul q (poly_power q e'));
           assert (poly_power q e == poly_mul q (poly_power q e'));
           poly_mul_left_congruence (poly_mul q (poly_power q e'))
                                   (poly_power q e) r';

@@ -71,7 +71,6 @@ private let group_cancel_left (#t: Type) {| g: add_comm_group t |} (a b c: t)
     add_associativity (neg a) a c;
     zero_plus_x b;
     zero_plus_x c;
-    reflexivity (neg a);
     add_congruence (neg a) (a + b) (neg a) (a + c);
     add_congruence (neg a + a) b zero b;
     add_congruence (neg a + a) c zero c
@@ -166,12 +165,9 @@ let rec sum_range_split (#t:Type) {| m: add_comm_group t |}
     trans_for_calc t ();
     if lo = mid then begin
       sum_range_empty f lo mid;
-      reflexivity (sum_range f mid hi);
       add_congruence (sum_range f lo mid) (sum_range f mid hi)
                      (zero <: t) (sum_range f mid hi);
       zero_plus_x (sum_range f mid hi);
-      symmetry (zero + sum_range f mid hi) (sum_range f mid hi);
-      reflexivity (sum_range f lo hi);
       transitivity (sum_range f lo hi)
                    (sum_range f mid hi)
                    (zero + sum_range f mid hi);
@@ -182,11 +178,9 @@ let rec sum_range_split (#t:Type) {| m: add_comm_group t |}
       sum_range_unfold_left f lo hi;
       sum_range_unfold_left f lo mid;
       sum_range_split f (nat_succ lo) mid hi;
-      reflexivity (f lo);
       add_congruence (f lo) (sum_range f (nat_succ lo) hi)
                      (f lo) (sum_range f (nat_succ lo) mid + sum_range f mid hi);
       add_associativity (f lo) (sum_range f (nat_succ lo) mid) (sum_range f mid hi);
-      reflexivity (sum_range f mid hi);
       add_congruence (f lo + sum_range f (nat_succ lo) mid) (sum_range f mid hi)
                      (sum_range f lo mid) (sum_range f mid hi);
       trans4 (sum_range f lo hi)
@@ -215,7 +209,6 @@ let rec sum_range_shift (#t:Type) {| m: add_comm_group t |}
       sum_range_unfold_left f (Prims.op_Addition lo offset) (Prims.op_Addition hi offset);
       assert (Prims.op_Addition (nat_succ lo) offset == nat_succ (Prims.op_Addition lo offset));
       sum_range_shift f offset (nat_succ lo) hi;
-      reflexivity (f (Prims.op_Addition lo offset));
       add_congruence (f (Prims.op_Addition lo offset))
                      (sum_range (fun (j:nat) -> f (Prims.op_Addition j offset)) (nat_succ lo) hi)
                      (f (Prims.op_Addition lo offset))
@@ -248,7 +241,6 @@ let rec sum_range_reverse (#t:Type) {| m: add_comm_group t |}
              (sum_range (fun (j:nat) -> g (Prims.op_Addition j 1)) 0 n1)
              (sum_range h 0 n1)
              (sum_range f' 0 n1);
-      reflexivity (f' n1);
       add_congruence (f' n1) (sum_range g 1 n)
                      (f' n1) (sum_range f' 0 n1);
       add_commutativity (f' n1) (sum_range f' 0 n1);
@@ -273,11 +265,9 @@ let rec sum_range_all_zero (#t:Type) {| m: add_comm_group t |}
         (fun (k: nat{nat_succ lo <= k /\ k < hi}) -> h k);
       elim_equatable_laws t ();
       trans_for_calc t ();
-      reflexivity (zero <: t);
       add_congruence (f lo) (sum_range f (nat_succ lo) hi)
                      (zero <: t) (zero <: t);
       zero_plus_x (zero <: t);
-      transitivity (sum_range f lo hi) (f lo + sum_range f (nat_succ lo) hi) (zero + zero);
       transitivity (sum_range f lo hi) (zero + zero) (zero <: t)
     end
 #pop-options
@@ -341,20 +331,17 @@ let rec prod_range_unfold_right
       x_mul_one (f lo);
       prod_range_empty f lo (nat_pred hi);
       one_mul_x (f (nat_pred hi));
-      symmetry (one * f (nat_pred hi)) (f (nat_pred hi));
       mul_congruence (prod_range f lo (nat_pred hi)) (f (nat_pred hi))
                      one (f (nat_pred hi))
     end else begin
       prod_range_unfold_left f lo hi;
       prod_range_unfold_right f (nat_succ lo) hi;
-      reflexivity (f lo);
       mul_congruence (f lo) (prod_range f (nat_succ lo) hi)
                      (f lo) (prod_range f (nat_succ lo) (nat_pred hi) * f (nat_pred hi));
       mul_associativity (f lo) (prod_range f (nat_succ lo) (nat_pred hi)) (f (nat_pred hi));
       prod_range_unfold_left f lo (nat_pred hi);
       symmetry (prod_range f lo (nat_pred hi))
                (f lo * prod_range f (nat_succ lo) (nat_pred hi));
-      reflexivity (f (nat_pred hi));
       mul_congruence (f lo * prod_range f (nat_succ lo) (nat_pred hi)) (f (nat_pred hi))
                      (prod_range f lo (nat_pred hi)) (f (nat_pred hi))
     end
@@ -371,12 +358,9 @@ let rec prod_range_split
     trans_for_calc t ();
     if lo = mid then begin
       prod_range_empty f lo mid;
-      reflexivity (prod_range f mid hi);
       mul_congruence (prod_range f lo mid) (prod_range f mid hi)
                      (one) (prod_range f mid hi);
       one_mul_x (prod_range f mid hi);
-      symmetry (one * prod_range f mid hi) (prod_range f mid hi);
-      reflexivity (prod_range f lo hi);
       transitivity (prod_range f lo hi)
                    (prod_range f mid hi)
                    (one * prod_range f mid hi);
@@ -387,11 +371,9 @@ let rec prod_range_split
       prod_range_unfold_left f lo hi;
       prod_range_unfold_left f lo mid;
       prod_range_split f (nat_succ lo) mid hi;
-      reflexivity (f lo);
       mul_congruence (f lo) (prod_range f (nat_succ lo) hi)
                      (f lo) (prod_range f (nat_succ lo) mid * prod_range f mid hi);
       mul_associativity (f lo) (prod_range f (nat_succ lo) mid) (prod_range f mid hi);
-      reflexivity (prod_range f mid hi);
       mul_congruence (f lo * prod_range f (nat_succ lo) mid) (prod_range f mid hi)
                      (prod_range f lo mid) (prod_range f mid hi);
       trans4 (prod_range f lo hi) (f lo * prod_range f (nat_succ lo) hi) (f lo * (prod_range f (nat_succ lo) mid * prod_range f mid hi)) ((f lo * prod_range f (nat_succ lo) mid) * prod_range f mid hi) (prod_range f lo mid * prod_range f mid hi)
@@ -407,7 +389,6 @@ let prod_range_two_step
     trans_for_calc t ();
     prod_range_unfold_left f i (nat_succ (nat_succ i));
     prod_range_singleton f (nat_succ i);
-    reflexivity (f i);
     mul_congruence (f i) (prod_range f (nat_succ i) (nat_succ (nat_succ i)))
                    (f i) (f (nat_succ i))
 #pop-options
@@ -448,17 +429,13 @@ let prod_range_swap_adjacent_forall
     let rp = prod_range f i2 hi in
     let lp_g = prod_range g lo i in
     let rp_g = prod_range g i2 hi in
-    reflexivity rp;
     mul_congruence (prod_range f i i2) rp (f i * f (nat_succ i)) rp;
     trans2 (prod_range f i hi) (prod_range f i i2 * rp) ((f i * f (nat_succ i)) * rp);
-    reflexivity rp_g;
     mul_congruence (prod_range g i i2) rp_g (g i * g (nat_succ i)) rp_g;
     trans2 (prod_range g i hi) (prod_range g i i2 * rp_g) ((g i * g (nat_succ i)) * rp_g);
     mul_congruence (g i) (g (nat_succ i)) (f (nat_succ i)) (f i);
     mul_congruence (g i * g (nat_succ i)) rp_g (f (nat_succ i) * f i) rp_g;
     trans2 (prod_range g i hi) ((g i * g (nat_succ i)) * rp_g) ((f (nat_succ i) * f i) * rp_g);
-    reflexivity lp;
-    reflexivity lp_g;
     mul_congruence lp (prod_range f i hi) lp ((f i * f (nat_succ i)) * rp);
     mul_congruence lp_g (prod_range g i hi) lp_g ((f (nat_succ i) * f i) * rp_g);
     assert (f i * f (nat_succ i) = f (nat_succ i) * f i);
@@ -466,10 +443,7 @@ let prod_range_swap_adjacent_forall
     mul_congruence (f i * f (nat_succ i)) rp (f (nat_succ i) * f i) rp_g;
     mul_congruence lp ((f i * f (nat_succ i)) * rp) lp_g ((f (nat_succ i) * f i) * rp_g);
     trans3 (prod_range f lo hi) (lp * prod_range f i hi) (lp * ((f i * f (nat_succ i)) * rp)) (lp_g * ((f (nat_succ i) * f i) * rp_g));
-    symmetry (prod_range g i hi) ((f (nat_succ i) * f i) * rp_g);
-    reflexivity lp_g;
     mul_congruence lp_g ((f (nat_succ i) * f i) * rp_g) lp_g (prod_range g i hi);
-    symmetry (prod_range g lo hi) (lp_g * prod_range g i hi);
     trans3 (prod_range f lo hi) (lp_g * ((f (nat_succ i) * f i) * rp_g)) (lp_g * prod_range g i hi) (prod_range g lo hi)
 #pop-options
 
@@ -530,10 +504,7 @@ let rec prod_range_perm_invariance
             swap_aux_i ();
             swap_aux_ip1 ();
             Classical.forall_intro swap_aux_off;
-            symmetry (body_p i) (body_q (nat_succ i));
-            symmetry (body_p (nat_succ i)) (body_q i);
             prod_range_swap_adjacent_forall body_q body_p 0 n i;
-            symmetry (prod_range body_q 0 n) (prod_range body_p 0 n);
             prod_range_perm_invariance #t #m #n f q;
             trans2 (prod_range body_p 0 n) (prod_range body_q 0 n) (prod_range body_id 0 n)
           end
@@ -614,13 +585,10 @@ private let rec sum_list_map_neg_lambda
       let trest = sum_list (map f rest) in
       let nrest = sum_list (map (fun x -> neg (f x)) rest) in
       assert (nrest = neg trest);
-      reflexivity (neg h);
       add_congruence (neg h) nrest (neg h) (neg trest);
       neg_of_sum h trest;
-      symmetry (neg (h + trest)) (neg trest + neg h);
       (* But we want `neg h + neg trest = neg (h + trest)`; flip via comm. *)
       add_commutativity (neg h) (neg trest);
-      transitivity (neg h + nrest) (neg h + neg trest) (neg trest + neg h);
       transitivity (neg h + nrest) (neg trest + neg h) (neg (h + trest))
 
 
@@ -644,22 +612,14 @@ private let rec sum_list_map_add_lambda
       let sg = sum_list (map g rest) in
       let sh = sum_list (map (fun x -> f x + g x) rest) in
       assert (sh = sf + sg);
-      reflexivity (a1 + b1);
       add_congruence (a1 + b1) sh (a1 + b1) (sf + sg);
       add_associativity a1 b1 sf;
-      symmetry ((a1 + b1) + sf) (a1 + (b1 + sf));
       add_commutativity b1 sf;
-      reflexivity a1;
       add_congruence a1 (b1 + sf) a1 (sf + b1);
       add_associativity a1 sf b1;
-      transitivity (a1 + (b1 + sf)) (a1 + (sf + b1)) ((a1 + sf) + b1);
-      transitivity ((a1 + b1) + sf) (a1 + (b1 + sf)) ((a1 + sf) + b1);
-      reflexivity sg;
       add_congruence ((a1 + b1) + sf) sg ((a1 + sf) + b1) sg;
       add_associativity (a1 + b1) sf sg;
-      symmetry ((a1 + b1) + sf + sg) ((a1 + b1) + (sf + sg));
       add_associativity (a1 + sf) b1 sg;
-      symmetry ((a1 + sf) + b1 + sg) ((a1 + sf) + (b1 + sg));
       trans4 ((a1 + b1) + sh) ((a1 + b1) + (sf + sg)) (((a1 + b1) + sf) + sg) (((a1 + sf) + b1) + sg) ((a1 + sf) + (b1 + sg))
 #pop-options
 
@@ -685,16 +645,12 @@ private let rec sum_list_map_mul_left_lambda
       let crest = sum_list (map (fun x -> c * f x) rest) in
       assert (c * trest = crest);
       left_distributivity c h trest;
-      reflexivity (c * h);
       add_congruence (c * h) (c * trest) (c * h) crest;
       let s_lhs  = c * sum_list (map f (hx :: rest)) in
       let s_mid1 = c * (h + trest) in
       let s_mid2 = c * h + c * trest in
       let s_mid3 = c * h + crest in
       let s_rhs  = sum_list (map (fun x -> c * f x) (hx :: rest)) in
-      reflexivity s_lhs;
-      reflexivity s_rhs;
-      symmetry s_rhs s_mid3;
       trans4 (s_lhs) (s_mid1) (s_mid2) (s_mid3) (s_rhs)
 #pop-options
 
@@ -728,27 +684,20 @@ private let rec sum_range_mul_left_lambda
     if lo >= hi then begin
       sum_range_empty f lo hi;
       sum_range_empty (fun k -> c * f k) lo hi;
-      reflexivity c;
       mul_congruence c (sum_range f lo hi) c zero;
       x_mul_zero c;
-      symmetry (sum_range (fun k -> c * f k) lo hi) zero;
-      transitivity (c * sum_range f lo hi) (c * zero) zero;
       transitivity (c * sum_range f lo hi) zero (sum_range (fun k -> c * f k) lo hi)
     end else begin
       sum_range_unfold_left f lo hi;
       sum_range_unfold_left (fun k -> c * f k) lo hi;
       let s1 = c * sum_range f lo hi in
       let s2 = c * (f lo + sum_range f (nat_succ lo) hi) in
-      reflexivity s1;
       left_distributivity c (f lo) (sum_range f (nat_succ lo) hi);
       sum_range_mul_left_lambda c f (nat_succ lo) hi;
-      reflexivity (c * f lo);
       add_congruence (c * f lo) (c * sum_range f (nat_succ lo) hi)
                      (c * f lo) (sum_range (fun k -> c * f k) (nat_succ lo) hi);
       let s5 = sum_range (fun k -> c * f k) lo hi in
       let s4 = c * f lo + sum_range (fun k -> c * f k) (nat_succ lo) hi in
-      reflexivity s5;
-      symmetry s5 s4;
       trans4 (s1) (s2) (c * f lo + c * sum_range f (nat_succ lo) hi) (s4) (s5)
     end
 #pop-options
@@ -765,27 +714,20 @@ private let rec sum_range_mul_right_lambda
     if lo >= hi then begin
       sum_range_empty f lo hi;
       sum_range_empty (fun k -> f k * c) lo hi;
-      reflexivity c;
       mul_congruence (sum_range f lo hi) c zero c;
       zero_mul_x c;
-      symmetry (sum_range (fun k -> f k * c) lo hi) zero;
-      transitivity (sum_range f lo hi * c) (zero * c) zero;
       transitivity (sum_range f lo hi * c) zero (sum_range (fun k -> f k * c) lo hi)
     end else begin
       sum_range_unfold_left f lo hi;
       sum_range_unfold_left (fun k -> f k * c) lo hi;
       let s1 = sum_range f lo hi * c in
       let s2 = (f lo + sum_range f (nat_succ lo) hi) * c in
-      reflexivity s1;
       right_distributivity c (f lo) (sum_range f (nat_succ lo) hi);
       sum_range_mul_right_lambda f c (nat_succ lo) hi;
-      reflexivity (f lo * c);
       add_congruence (f lo * c) (sum_range f (nat_succ lo) hi * c)
                      (f lo * c) (sum_range (fun k -> f k * c) (nat_succ lo) hi);
       let s5 = sum_range (fun k -> f k * c) lo hi in
       let s4 = f lo * c + sum_range (fun k -> f k * c) (nat_succ lo) hi in
-      reflexivity s5;
-      symmetry s5 s4;
       trans4 (s1) (s2) (f lo * c + sum_range f (nat_succ lo) hi * c) (s4) (s5)
     end
 #pop-options
@@ -804,10 +746,8 @@ private let rec sum_range_add_lambda
       sum_range_empty (fun k -> f k + g k) lo hi;
       sum_range_empty f lo hi;
       sum_range_empty g lo hi;
-      reflexivity (zero #t);
       add_congruence (sum_range f lo hi) (sum_range g lo hi) zero zero;
       zero_plus_x (zero #t);
-      symmetry (zero + zero #t) zero;
       trans3 (sum_range (fun k -> f k + g k) lo hi) (zero #t) (zero + zero #t) (sum_range f lo hi + sum_range g lo hi)
     end else begin
       sum_range_unfold_left (fun k -> f k + g k) lo hi;
@@ -817,27 +757,19 @@ private let rec sum_range_add_lambda
       let fa = sum_range f (nat_succ lo) hi in
       let ga = sum_range g (nat_succ lo) hi in
       sum_range_add_lambda f g (nat_succ lo) hi;
-      reflexivity (fl + gl);
       add_congruence (fl + gl) (sum_range (fun k -> f k + g k) (nat_succ lo) hi)
                      (fl + gl) (fa + ga);
       let head = sum_range (fun k -> f k + g k) lo hi in
       let target = sum_range f lo hi + sum_range g lo hi in
-      reflexivity head;
-      reflexivity target;
       add_associativity fl gl (fa + ga);
       add_associativity gl fa ga;
-      symmetry ((gl + fa) + ga) (gl + (fa + ga));
       add_commutativity gl fa;
-      reflexivity ga;
       add_congruence (gl + fa) ga (fa + gl) ga;
       add_associativity fa gl ga;
       trans3 (gl + (fa + ga)) ((gl + fa) + ga) ((fa + gl) + ga) (fa + (gl + ga));
-      reflexivity fl;
       add_congruence fl (gl + (fa + ga)) fl (fa + (gl + ga));
       add_associativity fl fa (gl + ga);
-      symmetry ((fl + fa) + (gl + ga)) (fl + (fa + (gl + ga)));
       trans4 (head) ((fl + gl) + (fa + ga)) (fl + (gl + (fa + ga))) (fl + (fa + (gl + ga))) ((fl + fa) + (gl + ga));
-      reflexivity ((fl + fa) + (gl + ga));
       transitivity head ((fl + fa) + (gl + ga)) target
     end
 #pop-options
@@ -867,14 +799,12 @@ private let rec sum_swap_aux_lambda
       transitivity (sum_range (fun j -> sum_range (fun i -> f i j) i_lo i_hi) j_lo j_hi)
                    (sum_range #t (fun _ -> zero) j_lo j_hi)
                    zero;
-      symmetry (sum_range (fun j -> sum_range (fun i -> f i j) i_lo i_hi) j_lo j_hi) zero;
       transitivity (sum_range (fun i -> sum_range (f i) j_lo j_hi) i_lo i_hi)
                    zero
                    (sum_range (fun j -> sum_range (fun i -> f i j) i_lo i_hi) j_lo j_hi)
     end else begin
       sum_range_unfold_left #t (fun i -> sum_range (f i) j_lo j_hi) i_lo i_hi;
       sum_swap_aux_lambda f (nat_succ i_lo) i_hi j_lo j_hi;
-      reflexivity (sum_range (f i_lo) j_lo j_hi);
       add_congruence (sum_range (f i_lo) j_lo j_hi)
                      (sum_range (fun i -> sum_range (f i) j_lo j_hi) (nat_succ i_lo) i_hi)
                      (sum_range (f i_lo) j_lo j_hi)
@@ -1039,11 +969,8 @@ private let fin_sum_swap_lambda
     sum_range_congruence_forall
       (fun (j: nat) -> sum_range (fun (i: nat) -> fin_swap_body f i j) 0 n)
       outer_rhs_open 0 n;
-    reflexivity (fin_sum (fun (i: fin n) -> fin_sum (f i)));
-    reflexivity (fin_sum (fun (j: fin n) -> fin_sum (fun (i: fin n) -> f i j)));
     symmetry (sum_range (fun (i: nat) -> sum_range (fin_swap_body f i) 0 n) 0 n)
              (sum_range outer_lhs_open 0 n);
-    symmetry (sum_range outer_rhs 0 n) (sum_range outer_rhs_open 0 n);
     symmetry (fin_sum (fun (j: fin n) -> fin_sum (fun (i: fin n) -> f i j)))
              (sum_range outer_rhs 0 n);
     transitivity
@@ -1168,18 +1095,15 @@ private let rec sum_range_kronecker_lambda
       let tail = sum_range body (nat_succ lo) hi in
       let head = body lo in
       let lhs = sum_range body lo hi in
-      reflexivity lhs;
       if i0 = lo then begin
         one_mul_x (g lo);
         x_plus_zero (g lo);
         add_congruence head tail (g lo) (zero #t);
-        transitivity lhs (head + tail) (g lo + zero);
         transitivity lhs (g lo + zero) (g lo)
       end else begin
         zero_mul_x (g lo);
         zero_plus_x tail;
         add_congruence head tail (zero #t) tail;
-        transitivity lhs (head + tail) (zero + tail);
         transitivity lhs (zero + tail) tail
       end
     end
@@ -1243,7 +1167,6 @@ let rec sum_list_map_congruence
         sum_list_cons (f x) (map f rest);
         sum_list_cons (g x) (map g rest);
         add_congruence (f x) (sum_list (map f rest)) (g x) (sum_list (map g rest));
-        symmetry (sum_list (map g (x :: rest))) (g x + sum_list (map g rest));
         trans3 (sum_list (map f (x :: rest)))
                (f x + sum_list (map f rest))
                (g x + sum_list (map g rest))
@@ -1364,7 +1287,6 @@ let sum_list_map_mul_left
     let prf (x: a) : Lemma (lam x = cm x)
       = pointwise_mul_unfold (const c) f x;
         const_unfold c x;
-        reflexivity (c * f x);
         symmetry (cm x) (c * f x)
     in
     sum_list_map_congruence lam cm xs prf;
@@ -1383,7 +1305,6 @@ private let rec sum_list_map_mul_right_lambda
     match xs with
     | [] ->
         zero_mul_x c;
-        symmetry (zero #t * c) zero;
         reflexivity (sum_list #t #r.r_add (map (fun x -> f x * c) ([] <: list a)))
     | hx :: rest ->
         sum_list_map_mul_right_lambda f c rest;
@@ -1391,16 +1312,12 @@ private let rec sum_list_map_mul_right_lambda
         let trest = sum_list (map f rest) in
         let crest = sum_list (map (fun x -> f x * c) rest) in
         right_distributivity c h trest;
-        reflexivity (h * c);
         add_congruence (h * c) (trest * c) (h * c) crest;
         let s_lhs  = sum_list (map f (hx :: rest)) * c in
         let s_mid1 = (h + trest) * c in
         let s_mid2 = h * c + trest * c in
         let s_mid3 = h * c + crest in
         let s_rhs  = sum_list (map (fun x -> f x * c) (hx :: rest)) in
-        reflexivity s_lhs;
-        reflexivity s_rhs;
-        symmetry s_rhs s_mid3;
         trans4 (s_lhs) (s_mid1) (s_mid2) (s_mid3) (s_rhs)
 #pop-options
 
@@ -1417,7 +1334,6 @@ let sum_list_map_mul_right
     let prf (x: a) : Lemma (lam x = cm x)
       = pointwise_mul_unfold f (const c) x;
         const_unfold c x;
-        reflexivity (f x * c);
         symmetry (cm x) (f x * c)
     in
     sum_list_map_congruence lam cm xs prf;
@@ -1456,7 +1372,6 @@ let sum_range_mul_left
     let prf (k: nat{lo <= k /\ k < hi}) : Lemma (lam k = cm k)
       = pointwise_mul_unfold (const c) f k;
         const_unfold c k;
-        reflexivity (c * f k);
         symmetry (cm k) (c * f k)
     in
     sum_range_congruence lam cm lo hi prf;
@@ -1477,7 +1392,6 @@ let sum_range_mul_right
     let prf (k: nat{lo <= k /\ k < hi}) : Lemma (lam k = cm k)
       = pointwise_mul_unfold f (const c) k;
         const_unfold c k;
-        reflexivity (f k * c);
         symmetry (cm k) (f k * c)
     in
     sum_range_congruence lam cm lo hi prf;
@@ -1526,7 +1440,6 @@ let sum_swap
         let inner_cm : nat -> t = swap_args f j in
         let inner_prf (i: nat{i_lo <= i /\ i < i_hi}) : Lemma (inner_lam i = inner_cm i)
           = swap_args_unfold f j i;
-            reflexivity (f i j);
             symmetry (inner_cm i) (f i j)
         in
         sum_range_congruence inner_lam inner_cm i_lo i_hi inner_prf;
@@ -1551,7 +1464,6 @@ let fin_sum_mul_left
     let prf (k: fin n) : Lemma ((fun (k: fin n) -> c * f k) k = pointwise_mul (const c) f k)
       = pointwise_mul_unfold (const c) f k;
         const_unfold c k;
-        reflexivity (c * f k);
         symmetry (pointwise_mul (const c) f k) (c * f k)
     in
     fin_sum_congruence (fun (k: fin n) -> c * f k) (pointwise_mul (const c) f) prf;
@@ -1596,7 +1508,6 @@ let fin_sum_swap
                                  = fin_sum_curry (swap_args f) j)
       = let inner_prf (i: fin n) : Lemma ((fun (i: fin n) -> f i j) i = swap_args f j i)
           = swap_args_unfold f j i;
-            reflexivity (f i j);
             symmetry (swap_args f j i) (f i j)
         in
         fin_sum_congruence (fun (i: fin n) -> f i j) (swap_args f j) inner_prf;
@@ -1677,7 +1588,6 @@ let fin_sum_kronecker
         fin_kronecker_delta_unfold #t i0 k;
         assert (kronecker_delta #t (i0 <: nat) (k <: nat)
               == (if (i0 <: nat) = (k <: nat) then one else zero #t));
-        reflexivity ((if (i0 <: nat) = (k <: nat) then one else zero #t) * g k);
         symmetry (pointwise_mul (fin_kronecker_delta i0) g k)
                  ((if (i0 <: nat) = (k <: nat) then one else zero #t) * g k)
     in
@@ -1796,9 +1706,6 @@ let rec sum_range_neg (#t:Type) {| g: add_comm_group t |}
       let rest = sum_range f lo1 hi in
       neg_of_sum (f lo) rest;
       add_commutativity (neg rest) (neg (f lo));
-      transitivity (neg (f lo + rest)) (neg rest + neg (f lo)) (neg (f lo) + neg rest);
-      symmetry (neg (f lo) + neg rest) (neg (f lo + rest));
-      reflexivity (neg (f lo));
       add_congruence (neg (f lo)) (sum_range nf lo1 hi)
                      (neg (f lo)) (neg rest);
       transitivity (neg (f lo) + sum_range nf lo1 hi)
@@ -1845,13 +1752,8 @@ let rec sum_range_reverse_named (#t:Type) {| acg: add_comm_group t |}
       sum_range_reverse_named f_sh g n1
         (fun (j: nat{j < n1}) -> h (Prims.op_Addition j 1));
       sum_range_shift f 1 0 n1;
-      symmetry (sum_range f_sh 0 n1) (sum_range f 1 n);
-      transitivity (sum_range f 1 n) (sum_range f_sh 0 n1) (sum_range g 0 n1);
       add_congruence (f 0) (sum_range f 1 n) (g n1) (sum_range g 0 n1);
       add_commutativity (sum_range g 0 n1) (g n1);
-      symmetry (sum_range g 0 n) (sum_range g 0 n1 + g n1);
-      transitivity (sum_range g 0 n) (sum_range g 0 n1 + g n1) (g n1 + sum_range g 0 n1);
-      symmetry (g n1 + sum_range g 0 n1) (sum_range g 0 n);
       transitivity (sum_range f 0 n) (g n1 + sum_range g 0 n1) (sum_range g 0 n)
     )
 #pop-options

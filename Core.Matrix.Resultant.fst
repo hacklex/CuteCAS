@@ -209,11 +209,11 @@ let bp_eq_aq (#t:Type) {| f: field t |}
     poly_mul_congruence b p b (poly_mul g a);
     poly_mul_associativity b g a;
     poly_eq_symmetry (poly_mul (poly_mul b g) a) (poly_mul b (poly_mul g a));
-    poly_mul_commutativity b g;
+    mul_commutativity_cr b g;
     poly_eq_reflexivity a;
     poly_mul_congruence (poly_mul b g) a (poly_mul g b) a;
     poly_mul_congruence (poly_mul g b) a q a;
-    poly_mul_commutativity q a;
+    mul_commutativity_cr q a;
     poly_eq_transitivity (poly_mul b p) (poly_mul b (poly_mul g a)) (poly_mul (poly_mul b g) a);
     poly_eq_transitivity (poly_mul b p) (poly_mul (poly_mul b g) a) (poly_mul (poly_mul g b) a);
     poly_eq_transitivity (poly_mul b p) (poly_mul (poly_mul g b) a) (poly_mul q a);
@@ -226,7 +226,7 @@ let poly_div_has_degree_local (#t:Type) {| f: field t |}
   (p d: polynomial t)
   : Lemma (requires Some? (poly_deg d) /\ Some? (poly_deg p) /\ divides d p)
           (ensures  Some? (poly_deg (poly_div p d)))
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     H.elim_equatable_laws (polynomial t) ();
     H.trans_for_calc (polynomial t) ();
     poly_div_correct p d;
@@ -235,13 +235,8 @@ let poly_div_has_degree_local (#t:Type) {| f: field t |}
     | Some _ -> ()
     | None ->
         degree_none_poly_eq_zero q;
-        poly_eq_reflexivity d;
         poly_mul_congruence d q d (poly_zero #t);
         H.x_mul_zero #(polynomial t) d;
-        poly_eq_transitivity (poly_mul d q) (poly_mul d (poly_zero #t)) (poly_zero #t);
-        poly_eq_symmetry (poly_mul d q) p;
-        poly_eq_transitivity (poly_zero #t) (poly_mul d q) p;
-        poly_eq_symmetry (poly_zero #t) p;
         degree_well_defined p (poly_zero #t)
 #pop-options
 
@@ -279,7 +274,6 @@ let coeff_cancel (#t:Type) {| cr: commutative_ring t |} (bp aq: polynomial t) (k
   = H.elim_equatable_laws t ();
     H.trans_for_calc t ();
     poly_eq_means_equal_coeffs bp aq kk;
-    reflexivity (neg (coeff aq kk));
     add_congruence (coeff bp kk) (neg (coeff aq kk)) (coeff aq kk) (neg (coeff aq kk));
     H.x_plus_neg_x (coeff aq kk)
 #pop-options
@@ -341,18 +335,15 @@ let syl_null_vec_is_null (#t:Type) {| cr: commutative_ring t |}
     sum_range_split g_fp 0 n_deg size;
     sum_range_all_zero g_fp n_deg size
       (fun (k: nat{n_deg <= k /\ k < size}) -> reflexivity (zero <: t));
-    reflexivity (sum_range g_fp 0 n_deg);
     add_congruence (sum_range g_fp 0 n_deg) (sum_range g_fp n_deg size)
                    (sum_range g_fp 0 n_deg) (zero <: t);
     H.x_plus_zero (sum_range g_fp 0 n_deg);
-    symmetry (sum_range g_fp 0 size) (sum_range g_fp 0 n_deg + sum_range g_fp n_deg size);
     transitivity (sum_range g_fp 0 size)
                  (sum_range g_fp 0 n_deg + sum_range g_fp n_deg size)
                  (sum_range g_fp 0 n_deg + (zero <: t));
     transitivity (sum_range g_fp 0 size)
                  (sum_range g_fp 0 n_deg + (zero <: t))
                  (sum_range g_fp 0 n_deg);
-    transitivity (fin_sum f_p) (sum_range g_fp 0 size) (sum_range g_fp 0 n_deg);
     let g_bp (r:nat) : t = coeff b r * coeff p (Prims.op_Subtraction kk r) in
     let h_rev (j: nat{j < n_deg})
       : Lemma (g_fp j = g_bp (Prims.op_Subtraction (Prims.op_Subtraction n_deg 1) j))
@@ -369,11 +360,9 @@ let syl_null_vec_is_null (#t:Type) {| cr: commutative_ring t |}
       (fun (r: nat{L.length b <= r /\ r < n_deg}) ->
         assert (coeff b r == (zero <: t));
         H.zero_mul_x (coeff p (Prims.op_Subtraction kk r)));
-    reflexivity (sum_range g_bp 0 (L.length b));
     add_congruence (sum_range g_bp 0 (L.length b)) (sum_range g_bp (L.length b) n_deg)
                    (sum_range g_bp 0 (L.length b)) (zero <: t);
     H.x_plus_zero (sum_range g_bp 0 (L.length b));
-    symmetry (sum_range g_bp 0 n_deg) (sum_range g_bp 0 (L.length b) + sum_range g_bp (L.length b) n_deg);
     transitivity (sum_range g_bp 0 n_deg)
                  (sum_range g_bp 0 (L.length b) + sum_range g_bp (L.length b) n_deg)
                  (sum_range g_bp 0 (L.length b) + (zero <: t));
@@ -382,10 +371,6 @@ let syl_null_vec_is_null (#t:Type) {| cr: commutative_ring t |}
                  (sum_range g_bp 0 (L.length b));
     coeff_poly_mul_named b p kk g_bp
       (fun (r:nat) -> reflexivity (coeff b r * coeff p (Prims.op_Subtraction kk r)));
-    symmetry (coeff (poly_mul b p) kk) (sum_range g_bp 0 (L.length b));
-    transitivity (fin_sum f_p) (sum_range g_fp 0 n_deg) (sum_range g_bp 0 n_deg);
-    transitivity (fin_sum f_p) (sum_range g_bp 0 n_deg) (sum_range g_bp 0 (L.length b));
-    transitivity (fin_sum f_p) (sum_range g_bp 0 (L.length b)) (coeff (poly_mul b p) kk);
 
     // ========== Q-half: fin_sum f_q = neg(coeff(a*q, kk)) ==========
     let g_fq (j:nat) : t = if j >= n_deg && j < size
@@ -395,22 +380,17 @@ let syl_null_vec_is_null (#t:Type) {| cr: commutative_ring t |}
     sum_range_split g_fq 0 n_deg size;
     sum_range_all_zero g_fq 0 n_deg
       (fun (k: nat{0 <= k /\ k < n_deg}) -> reflexivity (zero <: t));
-    reflexivity (sum_range g_fq n_deg size);
     add_congruence (sum_range g_fq 0 n_deg) (sum_range g_fq n_deg size)
                    (zero <: t) (sum_range g_fq n_deg size);
     H.zero_plus_x (sum_range g_fq n_deg size);
-    symmetry (sum_range g_fq 0 size) (sum_range g_fq 0 n_deg + sum_range g_fq n_deg size);
     transitivity (sum_range g_fq 0 size)
                  (sum_range g_fq 0 n_deg + sum_range g_fq n_deg size)
                  ((zero <: t) + sum_range g_fq n_deg size);
     transitivity (sum_range g_fq 0 size)
                  ((zero <: t) + sum_range g_fq n_deg size)
                  (sum_range g_fq n_deg size);
-    transitivity (fin_sum f_q) (sum_range g_fq 0 size) (sum_range g_fq n_deg size);
     let f_sh : nat -> t = fun (j:nat) -> g_fq (Prims.op_Addition j n_deg) in
     sum_range_shift g_fq n_deg 0 m_deg;
-    symmetry (sum_range f_sh 0 m_deg) (sum_range g_fq n_deg size);
-    transitivity (fin_sum f_q) (sum_range g_fq n_deg size) (sum_range f_sh 0 m_deg);
     let g_aq (r:nat) : t = coeff a r * coeff q (Prims.op_Subtraction kk r) in
     let g_rev (j:nat) : t = if m_deg > 0 && j < m_deg
       then g_aq (Prims.op_Subtraction (Prims.op_Subtraction m_deg 1) j)
@@ -436,23 +416,18 @@ let syl_null_vec_is_null (#t:Type) {| cr: commutative_ring t |}
                 coeff a (Prims.op_Subtraction (Prims.op_Subtraction m_deg 1) j)))
           (neg_g_rev j)
       );
-    transitivity (fin_sum f_q) (sum_range f_sh 0 m_deg) (sum_range neg_g_rev 0 m_deg);
     sum_range_neg g_rev 0 m_deg;
-    transitivity (fin_sum f_q) (sum_range neg_g_rev 0 m_deg) (neg (sum_range g_rev 0 m_deg));
     sum_range_reverse_named g_rev g_aq m_deg
       (fun (j: nat{j < m_deg}) -> reflexivity (g_rev j));
     neg_congruence (sum_range g_rev 0 m_deg) (sum_range g_aq 0 m_deg);
-    transitivity (fin_sum f_q) (neg (sum_range g_rev 0 m_deg)) (neg (sum_range g_aq 0 m_deg));
     sum_range_split g_aq 0 (L.length a) m_deg;
     sum_range_all_zero g_aq (L.length a) m_deg
       (fun (r: nat{L.length a <= r /\ r < m_deg}) ->
         assert (coeff a r == (zero <: t));
         H.zero_mul_x (coeff q (Prims.op_Subtraction kk r)));
-    reflexivity (sum_range g_aq 0 (L.length a));
     add_congruence (sum_range g_aq 0 (L.length a)) (sum_range g_aq (L.length a) m_deg)
                    (sum_range g_aq 0 (L.length a)) (zero <: t);
     H.x_plus_zero (sum_range g_aq 0 (L.length a));
-    symmetry (sum_range g_aq 0 m_deg) (sum_range g_aq 0 (L.length a) + sum_range g_aq (L.length a) m_deg);
     transitivity (sum_range g_aq 0 m_deg)
                  (sum_range g_aq 0 (L.length a) + sum_range g_aq (L.length a) m_deg)
                  (sum_range g_aq 0 (L.length a) + (zero <: t));
@@ -460,12 +435,9 @@ let syl_null_vec_is_null (#t:Type) {| cr: commutative_ring t |}
                  (sum_range g_aq 0 (L.length a) + (zero <: t))
                  (sum_range g_aq 0 (L.length a));
     neg_congruence (sum_range g_aq 0 m_deg) (sum_range g_aq 0 (L.length a));
-    transitivity (fin_sum f_q) (neg (sum_range g_aq 0 m_deg)) (neg (sum_range g_aq 0 (L.length a)));
     coeff_poly_mul_named a q kk g_aq
       (fun (r:nat) -> reflexivity (coeff a r * coeff q (Prims.op_Subtraction kk r)));
-    symmetry (coeff (poly_mul a q) kk) (sum_range g_aq 0 (L.length a));
     neg_congruence (sum_range g_aq 0 (L.length a)) (coeff (poly_mul a q) kk);
-    transitivity (fin_sum f_q) (neg (sum_range g_aq 0 (L.length a))) (neg (coeff (poly_mul a q) kk));
 
     add_congruence (fin_sum f_p) (fin_sum f_q)
                    (coeff (poly_mul b p) kk) (neg (coeff (poly_mul a q) kk));
@@ -511,6 +483,5 @@ let resultant_zero_of_common_divisor (#t:Type) {| f: field t |}
     assert (is_nonzero (v k));
     null_vec_implies_det_zero st v k;
     det_transpose sm;
-    symmetry (det st) (det sm);
     transitivity (det sm) (det st) (zero <: t)
 #pop-options

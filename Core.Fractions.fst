@@ -199,8 +199,6 @@ private let fraction_eq_trans
           mul_cong_3 (f * a) (a * f) (c * dn) }
       (c * dn) * (a * f);
     };
-    transitivity ((c * dn) * (a * f)) ((a * dn) * (c * f)) ((b * c) * (dn * e));
-    transitivity ((c * dn) * (a * f)) ((b * c) * (dn * e)) ((c * dn) * (b * e));
     assert ((c * dn) * (a * f) = (c * dn) * (b * e));
     if not (c * dn = zero) then
       left_cancel (c * dn) (a * f) (b * e)
@@ -209,33 +207,20 @@ private let fraction_eq_trans
       domain_zero_div c dn;
       assert (c = zero);
       (* From a*dn = b*c and c = 0: a*dn = b*0 = 0, with dn ≠ 0 ⇒ a = 0. *)
-      reflexivity b;
       mul_congruence b c b zero;
       x_mul_zero b;
-      transitivity (b * c) (b * zero) zero;
-      symmetry (b * c) (a * dn);
-      transitivity (a * dn) (b * c) zero;
       domain_zero_div a dn;
       assert (a = zero);
       (* From c*f = dn*e and c = 0: 0*f = dn*e, with dn ≠ 0 ⇒ e = 0. *)
-      reflexivity f;
       mul_congruence c f zero f;
       zero_mul_x f;
-      transitivity (c * f) (zero * f) zero;
-      symmetry (c * f) (dn * e);
-      transitivity (dn * e) (c * f) zero;
       domain_zero_div dn e;
       assert (e = zero);
       (* Now a*f = 0*f = 0 = b*0 = b*e. *)
-      reflexivity f;
       mul_congruence a f zero f;
       zero_mul_x f;
-      transitivity (a * f) (zero * f) zero;
-      reflexivity b;
       mul_congruence b e b zero;
       x_mul_zero b;
-      transitivity (b * e) (b * zero) zero;
-      symmetry (b * e) zero;
       transitivity (a * f) zero (b * e)
     end
 #pop-options
@@ -321,15 +306,10 @@ private let fraction_add_left_congruence
     mul_middle_swap a dd f dd;
     mul_congruence (a * f) (dd * dd) (b * e) (dd * dd);
     mul_middle_swap b e dd dd;
-    transitivity ((a * dd) * (f * dd)) ((a * f) * (dd * dd)) ((b * e) * (dd * dd));
-    transitivity ((a * dd) * (f * dd)) ((b * e) * (dd * dd)) ((b * dd) * (e * dd));
     mul_middle_swap b c f dd;
     mul_middle_swap b dd f c;
     mul_commutativity c dd;
     mul_congruence (b * f) (c * dd) (b * f) (dd * c);
-    symmetry ((b * dd) * (f * c)) ((b * f) * (dd * c));
-    transitivity ((b * c) * (f * dd)) ((b * f) * (c * dd)) ((b * f) * (dd * c));
-    transitivity ((b * c) * (f * dd)) ((b * f) * (dd * c)) ((b * dd) * (f * c));
     add_congruence ((a * dd) * (f * dd)) ((b * c) * (f * dd))
                    ((b * dd) * (e * dd)) ((b * dd) * (f * c));
     right_distributivity (f * dd) (a * dd) (b * c);
@@ -401,9 +381,7 @@ private let fraction_neg_congruence
     trans_for_calc t ();
     neg_mul_left a e;
     neg_congruence (a * e) (b * c);
-    transitivity (neg a * e) (neg (a * e)) (neg (b * c));
     neg_mul_right b c;
-    symmetry (b * neg c) (neg (b * c));
     transitivity (neg a * e) (neg (b * c)) (b * neg c)
 #pop-options
 
@@ -450,7 +428,6 @@ private let fraction_mul_congruence
     mul_middle_swap a c f h;
     mul_congruence (a * f) (c * h) (b * e) (dd * g);
     mul_middle_swap b e dd g;
-    transitivity ((a * c) * (f * h)) ((a * f) * (c * h)) ((b * e) * (dd * g));
     transitivity ((a * c) * (f * h)) ((b * e) * (dd * g)) ((b * dd) * (e * g))
 
 private let fraction_mul_is_associative
@@ -561,8 +538,6 @@ private let fraction_zero_ne_one_lemma
         (requires fraction_eq (fraction_zero t #dom) (fraction_one t #dom))
         (ensures False)
       = symmetry (zero * one) (zero <: t);
-        transitivity (zero #t) (zero * one) (one * one);
-        transitivity (zero #t) (one * one) (one <: t);
         let _: squash (not ((one <: t) = (zero <: t))) = dom.id_one_ne_zero in
         symmetry (zero #t) (one <: t)
     in
@@ -577,27 +552,21 @@ private let fraction_domain_law_fwd
           (ensures  fraction_eq x (fraction_zero t) \/
                     fraction_eq y (fraction_zero t))
   = elim_equatable_laws t ();
+ trans_for_calc t ();
     let a, b, c, e : t & t & t & t = x.num, x.den, y.num, y.den in
     assert ((a * c) * one = a * c) by canon_ring();
     assert ((b * e) * zero = zero) by canon_ring();
-    symmetry ((a * c) * one) (a * c);
-    transitivity (a * c) ((a * c) * one) ((b * e) * zero);
-    transitivity (a * c) ((b * e) * zero) zero;
     domain_zero_div a c;
     let if_a () : Lemma (requires a = zero)
                         (ensures fraction_eq x (fraction_zero t #dom))
       = assert (a * one = a) by canon_ring();
-        transitivity (a * one) a zero;
         assert (b * zero = zero) by canon_ring();
-        symmetry (b * zero) zero;
         transitivity (a * one) zero (b * zero)
     in
     let if_c () : Lemma (requires c = zero)
                         (ensures fraction_eq y (fraction_zero t #dom))
       = assert (c * one = c) by canon_ring();
-        transitivity (c * one) c zero;
         assert (e * zero = zero) by canon_ring();
-        symmetry (e * zero) zero;
         transitivity (c * one) zero (e * zero)
     in
     Classical.move_requires if_a ();
@@ -611,19 +580,15 @@ private let fraction_domain_law_bwd_left
   : Lemma (requires fraction_eq x (fraction_zero t))
           (ensures  fraction_eq (fraction_mul x y) (fraction_zero t))
   = elim_equatable_laws t ();
+ trans_for_calc t ();
     let a, b, c, e : t & t & t & t = x.num, x.den, y.num, y.den in
     assert (a * one = a) by canon_ring();
     assert (b * zero = zero) by canon_ring();
-    transitivity a (a * one) (b * zero);
-    transitivity a (b * zero) zero;
     assert (a = zero);
     assert ((a * c) * one = a * c) by canon_ring();
     assert ((b * e) * zero = zero) by canon_ring();
     assert ((zero * c) = zero) by canon_ring();
     mul_congruence a c zero c;
-    transitivity (a * c) (zero * c) zero;
-    transitivity ((a * c) * one) (a * c) zero;
-    symmetry ((b * e) * zero) zero;
     transitivity ((a * c) * one) zero ((b * e) * zero)
 #pop-options
 
@@ -631,20 +596,15 @@ let fraction_eq_zero_iff_num_zero
   (#t:Type) {| d: integral_domain t |} (x: fraction d)
   : Lemma (fraction_eq x (fraction_zero t) <==> (x.num = zero))
   = elim_equatable_laws t ();
+    trans_for_calc t ();
     let a, b : t & t = x.num, x.den in
     assert (a * one = a) by canon_ring();
     assert (b * zero = zero) by canon_ring();
     let fwd () : Lemma (requires fraction_eq x (fraction_zero t #d))
-                       (ensures  a = zero)
-      = transitivity a (a * one) (b * zero);
-        transitivity a (b * zero) zero
+                       (ensures  a = zero) = ()
     in
     let bwd () : Lemma (requires a = zero)
-                       (ensures  fraction_eq x (fraction_zero t #d))
-      = symmetry (a * one) a;
-        transitivity (a * one) a zero;
-        symmetry (b * zero) zero;
-        transitivity (a * one) zero (b * zero)
+                       (ensures  fraction_eq x (fraction_zero t #d)) = ()
     in
     Classical.move_requires fwd ();
     Classical.move_requires bwd ()

@@ -31,6 +31,17 @@ val perm_product_unfold (#t: Type) {| cr: commutative_ring t |} (#n: pos)
   (m: square_matrix t n) (p: permutation n)
   : Lemma (perm_product m p ==
            prod_range (fun k -> if k < n then m k (p.fwd k) else one) 0 n)
+
+(* Named per-index entry of the Leibniz product (so downstream code can
+   reference one function symbol instead of perm_product's inline lambda
+   — needed to transport a ring hom through perm_product). *)
+let perm_entry (#t: Type) {| cr: commutative_ring t |} (#n: pos)
+  (m: square_matrix t n) (p: permutation n) (k: nat) : t
+  = if k < n then m k (p.fwd k) else one
+
+val perm_product_via (#t: Type) {| cr: commutative_ring t |} (#n: pos)
+  (m: square_matrix t n) (p: permutation n)
+  : Lemma (perm_product m p == prod_range (perm_entry m p) 0 n)
 let leibniz_term (#t: Type) {| cr: commutative_ring t |} (#n: pos)
   (m: square_matrix t n) (p: permutation n) : t
   = if parity p then perm_product m p else (-(perm_product m p))

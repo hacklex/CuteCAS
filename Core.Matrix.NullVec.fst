@@ -162,9 +162,7 @@ let rec col_add_steps_eq_elim (#t:Type) {| f: field t |} (#n: pos)
           if i = k then begin
             (* pik = one, pis = zero → one + zero*c = one *)
             mul_congruence pis c zero c;
-            reflexivity c;
             zero_mul_x c;
-            transitivity (pis * c) (zero * c) zero;
             add_congruence pik (pis * c) one zero;
             x_plus_zero one;
             transitivity (pik + pis * c) (one + zero) one
@@ -172,9 +170,7 @@ let rec col_add_steps_eq_elim (#t:Type) {| f: field t |} (#n: pos)
           else if i = s then begin
             (* pik = zero, pis = one → zero + one*c = c *)
             mul_congruence pis c one c;
-            reflexivity c;
             one_mul_x c;
-            transitivity (pis * c) (one * c) c;
             add_congruence pik (pis * c) zero c;
             zero_plus_x c;
             transitivity (pik + pis * c) (zero + c) c
@@ -183,9 +179,7 @@ let rec col_add_steps_eq_elim (#t:Type) {| f: field t |} (#n: pos)
             (* pik = v(i)*inv(vk), pis = zero → v(i)*inv(vk) + zero*c = v(i)*inv(vk) *)
             let vi_inv = mul (v i) (inv (v k)) in
             mul_congruence pis c zero c;
-            reflexivity c;
             zero_mul_x c;
-            transitivity (pis * c) (zero * c) zero;
             add_congruence pik (pis * c) vi_inv zero;
             x_plus_zero vi_inv;
             transitivity (pik + pis * c) (vi_inv + zero) vi_inv
@@ -194,10 +188,8 @@ let rec col_add_steps_eq_elim (#t:Type) {| f: field t |} (#n: pos)
             (* pik = zero, pis = zero → zero + zero*c = zero *)
             assert (pis = zero);
             assert (pik = zero);
-            reflexivity c;
             mul_congruence pis c zero c;
             zero_mul_x c;
-            transitivity (pis * c) (zero * c) zero;
             add_congruence pik (pis * c) zero zero;
             x_plus_zero zero;
             transitivity (pik + pis * c) (zero + zero) zero
@@ -270,20 +262,14 @@ let null_vec_implies_det_zero (#t:Type) {| f: field t |} (#n: nat{n > 0})
     Classical.forall_intro_2 pw;
     det_pointwise_eq e_steps e;
     (* det e_steps = det e *)
-    symmetry (det e_steps) (det e);
-    transitivity (det e) (det e_steps) (one <: t);
     (* det e = one *)
     (* Step 4: det(m) * one = det(m) = det(me) = zero *)
     x_mul_one (det m);
     (* det m * one = det m *)
     mul_congruence (det m) (det e) (det m) (one <: t);
-    reflexivity (det m);
     (* det m * det e = det m * one *)
-    transitivity (det m * det e) (det m * (one <: t)) (det m);
     (* det m * det e = det m *)
-    symmetry (det (matrix_mul m e)) (det m * det e);
     (* det m * det e = det(me) *)
-    transitivity (det m) (det m * det e) (det (matrix_mul m e));
     (* det m = det(me) *)
     transitivity (det m) (det (matrix_mul m e)) (zero <: t)
     (* det m = zero *)

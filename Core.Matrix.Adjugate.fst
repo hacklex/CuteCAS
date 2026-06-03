@@ -67,8 +67,6 @@ let cofactor_term_eq_entry_times_signed_cofactor
     mul_congruence (mop * e) det_min (e * mop) det_min;
     mul_associativity #t #cr.cr_r e mop det_min;
     (* (e * mop) * det_min = e * (mop * det_min) = e * signed_cofactor *)
-    transitivity (cofactor_term m i j) ((mop * e) * det_min) ((e * mop) * det_min);
-    transitivity ((e * mop) * det_min) (e * (mop * det_min)) (e * signed_cofactor m i j);
     transitivity (cofactor_term m i j) ((e * mop) * det_min) (e * signed_cofactor m i j)
 #pop-options
 
@@ -181,7 +179,6 @@ let signed_cofactor_transpose (#t: Type) {| cr: commutative_ring t |} (#n: pos{n
        and i+j = j+i *)
     assert (Prims.op_Addition (i <: nat) (j <: nat) =
             Prims.op_Addition (j <: nat) (i <: nat));
-    reflexivity (minus_one_pow #t #cr (Prims.op_Addition (i <: nat) (j <: nat)));
     mul_congruence
       (minus_one_pow #t #cr (Prims.op_Addition (i <: nat) (j <: nat)))
       (det #t #cr #(Prims.op_Subtraction n 1) (minor (transpose m) i j))
@@ -293,13 +290,11 @@ let fake_laplace_is_det_col_duplicate
       = minor_col_duplicate_eq #t #cr m i j k;
         det_pointwise_eq #t #cr #(Prims.op_Subtraction n 1)
           (minor (col_duplicate m i j) k j) (minor m k j);
-        reflexivity (minus_one_pow #t #cr (Prims.op_Addition (k <: nat) (j <: nat)));
         mul_congruence
           (minus_one_pow #t #cr (Prims.op_Addition (k <: nat) (j <: nat)))
           (det #t #cr #(Prims.op_Subtraction n 1) (minor (col_duplicate m i j) k j))
           (minus_one_pow #t #cr (Prims.op_Addition (k <: nat) (j <: nat)))
           (det #t #cr #(Prims.op_Subtraction n 1) (minor m k j));
-        reflexivity (m k i);
         mul_congruence (col_duplicate m i j k j)
                        (signed_cofactor (col_duplicate m i j) k j)
                        (m k i) (signed_cofactor m k j)
@@ -335,7 +330,6 @@ let det_col_duplicate_zero (#t: Type) {| cr: commutative_ring t |} (#n: pos)
     (* det tm = zero *)
     det_transpose #t #cr #n m';
     (* det tm = det m' *)
-    symmetry (det tm) (det m');
     (* det m' = det tm *)
     transitivity (det m') (det tm) (zero <: t)
 #pop-options
@@ -393,7 +387,6 @@ let adj_mul_diagonal (#t: Type) {| cr: commutative_ring t |} (#n: pos{n > 1})
                    (pointwise_mul (row (adjugate m) i) (col m i)))
                  (fin_sum (col_cofactor_summand m i));
     det_laplace_col m i;
-    symmetry (det m) (fin_sum (col_cofactor_summand m i));
     transitivity (matrix_mul (adjugate m) m i i)
                  (fin_sum (col_cofactor_summand m i)) (det m)
 #pop-options

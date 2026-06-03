@@ -21,7 +21,9 @@ module TC = FStar.Tactics.Typeclasses
 
 open Core.Algebra
 open Core.Algebra.Notation
+open Core.Algebra.Divisibility
 open Core.Polynomial
+open Core.Polynomial.Div
 
 (* ---------------------------------------------------------------- *)
 (*  Carrier                                                          *)
@@ -53,6 +55,33 @@ val ac_neg (#t:Type) {| f: field t |} (#r: polynomial t {Some? (poly_deg r)})
 
 val ac_mul (#t:Type) {| f: field t |} (#r: polynomial t {Some? (poly_deg r)})
            (a b: algebraic t r) : algebraic t r
+
+(* Nullity in the quotient: [a] = 0  iff  r divides a.rep.  The bridge consumed
+   by the field construction (inverse via Bezout). *)
+val ac_eq_zero_iff_divides (#t:Type) {| f: field t |} (#r: polynomial t {Some? (poly_deg r)})
+    (a: algebraic t r)
+  : Lemma (let cr_p : commutative_ring (polynomial t) = TC.solve in
+           b2t (ac_eq a (ac_zero #t #f #r)) <==>
+             divides #(polynomial t) #cr_p r a.ac_rep)
+
+(* General: [a] = [b]  iff  r divides (a.rep - b.rep).  (Explicit; no SMT pattern.) *)
+val ac_eq_divides (#t:Type) {| f: field t |} (#r: polynomial t {Some? (poly_deg r)})
+    (a b: algebraic t r)
+  : Lemma (let cr_p : commutative_ring (polynomial t) = TC.solve in
+           b2t (ac_eq a b) <==>
+             divides #(polynomial t) #cr_p r (poly_sub a.ac_rep b.ac_rep))
+
+(* Representation reveals (the ring operations are abstract through this interface). *)
+val ac_mul_rep (#t:Type) {| f: field t |} (#r: polynomial t {Some? (poly_deg r)})
+    (a b: algebraic t r)
+  : Lemma ((ac_mul a b).ac_rep == poly_mul a.ac_rep b.ac_rep)
+
+val ac_add_rep (#t:Type) {| f: field t |} (#r: polynomial t {Some? (poly_deg r)})
+    (a b: algebraic t r)
+  : Lemma ((ac_add a b).ac_rep == poly_add a.ac_rep b.ac_rep)
+
+val ac_one_rep (#t:Type) {| f: field t |} (r: polynomial t {Some? (poly_deg r)})
+  : Lemma ((ac_one #t #f #r).ac_rep == poly_one #t)
 
 (* ---------------------------------------------------------------- *)
 (*  Equivalence + ring laws                                          *)
@@ -136,3 +165,23 @@ val algebraic_equatable
 val algebraic_commutative_ring
     (#t:Type) {| f: field t |} (#r: polynomial t {Some? (poly_deg r)})
   : commutative_ring (algebraic t r)
+
+(* Reveal: the commutative-ring instance's operations are the ac_* operations. *)
+val algebraic_ring_reveal (#t:Type) {| f: field t |} (#r: polynomial t {Some? (poly_deg r)})
+  : Lemma (
+      (let cr = algebraic_commutative_ring #t #f #r in
+       cr.cr_r.mul              == ac_mul  #t #f #r /\
+       cr.cr_r.one              == ac_one  #t #f #r /\
+       cr.cr_r.r_add.add        == ac_add  #t #f #r /\
+       cr.cr_r.r_add.neg        == ac_neg  #t #f #r /\
+       cr.cr_r.r_add.zero       == ac_zero #t #f #r /\
+       cr.cr_r.r_add.acg_eq.eq  == ac_eq   #t #f #r))
+
+let ac_elim_equatable_laws #t {| f: field t |} (r: polynomial t {Some? (poly_deg r)})
+  : Lemma ((forall (x:algebraic t r). x `ac_eq` x) /\ (forall (x y:algebraic t r). ac_eq x y <==> ac_eq y x)
+          /\ (forall (x y z: algebraic t r). ac_eq x y /\ ac_eq y z ==> ac_eq x z)) =   
+  Classical.forall_intro (ac_eq_reflexivity #t #f #r);
+  Classical.forall_intro_2 (Classical.move_requires_2 (ac_eq_symmetry #t #f #r));
+  Classical.forall_intro_3 (Classical.move_requires_3 (ac_eq_transitivity #t #f #r))
+
+

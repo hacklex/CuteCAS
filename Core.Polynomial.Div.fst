@@ -319,7 +319,7 @@ let divmod_base_case (#t:Type) {| cr: commutative_ring t |}
     poly_add_congruence (poly_mul q ([] <: polynomial t)) p
                         ([] <: polynomial t) p;
     let pcrc : polynomial_commutative_ring t = polynomial_commutative_ring_instance in
-    let cr_p : commutative_ring (polynomial t) = TC.solve in
+    
     assert (poly_eq (poly_add ([] <: polynomial t) p) p);
     poly_eq_symmetry (poly_add (poly_mul q ([] <: polynomial t)) p)
                      (poly_add ([] <: polynomial t) p);

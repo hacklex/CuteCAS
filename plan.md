@@ -103,7 +103,7 @@ for the headline "verified ℚ(x) integrator" goal.
 |---|---|---|
 | 0–1 | Typeclass tower + canon tactics | ✅ done |
 | 1.5 | Perms, det, Cauchy–Binet, adjugate, Sylvester, resultant, kernel/null-vec | ✅ done |
-| 1.75 | Algebraic constants ℚ[c]/R(c) | ✅ `Core.AlgebraicConstant` |
+| 1.75 | Algebraic constants ℚ[c]/R(c) (ring + **field** at irreducible `r`) | ✅ `Core.AlgebraicConstant` (+ `.Field`) |
 | 2a | Euclidean division (+ correctness + degree bound) | ✅ `Core.Polynomial.Div` |
 | 2b | Polynomial GCD + Bézout | ✅ `Core.Polynomial.GCD` |
 | 2c | Square-free factorization (Yun) | ✅ `Core.Polynomial.SquareFree` |
@@ -127,19 +127,26 @@ integrator and its proof over **ℚ**, slowly — no timeline. Dependency order:
 1. **Full LRT soundness** (`d/dx[Σ cᵢ·log vᵢ] = p/q`). Structural residue
    soundness is done; the derivative identity is **blocked on missing
    foundations**, in dependency order:
-   a. **`eval` as a ring homomorphism** `polynomial t → t` (evaluate at a
-      constant) — does not exist yet.
+   a. ✅ **DONE** — **`poly_eval` as a ring homomorphism** `polynomial t → t`
+      (`Core.Polynomial.Eval.fst`: eval_zero/one/add/neg/mul/congruence). Also
+      spun off `Core.FinSum.Convolution.sum_range_convolution` (Cauchy product).
    b. **Determinant specialization**: `det` commutes with a ring hom applied
       entrywise, giving **resultant specialization** `R(c) = res_x(p−c·q', q)`.
       Combined with the proven `resultant_zero_of_common_divisor` (and a
       converse), this yields the base-field Rothstein–Trager criterion
       `R(c)=0 ⟺ deg(gcd(p−c·q', q)) ≥ 1`.
-   c. **Soundness over a given splitting field (ℚ, char 0)**: upgrade
-      `Core.AlgebraicConstant` (CR-only) to a **field** at an irreducible
-      factor; by the **primitive element theorem** the splitting field is a
-      *single* extension `ℚ(θ)` (no type-changing tower). Then
+   c. **Soundness over a given splitting field (ℚ, char 0)**:
+      ✅ **DONE (2026-06-02)** — `Core.AlgebraicConstant` (CR-only) is upgraded
+      to a **field** at an irreducible factor:
+      `Core.AlgebraicConstant.Field.algebraic_field : field (algebraic t r)`
+      for `poly_irreducible r` (inverse via Bézout/`ext_gcd`; no `admit`/`assume`).
+      By the **primitive element theorem** the splitting field is a *single*
+      extension `ℚ(θ)` (no type-changing tower). **Remaining:**
       **resultant=∏-over-roots → partial fractions → RT correspondence →
       assembly** gives the derivative identity *relative to* a provided `ℚ(θ)`.
+      Companion prereq B (root theory — factor theorem, squarefree ⟹ `q'(α)≠0`)
+      is ✅ **DONE (2026-06-02)**: `Core.Polynomial.Root`
+      (`factor_theorem`, `squarefree_root_deriv_nonzero`).
    d. **Construction (makes it executable)**: 𝔽_p → Berlekamp → Hensel →
       recombination with the **Lagrange/Kronecker** coefficient bound (NOT
       Mignotte — keeps it ℂ-free) ⇒ factorization over ℚ ⇒ `ℚ(θ)`. Large but

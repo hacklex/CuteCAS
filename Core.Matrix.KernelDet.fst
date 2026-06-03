@@ -104,8 +104,6 @@ let row_adj_summand_eq_cofactor_of_replaced
     transitivity (cofactor_term (row_replace m i j) j k)
                  ((e * mop) * det_min) (e * (mop * det_min));
     (* row_adj_summand = e * signed_cofactor m j k = e * (mop * det_min) *)
-    symmetry (cofactor_term (row_replace m i j) j k) (e * (mop * det_min));
-    symmetry (row_adj_summand m i j k) (e * (mop * det_min));
     transitivity (row_adj_summand m i j k)
                  (e * (mop * det_min))
                  (cofactor_term (row_replace m i j) j k)
@@ -197,7 +195,6 @@ let right_adj_diagonal (#t: Type) {| cr: commutative_ring t |} (#n: pos{n > 1})
     fin_sum_congruence (pointwise_mul (row m i) (col (adjugate m) i))
                        (cofactor_term m i) (fun _ -> ());
     det_laplace_row m i;
-    symmetry (det m) (fin_sum (cofactor_term m i));
     transitivity (matrix_mul m (adjugate m) i i)
                  (fin_sum (pointwise_mul (row m i) (col (adjugate m) i)))
                  (fin_sum (cofactor_term m i));
@@ -271,7 +268,6 @@ let elim_col_zero (#t: Type) {| f: field t |} (#n: pos)
     (* m i piv_c * one = m i piv_c *)
     transitivity (c * m piv_r piv_c) (m i piv_c * (pivot_inv * m piv_r piv_c))
                  (m i piv_c * (one <: t));
-    transitivity (c * m piv_r piv_c) (m i piv_c * (one <: t)) (m i piv_c);
     (* c * pivot = m i piv_c *)
     neg_congruence (c * m piv_r piv_c) (m i piv_c);
     (* neg(c * pivot) = neg(m i piv_c) *)
@@ -390,8 +386,6 @@ private let partial_elim_step (#t: Type) {| f: field t |} (#n: pos)
             let x = m k piv_c * pivot_inv in
             let y = m piv_r b in
             neg_mul_l #t #(r_of_sf t) x y;
-            symmetry (neg x * y) (neg (x * y));
-            reflexivity (m k b);
             add_congruence (m k b) (neg (x * y)) (m k b) (neg x * y)
           end
           else ()
@@ -454,7 +448,6 @@ private let fin_sum_only_at (#t: Type) {| r: ring t |} (#n: pos)
         end else begin
           h j;
           zero_mul_x #t #r (f j);
-          symmetry ((zero <: t) * f j) (zero <: t);
           transitivity (f j) (zero <: t) ((zero <: t) * f j)
         end
     in
@@ -475,7 +468,6 @@ private let cofactor_term_zero_entry (#t: Type) {| cr: commutative_ring t |} (#n
     let d = det #t #cr #(Prims.op_Subtraction n 1) (minor m i j) in
     x_mul_zero #t #r s;
     mul_congruence #t #r s (m i j) s (zero <: t);
-    transitivity (s * m i j) (s * (zero <: t)) (zero <: t);
     zero_mul_x #t #r d;
     mul_congruence #t #r (s * m i j) d (zero <: t) d;
     transitivity (s * m i j * d) ((zero <: t) * d) (zero <: t)
@@ -492,8 +484,6 @@ private let neg_one_nonzero (#t: Type) {| f: field t |}
       x_plus_neg_x (one <: t);
       add_congruence (one <: t) (-(one <: t)) (one <: t) (zero <: t);
       add_zero (one <: t);
-      transitivity ((one <: t) + -(one <: t)) ((one <: t) + (zero <: t)) (one <: t);
-      transitivity (one <: t) ((one <: t) + -(one <: t)) (zero <: t);
       ()
     end else ()
 #pop-options
@@ -541,9 +531,6 @@ private let det_zero_single_entry_col (#t: Type) {| f: field t |} (#n: pos{n > 1
     fin_sum_only_at (cofactor_term (transpose m) c) r ct_zero;
     transitivity (det (transpose m)) (fin_sum (cofactor_term (transpose m) c))
                  (cofactor_term (transpose m) c r);
-    symmetry (det (transpose m)) (det m);
-    transitivity (cofactor_term (transpose m) c r) (det (transpose m)) (det m);
-    transitivity (cofactor_term (transpose m) c r) (det m) (zero <: t);
     assert ((transpose m) c r == m r c);
     let s = minus_one_pow (Prims.op_Addition (c <: nat) (r <: nat)) in
     det_minor_transpose_f m c r;
@@ -663,14 +650,9 @@ private let sum_range_reindex_helper (#t: Type) {| acg: add_comm_group t |} (#n:
         h_big k;
         h_small k;
         H.leibniz_to_eq (f (skip c (k <: fin nm1))) (f (k <: fin n));
-        symmetry (f (skip c (k <: fin nm1))) (g (k <: fin nm1));
-        transitivity (f (k <: fin n)) (f (skip c (k <: fin nm1))) (g (k <: fin nm1));
-        transitivity (big k) (f (k <: fin n)) (g (k <: fin nm1));
-        symmetry (small k) (g (k <: fin nm1));
         transitivity (big k) (g (k <: fin nm1)) (small k)
     in
     sum_range_congruence big small 0 c first_half;
-    symmetry (sum_range big 0 c) (sum_range small 0 c);
     let second_half (k: nat{c <= k /\ k < nm1})
       : Lemma (small k = big (Prims.op_Addition k 1))
       = h_skip (k <: fin nm1);
@@ -678,12 +660,6 @@ private let sum_range_reindex_helper (#t: Type) {| acg: add_comm_group t |} (#n:
         let kp1 : fin n = Prims.op_Addition k 1 in
         h_big kp1;
         H.leibniz_to_eq (f (skip c (k <: fin nm1))) (f kp1);
-        symmetry (f (skip c (k <: fin nm1))) (g (k <: fin nm1));
-        transitivity (f kp1) (f (skip c (k <: fin nm1))) (g (k <: fin nm1));
-        symmetry (small k) (g (k <: fin nm1));
-        transitivity (f kp1) (g (k <: fin nm1)) (small k);
-        symmetry (f kp1) (small k);
-        transitivity (small k) (f kp1) (big kp1);
         symmetry (small k) (big kp1)
     in
     let big_plus1 : (nat -> t) = (fun (j:nat) -> big (Prims.op_Addition j 1)) in
@@ -693,7 +669,6 @@ private let sum_range_reindex_helper (#t: Type) {| acg: add_comm_group t |} (#n:
                  (sum_range big (Prims.op_Addition c 1) n);
     add_congruence (sum_range small 0 c) (sum_range small c nm1)
                    (sum_range big 0 c) (sum_range big (Prims.op_Addition c 1) n);
-    symmetry (sum_range small 0 nm1) (sum_range small 0 c + sum_range small c nm1);
     transitivity (sum_range small 0 nm1)
                  (sum_range small 0 c + sum_range small c nm1)
                  (sum_range big 0 c + sum_range big (Prims.op_Addition c 1) n)
@@ -711,7 +686,6 @@ private let fin_sum_eliminate_zero_helper (#t: Type) {| acg: add_comm_group t |}
     sum_range_split big 0 c n;
     sum_range_unfold_left big c n;
     H.leibniz_to_eq (sum_range big c n) (big c + sum_range big (Prims.op_Addition c 1) n);
-    transitivity (big c) (f c) (zero <: t);
     zero_plus_x (sum_range big (Prims.op_Addition c 1) n);
     add_congruence (big c) (sum_range big (Prims.op_Addition c 1) n)
                    (zero <: t) (sum_range big (Prims.op_Addition c 1) n);
@@ -748,10 +722,8 @@ private let sub_add_cancel (#t: Type) {| acg: add_comm_group t |} (a b: t)
     trans_for_calc t ();
     add_associativity a (neg b) b;
     neg_x_plus_x #t #acg b;
-    reflexivity a;
     add_congruence a (neg b + b) a (zero <: t);
     x_plus_zero #t #acg a;
-    transitivity ((a + neg b) + b) (a + (neg b + b)) (a + (zero <: t));
     transitivity ((a + neg b) + b) (a + (zero <: t)) a
 #pop-options
 
@@ -775,8 +747,6 @@ private let fin_sum_skip_reindex (#t: Type) {| acg: add_comm_group t |} (#n: pos
     let rhs = sum_range big 0 c + sum_range big (Prims.op_Addition c 1) n in
     let h_sr : squash (sum_range small 0 nm1 = rhs) = () in
     derive_eq_via_mid (fin_sum g) (sum_range small 0 nm1) rhs h_fg h_sr;
-    symmetry (fin_sum f) rhs;
-    transitivity (fin_sum g) rhs (fin_sum f);
     symmetry (fin_sum g) (fin_sum f)
 #pop-options
 
@@ -808,7 +778,6 @@ private let sum_split_neg_cancel (#t: Type) {| acg: add_comm_group t |}
     trans_for_calc t ();
     neg_x_plus_x #t #acg x;
     add_congruence sum_f2 sum_f1 (neg x) x;
-    transitivity sum_pw (sum_f2 + sum_f1) (neg x + x);
     transitivity sum_pw (neg x + x) (zero <: t)
 #pop-options
 
@@ -825,12 +794,10 @@ private let fin_sum_single (#t: Type) {| r: ring t |} (#n: pos)
       = pointwise_mul_unfold #(fin n) #t #r (fin_kronecker_delta c) (const val_c) j;
         if (j <: nat) = (c <: nat) then begin
           one_mul_x #t #r val_c;
-          symmetry val_c (one * val_c);
           transitivity (f j) val_c (one * val_c)
         end else begin
           h_nc j;
           zero_mul_x #t #r val_c;
-          symmetry (zero <: t) (zero * val_c);
           transitivity (f j) (zero <: t) (zero * val_c)
         end
     in
@@ -914,7 +881,6 @@ let rec det_zero_implies_null_vec #t #f #n m =
     det_1x1 m;
     elim_equatable_laws t ();
     trans_for_calc t ();
-    transitivity (m (0 <: fin 1) (0 <: fin 1)) (det m) (zero <: t);
     let all_zero (r: fin 1) (c: fin 1)
       : Lemma (m r c = (zero <: t))
       = () (* r=0, c=0 is the only case *)
@@ -962,7 +928,6 @@ let rec det_zero_implies_null_vec #t #f #n m =
             let e = elim_col m r c in
             det_elim_col_eq m r c;
             (* det e = det m = zero *)
-            transitivity (det e) (det m) (zero <: t);
             (* Step 2: Laplace along column c → det(minor(E, r, c)) = 0 *)
             let minor_e : square_matrix t (Prims.op_Subtraction n 1) = minor e r c in
             (* e has column c all zeros except at (r,c) *)
@@ -1037,8 +1002,6 @@ let rec det_zero_implies_null_vec #t #f #n m =
                     neg_mul_l #t #rr one x;
                     one_mul_x #t #rr x;
                     neg_congruence #t #(rr.r_add) (one * x) x;
-                    transitivity (neg one * x) (neg (one * x)) (neg x);
-                    transitivity (neg (m r c * inv_mrc) * x) (neg one * x) (neg x);
                     transitivity ((m r c * neg_inv) * x)
                                  (neg (m r c * inv_mrc) * x) (neg x);
                     symmetry ((m r c * neg_inv) * x)
@@ -1101,26 +1064,22 @@ let rec det_zero_implies_null_vec #t #f #n m =
                                        (neg ((coeff_i * m r j) * v j))
                                        (neg (coeff_i * (m r j * v j)));
                           (* chain: e i j * v j = m i j * v j + neg(coeff_i*(m r j * v j)) *)
-                          reflexivity (m i j * v j);
                           add_congruence #t #(rr.r_add) (m i j * v j) (neg (coeff_i * m r j) * v j)
                                          (m i j * v j) (neg (coeff_i * (m r j * v j)));
                           transitivity ((m i j + neg (coeff_i * m r j)) * v j)
                                        (m i j * v j + neg (coeff_i * m r j) * v j)
                                        (m i j * v j + neg (coeff_i * (m r j * v j)));
-                          reflexivity (v j);
                           mul_congruence #t #rr (e i j) (v j) (m i j + neg (coeff_i * m r j)) (v j);
                           transitivity (e i j * v j)
                                        ((m i j + neg (coeff_i * m r j)) * v j)
                                        (m i j * v j + neg (coeff_i * (m r j * v j)));
                           (* sub_add_cancel: (a + neg b) + b = a *)
                           sub_add_cancel #t #(rr.r_add) (m i j * v j) (coeff_i * (m r j * v j));
-                          reflexivity (coeff_i * (m r j * v j));
                           add_congruence #t #(rr.r_add) (e i j * v j) (coeff_i * (m r j * v j))
                                          (m i j * v j + neg (coeff_i * (m r j * v j))) (coeff_i * (m r j * v j));
                           transitivity (e i j * v j + coeff_i * (m r j * v j))
                                        ((m i j * v j + neg (coeff_i * (m r j * v j))) + coeff_i * (m r j * v j))
                                        (m i j * v j);
-                          symmetry (e i j * v j + coeff_i * (m r j * v j)) (m i j * v j);
                           (* So m i j * v j = f1 j + f2 j *)
                           H.leibniz_to_eq (f1 j) (e i j * v j);
                           H.leibniz_to_eq (f2 j) (coeff_i * (m r j * v j));
@@ -1156,7 +1115,6 @@ let rec det_zero_implies_null_vec #t #f #n m =
                                                 (minor_e ih_row b) (w b);
                           transitivity (f1 (skip c b)) (e i (skip c b) * v (skip c b))
                                        (minor_e ih_row b * w b);
-                          symmetry ((pointwise_mul #(fin (Prims.op_Subtraction n 1)) #t #rr (row minor_e ih_row) w) b) (minor_e ih_row b * w b);
                           transitivity (f1 (skip c b)) (minor_e ih_row b * w b) ((pointwise_mul #(fin (Prims.op_Subtraction n 1)) #t #rr (row minor_e ih_row) w) b)
                       in
                       vector_dot_reveal #t #rr #(Prims.op_Subtraction n 1) (row minor_e ih_row) w;

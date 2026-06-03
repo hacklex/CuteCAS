@@ -105,7 +105,6 @@ let rec sum_list_append
         sum_list_append #t #g tl ys;
         sum_list_cons x (append tl ys);
         sum_list_cons x tl;
-        reflexivity x;
         g.add_congruence x (sum_list (append tl ys)) x (sum_list tl + sum_list ys);
         g.add_associativity x (sum_list tl) (sum_list ys)
 #pop-options
@@ -131,7 +130,6 @@ let rec sum_list_concatMap
         sum_list_concatMap #a #t #g f tl;
         sum_list_append (f x) (concatMap f tl);
         sum_list_cons (sum_list (f x)) (map (fun (y:a) -> sum_list (f y)) tl);
-        reflexivity (sum_list (f x));
         g.add_congruence
           (sum_list (f x)) (sum_list (concatMap f tl))
           (sum_list (f x)) (sum_list (map (fun (y:a) -> sum_list (f y)) tl));
@@ -175,7 +173,6 @@ let rec sum_list_map_compose
         sum_list_map_compose gf h tl;
         sum_list_cons (gf (h x)) (map gf (map h tl));
         sum_list_cons (gf (h x)) (map (fun (y:a) -> gf (h y)) tl);
-        reflexivity (gf (h x));
         g.add_congruence
           (gf (h x)) (sum_list (map gf (map h tl)))
           (gf (h x)) (sum_list (map (fun (y:a) -> gf (h y)) tl))
@@ -205,7 +202,6 @@ let rec sum_list_map_all_fins_from_eq_sum_range
       sum_list_cons (f (k <: fin m)) (map f (all_fins_from m k1));
       sum_range_unfold_left
         (fun (j: nat) -> if j < m then f (j <: fin m) else zero #t) k m;
-      reflexivity (f (k <: fin m));
       g.add_congruence
         (f (k <: fin m))
         (sum_list (map f (all_fins_from m k1)))
@@ -310,7 +306,6 @@ let rec sum_list_map_mul_right
         let trest = sum_list (map f rest) in
         let crest = sum_list (map (fun x -> f x * c) rest) in
         r.right_distributivity c h trest;
-        reflexivity (h * c);
         r.r_add.add_congruence (h * c) (trest * c) (h * c) crest;
         transitivity (sum_list (map f (hx :: rest)) * c)
                      ((h + trest) * c)
@@ -370,7 +365,6 @@ let prod_range_extend_pointwise
     in
     Classical.forall_intro cong;
     prod_range_congruence body_full body_short 0 n (fun _ -> ());
-    reflexivity (a (n <: fin (Prims.op_Addition n 1)) k);
     r.mul_congruence
       (prod_range body_full 0 n)
       (body_full n)

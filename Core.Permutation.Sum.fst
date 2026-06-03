@@ -87,6 +87,12 @@ let sum_over_perms
   (n: nat) (f: permutation n -> t) : t
   = sum_list (L.map f (all_permutations n))
 
+let sum_over_perms_reveal
+  (#t: Type) {| m: add_comm_group t |}
+  (n: nat) (f: permutation n -> t)
+  : Lemma (sum_over_perms n f == sum_list (L.map f (all_permutations n)))
+  = ()
+
 (* -------------------------------------------------------------------- *)
 (*  Congruence under pointwise-equal functions.                         *)
 (* -------------------------------------------------------------------- *)
@@ -116,7 +122,6 @@ let sum_over_perms_neg_named
     let h' (s: permutation n) : Lemma (nf s = pointwise_neg f s)
       = h s;
         pointwise_neg_unfold f s;
-        reflexivity (neg (f s));
         symmetry (pointwise_neg f s) (neg (f s)) in
     sum_over_perms_congruence #t #g n nf (pointwise_neg f) h';
     transitivity (sum_over_perms n nf)
@@ -143,7 +148,6 @@ let sum_over_perms_add_named
     let h' (p: permutation n) : Lemma (s p = pointwise_add f g p)
       = h p;
         pointwise_add_unfold f g p;
-        reflexivity (f p + g p);
         symmetry (pointwise_add f g p) (f p + g p) in
     sum_over_perms_congruence n s (pointwise_add f g) h';
     transitivity (sum_over_perms n s)
@@ -170,10 +174,8 @@ let sum_over_perms_mul_left_named
       = h s;
         pointwise_mul_unfold (const c) f s;
         const_unfold c s;
-        reflexivity (c * f s);
         symmetry (pointwise_mul (const c) f s) (c * f s) in
     sum_over_perms_congruence #t #r.r_add n cf (pointwise_mul (const c) f) h';
-    symmetry (c * sum_over_perms n f) (sum_over_perms n (pointwise_mul (const c) f));
     transitivity (sum_over_perms n cf)
                  (sum_over_perms n (pointwise_mul (const c) f))
                  (c * sum_over_perms n f)
@@ -319,7 +321,6 @@ let rec sum_list_append
         sum_list_append tl ys;
         sum_list_cons h tl;
         sum_list_cons h (L.append tl ys);
-        reflexivity h;
         add_congruence h (sum_list (L.append tl ys))
                        h (sum_list tl + sum_list ys);
         add_associativity h (sum_list tl) (sum_list ys);
@@ -373,7 +374,6 @@ let sum_list_extract
     sum_list_append pre (a :: post);
     (* sum_list (pre ++ a :: post) = sp + sum_list (a :: post)
        by substitution: = sp + (a + sq) *)
-    reflexivity sp;
     add_congruence sp (sum_list (a :: post)) sp (a + sq);
     (* sp + sum_list (a :: post) = sp + (a + sq) *)
     transitivity (sum_list (L.append pre (a :: post)))
@@ -383,21 +383,14 @@ let sum_list_extract
     (* sum_list (pre ++ post) = sp + sq *)
     add_associativity sp a sq;
     (* (sp + a) + sq = sp + (a + sq) *)
-    symmetry ((sp + a) + sq) (sp + (a + sq));
     (* sp + (a + sq) = (sp + a) + sq *)
     add_commutativity sp a;
-    reflexivity sq;
     add_congruence (sp + a) sq (a + sp) sq;
     (* (sp + a) + sq = (a + sp) + sq *)
     add_associativity a sp sq;
     (* (a + sp) + sq = a + (sp + sq) *)
-    reflexivity a;
-    symmetry (sum_list (L.append pre post)) (sp + sq);
     add_congruence a (sp + sq) a (sum_list (L.append pre post));
     (* a + (sp + sq) = a + sum_list (pre ++ post) *)
-    transitivity (sp + (a + sq)) ((sp + a) + sq) ((a + sp) + sq);
-    transitivity (sp + (a + sq)) ((a + sp) + sq) (a + (sp + sq));
-    transitivity (sp + (a + sq)) (a + (sp + sq)) (a + sum_list (L.append pre post));
     transitivity (sum_list (L.append pre (a :: post))) (sp + (a + sq))
                  (a + sum_list (L.append pre post))
 #pop-options
@@ -491,7 +484,6 @@ let rec sum_list_perm_invariance
         assert (f h = f mm);
         sum_list_cons (f h) (L.map f tl);
         (* sum_list (L.map f (h :: tl)) == f h + sum_list (L.map f tl) *)
-        reflexivity (sum_list (L.map f tl));
         add_congruence (f h) (sum_list (L.map f tl))
                        (f mm) (sum_list (L.map f (L.append pre post)));
         (* f h + sum_list (map f tl) = f mm + sum_list (map f (pre ++ post)) *)
@@ -833,7 +825,6 @@ private let rec sum_list_const_zero
         sum_list_const_zero n f tl;
         add_congruence (f h) (sum_list (L.map f tl)) (zero #t) (zero #t);
         zero_plus_x (zero #t);
-        transitivity (f h + sum_list (L.map f tl)) (zero #t + zero #t) (zero #t);
         assert (sum_list (L.map f (h :: tl)) = f h + sum_list (L.map f tl));
         transitivity (sum_list (L.map f (h :: tl))) (f h + sum_list (L.map f tl)) (zero #t)
 #pop-options
@@ -867,7 +858,6 @@ private let rec sum_list_pick
             sum_list_const_zero n f tl;
             add_congruence (f h) (sum_list (L.map f tl)) (f q) (zero #t);
             x_plus_zero (f q);
-            transitivity (f h + sum_list (L.map f tl)) (f q + zero #t) (f q);
             assert (sum_list (L.map f (h :: tl)) = f h + sum_list (L.map f tl));
             transitivity (sum_list (L.map f (h :: tl))) (f h + sum_list (L.map f tl)) (f q)
           end
@@ -884,7 +874,6 @@ private let rec sum_list_pick
             sum_list_pick #n #t #m tl f q;
             add_congruence (f h) (sum_list (L.map f tl)) (zero #t) (f q);
             zero_plus_x (f q);
-            transitivity (f h + sum_list (L.map f tl)) (zero #t + f q) (f q);
             assert (sum_list (L.map f (h :: tl)) = f h + sum_list (L.map f tl));
             transitivity (sum_list (L.map f (h :: tl))) (f h + sum_list (L.map f tl)) (f q)
           end
@@ -1236,29 +1225,23 @@ private let rec sum_orbit_partition_zero
         (* sum_list (map f xs) = f h + sum_list (map f tl) = f h + (f m' + spp). *)
         sum_list_cons (f h) (L.map f tl);
         let sxs = sum_list (L.map f xs) in
-        reflexivity sxs;
-        reflexivity (f h);
-        reflexivity smt;
         add_congruence (f h) smt (f h) (f m' + spp);
         assert (f h + smt = f h + (f m' + spp));
         assert (sxs = f h + smt);
         assert (sxs = f h + (f m' + spp));
         (* Re-associate: f h + (f m' + spp) = (f h + f m') + spp. *)
         add_associativity (f h) (f m') spp;
-        symmetry ((f h + f m') + spp) (f h + (f m' + spp));
         assert (f h + (f m' + spp) = (f h + f m') + spp);
         (* f m' = f m by respects_perm_eq. *)
         perm_eq_sym m m';
         respects_perm_eq_elim f m' m;
         assert (f m' = f m);
         (* f h + f m' = f h + f m. *)
-        reflexivity (f h);
         add_congruence (f h) (f m') (f h) (f m);
         assert (f h + f m' = f h + f m);
         (* f h + f m = zero by hypothesis (instantiate at s = h). *)
         assert (f h + f m = zero);
         (* Chain to (f h + f m') + spp = zero + spp. *)
-        reflexivity spp;
         add_congruence (f h + f m') spp (f h + f m) spp;
         assert ((f h + f m') + spp = (f h + f m) + spp);
         add_congruence (f h + f m) spp (zero #t) spp;
@@ -1266,10 +1249,6 @@ private let rec sum_orbit_partition_zero
         zero_plus_x spp;
         assert (zero #t + spp = spp);
         (* Build sxs = spp via stepwise transitivity. *)
-        transitivity sxs (f h + (f m' + spp)) ((f h + f m') + spp);
-        transitivity sxs ((f h + f m') + spp) ((f h + f m) + spp);
-        transitivity sxs ((f h + f m) + spp) (zero #t + spp);
-        transitivity sxs (zero #t + spp) spp;
         (* Establish τ-closure on (pre ++ post). *)
         let closure_aux (s: permutation n)
           : Lemma (requires permutation_in_list s pp)
@@ -1382,7 +1361,6 @@ private let rec sum_orbit_partition_zero
         sum_orbit_partition_zero #t #g #n f tau pp;
         assert (spp = zero #t);
         (* Hence sxs = spp = zero. *)
-        reflexivity sxs;
         transitivity sxs spp (zero #t)
 #pop-options
 

@@ -145,7 +145,6 @@ let rec coeff_poly_mul (#t:Type) {| cr: commutative_ring t |}
             (* coeff q (negative) = zero *)
             mul_congruence (coeff p' j) (coeff q (Prims.op_Subtraction (Prims.op_Subtraction k 1) j))
                            (coeff p' j) (zero <: t);
-            reflexivity (coeff p' j);
             x_mul_zero (coeff p' j);
             transitivity (g j) (coeff p' j * (zero <: t)) (zero <: t)
         in
@@ -172,7 +171,6 @@ let rec coeff_poly_mul (#t:Type) {| cr: commutative_ring t |}
         transitivity lhs_val
                      (coeff scalar_part k + coeff shifted_part k)
                      (target + (zero <: t));
-        transitivity lhs_val (target + (zero <: t)) target;
 
         (* Chain: sum_range conv_f 1 (L.length p) = zero *)
         symmetry (sum_range (fun (j:nat) -> conv_f (Prims.op_Addition j 1)) 0 (L.length p'))
@@ -185,23 +183,19 @@ let rec coeff_poly_mul (#t:Type) {| cr: commutative_ring t |}
                      (zero <: t);
 
         (* RHS chain: sum_val = target *)
-        reflexivity (conv_f 0);
         add_congruence (conv_f 0) (sum_range conv_f 1 (L.length p))
                        (conv_f 0) (zero <: t);
         x_plus_zero (conv_f 0);
         transitivity sum_val
                      (conv_f 0 + sum_range conv_f 1 (L.length p))
                      (conv_f 0 + (zero <: t));
-        transitivity sum_val (conv_f 0 + (zero <: t)) (conv_f 0);
         (* conv_f 0 == target propositionally *)
 
         (* Final: lhs_val = target = sum_val *)
-        symmetry sum_val target;
         transitivity lhs_val target sum_val
       end
       else begin
         (* k >= 1: shifted part = coeff (poly_mul p' q) (k-1) = sum_range g 0 (L.length p') by IH *)
-        reflexivity (a * coeff q k);
         add_congruence (coeff scalar_part k) (coeff shifted_part k)
                        (a * coeff q k) (coeff (poly_mul p' q) (Prims.op_Subtraction k 1));
         add_congruence (a * coeff q k) (coeff (poly_mul p' q) (Prims.op_Subtraction k 1))
@@ -209,7 +203,6 @@ let rec coeff_poly_mul (#t:Type) {| cr: commutative_ring t |}
         let lhs_val : t = coeff (poly_mul (a @ p') q) k in
         let sum_val : t = sum_range conv_f 0 (L.length p) in
         let mid : t = a * coeff q k + sum_range g 0 (L.length p') in
-        transitivity lhs_val (coeff scalar_part k + coeff shifted_part k) mid;
 
         (* Chain: sum_range conv_f 1 (L.length p) = sum_range g 0 (L.length p') *)
         symmetry (sum_range (fun (j:nat) -> conv_f (Prims.op_Addition j 1)) 0 (L.length p'))
@@ -218,14 +211,12 @@ let rec coeff_poly_mul (#t:Type) {| cr: commutative_ring t |}
                      (sum_range (fun (j:nat) -> conv_f (Prims.op_Addition j 1)) 0 (L.length p'))
                      (sum_range g 0 (L.length p'));
         (* Now: conv_f 0 + sum_range conv_f 1 (L.length p) = mid *)
-        reflexivity (conv_f 0);
         add_congruence (conv_f 0) (sum_range conv_f 1 (L.length p))
                        (conv_f 0) (sum_range g 0 (L.length p'));
         (* conv_f 0 == a * coeff q k propositionally, so this is mid *)
         transitivity sum_val
                      (conv_f 0 + sum_range conv_f 1 (L.length p))
                      mid;
-        symmetry sum_val mid;
         transitivity lhs_val mid sum_val
       end
     end
@@ -263,14 +254,11 @@ let rec coeff_sum_range (#t:Type) {| cr: commutative_ring t |}
              = coeff (f lo) k + sum_range (fun i -> coeff (f i) k) (lo+1) hi  [IH]
          RHS = (fun lo -> coeff (f lo) k) lo + sum_range (fun i -> coeff (f i) k) (lo+1) hi
              = coeff (f lo) k + sum_range (fun i -> coeff (f i) k) (lo+1) hi  *)
-      reflexivity (coeff (f lo) k);
       add_congruence (coeff (f lo) k) (coeff rest k)
                      (coeff (f lo) k) (sum_range (fun (i:nat) -> coeff (f i) k) (nat_succ lo) hi);
       let lhs : t = coeff (sum_range #(polynomial t) #(polynomial_acg cr) f lo hi) k in
       let mid : t = coeff (f lo) k + sum_range (fun (i:nat) -> coeff (f i) k) (nat_succ lo) hi in
       let rhs : t = sum_range (fun (i:nat) -> coeff (f i) k) lo hi in
-      transitivity lhs (coeff (f lo) k + coeff rest k) mid;
-      symmetry rhs mid;
       transitivity lhs mid rhs
     end
 #pop-options
@@ -314,22 +302,17 @@ let monomial_decomposition (#t:Type) {| cr: commutative_ring t |}
           pointwise_mul_unfold (kronecker_delta j) (fun (i:nat) -> coeff p i) i;
           if i = j then begin
             one_mul_x (coeff p j);
-            reflexivity (coeff p j);
             symmetry (target_term i) (coeff p j)
           end
           else begin
             zero_mul_x (coeff p i);
-            reflexivity (zero <: t);
             symmetry (target_term i) (zero <: t)
           end
         in
         sum_range_congruence pw target_term 0 n pw_eq_target;
         (* sum_range pw 0 n = sum_range target_term 0 n *)
         (* Chain: coeff decomp j = sum_range target_term 0 n *)
-        transitivity (coeff decomp j) (sum_range term 0 n) (sum_range target_term 0 n);
         (* Chain: sum_range target_term 0 n = coeff p j *)
-        symmetry (sum_range pw 0 n) (sum_range target_term 0 n);
-        transitivity (sum_range target_term 0 n) (sum_range pw 0 n) (coeff p j);
         (* Final *)
         transitivity (coeff decomp j)
                      (sum_range target_term 0 n)
@@ -341,9 +324,7 @@ let monomial_decomposition (#t:Type) {| cr: commutative_ring t |}
         sum_range_all_zero target_term 0 n
           (fun (i: nat{0 <= i /\ i < n}) -> reflexivity (zero <: t));
         (* Chain: coeff decomp j = sum_range target_term 0 n *)
-        transitivity (coeff decomp j) (sum_range term 0 n) (sum_range target_term 0 n);
         (* coeff p j = zero since j >= L.length p *)
-        reflexivity (zero <: t);
         transitivity (coeff decomp j) (sum_range target_term 0 n) (coeff p j)
       end
     in

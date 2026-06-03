@@ -29,6 +29,14 @@ val sum_over_perms
   (#t: Type) {| m: add_comm_group t |}
   (n: nat) (f: permutation n -> t) : t
 
+(* Reveal: sum_over_perms is the sum_list over the permutation enumeration.
+   Lets downstream code transport a ring homomorphism (e.g. poly_eval at c)
+   through sum_over_perms via the corresponding sum_list lemma. *)
+val sum_over_perms_reveal
+  (#t: Type) {| m: add_comm_group t |}
+  (n: nat) (f: permutation n -> t)
+  : Lemma (sum_over_perms n f == sum_list (L.map f (all_permutations n)))
+
 (* -------------------------------------------------------------------- *)
 (*  Congruence under pointwise-equal functions.                         *)
 (* -------------------------------------------------------------------- *)

@@ -103,7 +103,6 @@ let group_cancel_left (#t:Type) {| add_comm_group t |} (a b c: t)
     add_associativity (neg a) a c;
     zero_plus_x b;
     zero_plus_x c;
-    reflexivity (neg a);
     add_congruence (neg a) (a + b) (neg a) (a + c);
     add_congruence (neg a + a) b zero b;
     add_congruence (neg a + a) c zero c
@@ -118,8 +117,6 @@ let neg_zero (#t:Type) {| add_comm_group t |} (_: unit)
     trans_for_calc t ();
     x_plus_zero (neg (zero #t));         (* neg 0 + 0 = neg 0 *)
     neg_x_plus_x (zero #t);              (* neg 0 + 0 = 0 *)
-    symmetry (neg (zero #t)) (neg zero + zero);
-    transitivity (neg (zero #t)) (neg zero + zero) zero;
     symmetry (neg (zero #t)) zero
 
 (* neg_neg: neg (neg x) = x.
@@ -136,18 +133,11 @@ let neg_neg (#t:Type) {| add_comm_group t |} (x: t)
     let nnx = neg nx in
     add_associativity nnx nx x;          (* (nnx + nx) + x = nnx + (nx + x) *)
     neg_x_plus_x x;                      (* nx + x = 0 *)
-    reflexivity nnx;
     add_congruence nnx (nx + x) nnx (zero #t);
     x_plus_zero nnx;                     (* nnx + 0 = nnx *)
-    transitivity (nnx + (nx + x)) (nnx + zero) nnx;
-    symmetry ((nnx + nx) + x) (nnx + (nx + x));
-    transitivity ((nnx + nx) + x) (nnx + (nx + x)) nnx;
     neg_x_plus_x nx;                     (* nnx + nx = 0 *)
-    reflexivity x;
     add_congruence (nnx + nx) x (zero #t) x;
     zero_plus_x x;                       (* 0 + x = x *)
-    transitivity ((nnx + nx) + x) (zero + x) x;
-    symmetry ((nnx + nx) + x) nnx;
     transitivity nnx ((nnx + nx) + x) x
 
 (* If x = zero then neg x = zero. *)
@@ -157,7 +147,6 @@ let neg_of_zero (#t:Type) {| add_comm_group t |} (x: t)
     trans_for_calc t ();
     neg_congruence x (zero #t);          (* neg x = neg zero *)
     neg_zero #t ();                      (* zero = neg zero *)
-    symmetry (zero #t) (neg zero);       (* neg zero = zero *)
     transitivity (neg x) (neg zero) zero
 
 (* If neg x = zero then x = zero. *)
@@ -167,7 +156,6 @@ let zero_of_neg (#t:Type) {| add_comm_group t |} (x: t)
     trans_for_calc t ();
     neg_of_zero (neg x);                 (* neg (neg x) = zero *)
     neg_neg x;                           (* neg (neg x) = x *)
-    symmetry (neg (neg x)) x;            (* x = neg (neg x) *)
     transitivity x (neg (neg x)) zero
 
 (* neg_of_sum: neg (x+y) = neg y + neg x.
@@ -197,37 +185,27 @@ let neg_of_sum (#t:Type) {| g: add_comm_group t |} (x y: t)
     (* e1: (ny + nx) + 0 *)
     x_plus_zero (ny + nx);
     assert ((ny + nx) + zero = ny + nx);
-    symmetry ((ny + nx) + zero) (ny + nx);
     (* 0 = s + ns *)
     x_plus_neg_x s;
-    symmetry (s + ns) zero;
     (* (ny + nx) + 0 = (ny + nx) + (s + ns) *)
-    reflexivity (ny + nx);
     add_congruence (ny + nx) (zero #t) (ny + nx) (s + ns);
     assert ((ny + nx) + zero = (ny + nx) + (s + ns));
     (* e2: ((ny + nx) + s) + ns  by assoc symm *)
     add_associativity (ny + nx) s ns;
-    symmetry ((ny + nx) + s + ns) ((ny + nx) + (s + ns));
     assert ((ny + nx) + (s + ns) = ((ny + nx) + s) + ns);
     (* e3: (ny + (nx + s)) + ns by assoc on first part, then cong with refl ns *)
     add_associativity ny nx s;
-    reflexivity ns;
     add_congruence ((ny + nx) + s) ns (ny + (nx + s)) ns;
     assert (((ny + nx) + s) + ns = (ny + (nx + s)) + ns);
     (* e4: (ny + ((nx + x) + y)) + ns:  inside, nx + s = nx + (x+y) = (nx + x) + y *)
     add_associativity nx x y;
-    symmetry (nx + x + y) (nx + (x + y));
-    reflexivity ny;
     add_congruence ny (nx + s) ny (nx + x + y);
     add_congruence (ny + (nx + s)) ns (ny + (nx + x + y)) ns;
     assert ((ny + (nx + s)) + ns = (ny + (nx + x + y)) + ns);
     (* e5: (ny + (0 + y)) + ns  via neg_x_plus_x x *)
     neg_x_plus_x x;                          (* nx + x = 0 *)
-    reflexivity y;
     add_congruence (nx + x) y (zero #t) y;
-    reflexivity ny;
     add_congruence ny (nx + x + y) ny (zero + y);
-    reflexivity ns;
     add_congruence (ny + (nx + x + y)) ns (ny + (zero + y)) ns;
     assert ((ny + (nx + x + y)) + ns = (ny + (zero + y)) + ns);
     (* e6: (ny + y) + ns  via zero_plus_x y *)
@@ -243,14 +221,6 @@ let neg_of_sum (#t:Type) {| g: add_comm_group t |} (x y: t)
     zero_plus_x ns;
     assert (zero + ns = ns);
     (* chain everything together by repeated trans *)
-    transitivity (ny + nx) ((ny + nx) + zero) ((ny + nx) + (s + ns));
-    transitivity (ny + nx) ((ny + nx) + (s + ns)) (((ny + nx) + s) + ns);
-    transitivity (ny + nx) (((ny + nx) + s) + ns) ((ny + (nx + s)) + ns);
-    transitivity (ny + nx) ((ny + (nx + s)) + ns) ((ny + (nx + x + y)) + ns);
-    transitivity (ny + nx) ((ny + (nx + x + y)) + ns) ((ny + (zero + y)) + ns);
-    transitivity (ny + nx) ((ny + (zero + y)) + ns) ((ny + y) + ns);
-    transitivity (ny + nx) ((ny + y) + ns) (zero + ns);
-    transitivity (ny + nx) (zero + ns) ns;
     symmetry (ny + nx) ns
 #pop-options
 
@@ -263,7 +233,6 @@ let zero_mul_x (#t:Type) {| ring t |} (x:t)
   = elim_equatable_laws t ();
     trans_for_calc t ();
     add_zero (zero #t);                              (* 0 + 0 = 0 *)
-    reflexivity x;
     right_distributivity x zero zero;                (* (0+0)*x = 0*x + 0*x *)
     mul_congruence (zero + zero) x zero x;           (* (0+0)*x = 0*x *)
     (* so 0*x = 0*x + 0*x; cancel: 0 = 0*x *)
@@ -276,7 +245,6 @@ let x_mul_zero (#t:Type) {| ring t |} (x:t)
   = elim_equatable_laws t ();
     trans_for_calc t ();
     add_zero (zero #t);
-    reflexivity x;
     left_distributivity x zero zero;
     mul_congruence x (zero + zero) x zero;
     x_plus_zero (x * zero);
@@ -291,7 +259,6 @@ let neg_mul_l (#t:Type) {| ring t |} (x y: t)
   = elim_equatable_laws t ();
     trans_for_calc t ();
     add_negation x;                                  (* x + neg x = 0 *)
-    reflexivity y;
     right_distributivity y x (neg x);                (* (x + neg x) * y = x*y + neg x*y *)
     mul_congruence (x + neg x) y (zero #t) y;        (* (x + neg x)*y = 0*y *)
     zero_mul_x y;                                    (* 0*y = 0 *)
@@ -300,15 +267,8 @@ let neg_mul_l (#t:Type) {| ring t |} (x y: t)
     x_plus_neg_x (x * y);                            (* x*y + neg (x*y) = 0 *)
     (* Combine via group_cancel_left on x*y: 
        x*y + (neg x*y) = 0 = x*y + neg (x*y) ⇒ neg x*y = neg (x*y) *)
-    transitivity ((x + neg x) * y) ((zero <: t) * y) (zero <: t);
-    transitivity ((x + neg x) * y) (x * y + neg x * y) (zero <: t);
-    symmetry ((x + neg x) * y) (x * y + neg x * y);
     (* So x*y + (neg x)*y = 0. *)
-    symmetry ((x + neg x) * y) (zero <: t);
-    transitivity (x*y + neg x * y) ((x + neg x) * y) (zero <: t);
     (* Likewise x*y + neg (x*y) = 0. So x*y + neg x*y = x*y + neg (x*y). *)
-    symmetry (x*y + neg (x*y)) (zero <: t);
-    transitivity (x*y + neg x * y) (zero <: t) (x*y + neg (x*y));
     group_cancel_left (x * y) (neg x * y) (neg (x * y))
 #pop-options
 
@@ -320,15 +280,9 @@ let neg_mul_r (#t:Type) {| ring t |} (x y: t)
   = elim_equatable_laws t ();
     trans_for_calc t ();
     add_negation y;                                  (* y + neg y = 0 *)
-    reflexivity x;
     left_distributivity x y (neg y);                 (* x * (y + neg y) = x*y + x*neg y *)
     mul_congruence x (y + neg y) x (zero <: t);
     x_mul_zero x;                                    (* x*0 = 0 *)
     x_plus_neg_x (x * y);                            (* x*y + neg (x*y) = 0 *)
-    transitivity (x * (y + neg y)) (x * (zero <: t)) (zero <: t);
-    symmetry (x * (y + neg y)) (x*y + x*neg y);
-    transitivity (x*y + x*neg y) (x * (y + neg y)) (zero <: t);
-    symmetry (x*y + neg (x*y)) (zero <: t);
-    transitivity (x*y + x*neg y) (zero <: t) (x*y + neg (x*y));
     group_cancel_left (x * y) (x * neg y) (neg (x * y))
 #pop-options

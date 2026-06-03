@@ -205,12 +205,10 @@ let rec prod_range_factor
       prod_range_empty (pw_mul f g) lo hi;
       prod_range_empty f lo hi;
       prod_range_empty g lo hi;
-      reflexivity (one #t);
       mul_congruence (prod_range f lo hi) (prod_range g lo hi) (one #t) (one #t);
       H.one_mul_x (one #t);
       transitivity (prod_range f lo hi * prod_range g lo hi)
                    (one #t * one #t) (one #t);
-      symmetry (prod_range f lo hi * prod_range g lo hi) (one #t);
       transitivity (prod_range (pw_mul f g) lo hi)
                    (one #t)
                    (prod_range f lo hi * prod_range g lo hi)
@@ -223,22 +221,18 @@ let rec prod_range_factor
       let pg = prod_range g (Prims.op_Addition lo 1) hi in
       let pfg = prod_range (pw_mul f g) (Prims.op_Addition lo 1) hi in
       (* pfg = pf * pg by IH *)
-      reflexivity (f lo * g lo);
       mul_congruence (f lo * g lo) pfg (f lo * g lo) (pf * pg);
       four_swap_cr (f lo) (g lo) pf pg;
       (* now: (f lo * g lo) * pfg = (f lo * g lo) * (pf*pg) = (f lo * pf) * (g lo * pg) *)
       transitivity ((f lo * g lo) * pfg)
                    ((f lo * g lo) * (pf * pg))
                    ((f lo * pf) * (g lo * pg));
-      reflexivity (prod_range f lo hi);
-      reflexivity (prod_range g lo hi);
       mul_congruence (f lo * pf) (g lo * pg)
                      (prod_range f lo hi) (prod_range g lo hi);
       transitivity ((f lo * g lo) * pfg)
                    ((f lo * pf) * (g lo * pg))
                    (prod_range f lo hi * prod_range g lo hi);
       (* finally: prod_range (pw_mul f g) lo hi = (f lo * g lo) * pfg = ... *)
-      reflexivity (prod_range (pw_mul f g) lo hi);
       H.leibniz_to_eq (prod_range (pw_mul f g) lo hi) ((f lo * g lo) * pfg);
       transitivity (prod_range (pw_mul f g) lo hi)
                    ((f lo * g lo) * pfg)
@@ -809,8 +803,6 @@ let factor_inner_perm_sum
     leibniz_term_respects_perm_eq (phi_matrix b phi);
     Classical.forall_intro (all_permutations_count_one n);
     sum_over_perms_via_count_one_list lt (all_permutations n) (fun _ -> ());
-    symmetry (sum_over_perms n lt) (sum_list (L.map lt (all_permutations n)));
-    reflexivity c;
     mul_congruence c (sum_list (L.map lt (all_permutations n)))
                    c (sum_over_perms n lt);
     transitivity
@@ -819,7 +811,6 @@ let factor_inner_perm_sum
       (c * sum_over_perms n lt);
     det_unfold (phi_matrix b phi);
     H.leibniz_to_eq (det (phi_matrix b phi)) (sum_over_perms n lt);
-    symmetry (det (phi_matrix b phi)) (sum_over_perms n lt);
     mul_congruence c (sum_over_perms n lt) c (det (phi_matrix b phi));
     transitivity
       (sum_list (L.map (swap_args (phi_lt_term a b) phi) (all_permutations n)))
@@ -1150,7 +1141,6 @@ private let rec sum_filter_eq
       then begin
         perm_list_from_funs_cons_inj phi tl;
         sum_list_cons (f (perm_of_inj_fn phi)) (L.map f (perm_list_from_funs tl));
-        reflexivity (g phi);
         add_congruence (g phi) (sum_list (L.map g tl))
                        (g phi) (sum_list (L.map f (perm_list_from_funs tl)))
       end
@@ -1158,7 +1148,6 @@ private let rec sum_filter_eq
         perm_list_from_funs_cons_non phi tl;
         let s = sum_list (L.map g tl) in
         add_zero s;
-        transitivity (g phi + s) (zero + s) s;
         transitivity (g phi + s) s (sum_list (L.map f (perm_list_from_funs tl)))
       end
 #pop-options
@@ -1182,7 +1171,6 @@ private let sum_funs_eq_perms
     sum_over_perms_via_count_one_list #t #(cr.cr_r.r_add) #n f perm_list (fun _ -> ());
     H.elim_equatable_laws t ();
     H.trans_for_calc t ();
-    symmetry (sum_over_perms n f) (sum_list (L.map f perm_list));
     transitivity (sum_over_funs n g) (sum_list (L.map f perm_list)) (sum_over_perms n f)
 #pop-options
 (* ============================================================ *)
@@ -1211,10 +1199,8 @@ private let phi_term_non_inj
       in
       Classical.forall_intro_2 wit2;
       H.x_mul_zero (phi_prod a phi);
-      reflexivity (phi_prod a phi);
       mul_congruence (phi_prod a phi) (det (phi_matrix b phi))
                      (phi_prod a phi) (zero <: t);
-      symmetry (phi_prod a phi * zero) (zero <: t);
       transitivity (phi_det_term a b phi)
                    (phi_prod a phi * zero)
                    (zero <: t)
@@ -1322,7 +1308,6 @@ private let det_expand_to_perms
       : Lemma (requires perm_eq p q)
               (ensures f p = f q)
       = respects_perm_eq_elim (leibniz_term a) p q;
-        reflexivity (det b);
         mul_congruence (leibniz_term a p) (det b) (leibniz_term a q) (det b)
     in
     let rpe_prod2 (p: permutation n) : (q: permutation n) -> Lemma (perm_eq p q ==> f p = f q) =
@@ -1372,7 +1357,6 @@ let det_mul
                  (sum_over_perms n (db_lt_a a b))
                  (det b * sum_over_perms n (leibniz_term a));
     det_unfold a;
-    reflexivity (det b);
     mul_congruence (det b) (sum_over_perms n (leibniz_term a))
                    (det b) (det a);
     transitivity (det (matrix_mul a b))

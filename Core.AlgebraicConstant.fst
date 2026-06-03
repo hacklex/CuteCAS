@@ -98,13 +98,13 @@ private let poly_eq_implies_sub_zero
     (a b: polynomial t)
   : Lemma (requires poly_eq a b)
           (ensures  poly_eq (poly_sub a b) (poly_zero #t))
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     poly_sub_reveal a b;
     (* poly_sub a b = poly_add a (poly_neg b) *)
-    reflexivity #(polynomial t) #(cr_p.cr_r.r_add.acg_eq) (poly_neg b);
+    reflexivity #(polynomial t)  (poly_neg b);
     poly_add_congruence a (poly_neg b) b (poly_neg b);
     (* Now poly_add a (poly_neg b) ~ poly_add b (poly_neg b) *)
-    cr_sub_self #(polynomial t) #cr_p b;
+    cr_sub_self  b;
     (* poly_add b (poly_neg b) ~ poly_zero *)
     transitivity (poly_add a (poly_neg b))
                  (poly_add b (poly_neg b))
@@ -131,31 +131,31 @@ let ac_eq #t #f (#r: polynomial t {Some? (poly_deg r)})
 private let ac_eq_iff_divides
     #t {| f: field t |} (#r: polynomial t {Some? (poly_deg r)})
     (a b: algebraic t r)
-  : Lemma (let cr_p : commutative_ring (polynomial t) = TC.solve in
+  : Lemma (
            b2t (ac_eq a b) <==>
-             divides #(polynomial t) #cr_p r (poly_sub a.ac_rep b.ac_rep))
+             divides  r (poly_sub a.ac_rep b.ac_rep))
     [SMTPat (ac_eq a b)]
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     let d = poly_sub a.ac_rep b.ac_rep in
     let (q, rem) = poly_divmod #t #f d r in
     poly_divmod_correct #t #f d r;
     (* Forward: ac_eq ⟹ divides. rem ~ 0 + p_correct: d ~ r*q + rem ~ r*q + 0 ~ r*q. *)
     let fwd () : Lemma (requires b2t (ac_eq a b))
-                       (ensures divides #(polynomial t) #cr_p r d)
+                       (ensures divides  r d)
       = (* rem ~ poly_zero, so d ~ r*q + 0 ~ r*q *)
-        let cr_p2 : commutative_ring (polynomial t) = TC.solve in
+        
         poly_add_zero (poly_mul r q);
         (* poly_add (poly_mul r q) poly_zero ~ poly_mul r q *)
         poly_add_congruence (poly_mul r q) rem (poly_mul r q) (poly_zero #t);
-        reflexivity #(polynomial t) #(cr_p2.cr_r.r_add.acg_eq) (poly_mul r q);
+        reflexivity #(polynomial t)  (poly_mul r q);
         transitivity d (poly_add (poly_mul r q) rem) (poly_add (poly_mul r q) (poly_zero #t));
         transitivity d (poly_add (poly_mul r q) (poly_zero #t)) (poly_mul r q);
-        divides_intro #(polynomial t) #cr_p2 r d q
+        divides_intro  r d q
     in
     (* Backward: divides ⟹ rem ~ 0 via poly_divmod_unique. *)
-    let bwd () : Lemma (requires divides #(polynomial t) #cr_p r d)
+    let bwd () : Lemma (requires divides  r d)
                        (ensures b2t (ac_eq a b))
-      = let cr_p2 : commutative_ring (polynomial t) = TC.solve in
+      = 
         eliminate exists (k: polynomial t). poly_eq d (poly_mul r k)
         returns b2t (ac_eq a b)
         with hyp.
@@ -165,7 +165,7 @@ private let ac_eq_iff_divides
              Then poly_divmod_unique gives rem ~ 0.                    *)
           poly_add_zero (poly_mul r k);
           (* poly_add (poly_mul r k) poly_zero ~ poly_mul r k *)
-          symmetry #(polynomial t) #(cr_p2.cr_r.r_add.acg_eq)
+          symmetry #(polynomial t) 
             (poly_add (poly_mul r k) (poly_zero #t)) (poly_mul r k);
           transitivity d (poly_mul r k) (poly_add (poly_mul r k) (poly_zero #t));
           (* d ~ poly_add (poly_mul r k) poly_zero
@@ -195,52 +195,102 @@ let ac_neg #t #f (#r: polynomial t {Some? (poly_deg r)}) (a: algebraic t r) : al
 let ac_mul #t #f (#r: polynomial t {Some? (poly_deg r)}) (a b: algebraic t r) : algebraic t r =
   { ac_rep = poly_mul a.ac_rep b.ac_rep }
 
+(* Clean characterization of nullity: [a] = 0 in the quotient iff r divides a.rep.
+   This is the bridge the field construction (inverse via Bezout) consumes; it is
+   proved here, where the divides<->ac_eq SMT pattern and the poly_eq/eq idiom are
+   available, so external callers never need to fight `poly_sub a 0 ~ a`. *)
+let ac_eq_zero_iff_divides #t #f (#r: polynomial t {Some? (poly_deg r)}) (a: algebraic t r)
+  : Lemma (
+           b2t (ac_eq a (ac_zero #t #f #r)) <==>
+             divides  r a.ac_rep)
+  = 
+    let x = a.ac_rep in
+    let s = poly_sub x (poly_zero #t) in
+    (* SMTPat: ac_eq a 0 <==> divides r (poly_sub x 0) = divides r s. *)
+    ac_eq_iff_divides a (ac_zero #t #f #r);
+    (* s = poly_sub x 0 ~ x. *)
+    poly_sub_reveal x (poly_zero #t);                            (* s == poly_add x (poly_neg 0) *)
+    poly_neg_zero #t #(TC.solve <: commutative_ring t);         (* poly_neg 0 == 0 *)
+    poly_add_zero x;                                            (* poly_add x 0 ~ x *)
+    reflexivity #(polynomial t)  x;
+    poly_add_congruence x (poly_neg (poly_zero #t)) x (poly_zero #t);
+    transitivity s (poly_add x (poly_zero #t)) x;               (* eq s x *)
+    symmetry #(polynomial t)  s x;     (* eq x s *)
+    (* divides r s <==> divides r x. *)
+    let fwd () : Lemma (requires divides  r s)
+                       (ensures  divides  r x)
+      = divides_congruence_right  r s x in
+    let bwd () : Lemma (requires divides  r x)
+                       (ensures  divides  r s)
+      = divides_congruence_right  r x s in
+    Classical.move_requires fwd ();
+    Classical.move_requires bwd ()
+
+(* General characterization (explicit, no SMT pattern): [a] = [b] iff r | (a.rep - b.rep).
+   Re-exposes the internal definitional equivalence for external callers (e.g. the
+   field inversion identity, which needs ac_eq _ ac_one). *)
+let ac_eq_divides #t #f (#r: polynomial t {Some? (poly_deg r)}) (a b: algebraic t r)
+  : Lemma (
+           b2t (ac_eq a b) <==>
+             divides  r (poly_sub a.ac_rep b.ac_rep))
+  = ac_eq_iff_divides a b
+
+(* Representation reveals (ops are abstract through the interface). *)
+let ac_mul_rep #t #f (#r: polynomial t {Some? (poly_deg r)}) (a b: algebraic t r)
+  : Lemma ((ac_mul a b).ac_rep == poly_mul a.ac_rep b.ac_rep) = ()
+
+let ac_add_rep #t #f (#r: polynomial t {Some? (poly_deg r)}) (a b: algebraic t r)
+  : Lemma ((ac_add a b).ac_rep == poly_add a.ac_rep b.ac_rep) = ()
+
+let ac_one_rep #t #f (r: polynomial t {Some? (poly_deg r)})
+  : Lemma ((ac_one #t #f #r).ac_rep == poly_one #t) = ()
+
 (* ---------------------------------------------------------------- *)
 (*  Equivalence laws                                                 *)
 (* ---------------------------------------------------------------- *)
 
 let ac_eq_reflexivity #t #f (#r: polynomial t {Some? (poly_deg r)}) (a: algebraic t r)
   : Lemma (ac_eq a a)
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     let x = a.ac_rep in
     (* poly_sub x x ~ poly_zero, r | poly_zero, then divides_congruence_right. *)
-    cr_sub_self #(polynomial t) #cr_p x;
+    cr_sub_self  x;
     poly_sub_reveal x x;
     (* poly_sub x x = poly_add x (poly_neg x); both directions of eq. *)
-    divides_zero #(polynomial t) #cr_p r;
-    symmetry #(polynomial t) #(cr_p.cr_r.r_add.acg_eq)
+    divides_zero  r;
+    symmetry #(polynomial t) 
              (poly_add x (poly_neg x)) (poly_zero #t);
-    divides_congruence_right #(polynomial t) #cr_p r
+    divides_congruence_right  r
                              (poly_zero #t) (poly_add x (poly_neg x))
 
 let ac_eq_symmetry #t #f (#r: polynomial t {Some? (poly_deg r)}) (a b: algebraic t r)
   : Lemma (requires ac_eq a b) (ensures ac_eq b a)
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     let x = a.ac_rep in
     let y = b.ac_rep in
     poly_sub_reveal x y;
     poly_sub_reveal y x;
     (* divides r (x - y).  Negate to get divides r -(x - y).
        -(x - y) ~ y - x.                                              *)
-    divides_neg #(polynomial t) #cr_p r (poly_sub x y);
-    cr_neg_sub_swap #(polynomial t) #cr_p x y;
+    divides_neg  r (poly_sub x y);
+    cr_neg_sub_swap  x y;
     (* neg (poly_sub x y) ~ poly_sub y x *)
-    divides_congruence_right #(polynomial t) #cr_p r
+    divides_congruence_right  r
       (poly_neg (poly_sub x y)) (poly_sub y x)
 
 let ac_eq_transitivity #t #f (#r: polynomial t {Some? (poly_deg r)}) (a b c: algebraic t r)
   : Lemma (requires ac_eq a b /\ ac_eq b c)
           (ensures  ac_eq a c)
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     let x = a.ac_rep in
     let y = b.ac_rep in
     let z = c.ac_rep in
     poly_sub_reveal x y;
     poly_sub_reveal y z;
     poly_sub_reveal x z;
-    divides_add #(polynomial t) #cr_p r (poly_sub x y) (poly_sub y z);
-    cr_sub_telescope #(polynomial t) #cr_p x y z;
-    divides_congruence_right #(polynomial t) #cr_p r
+    divides_add  r (poly_sub x y) (poly_sub y z);
+    cr_sub_telescope  x y z;
+    divides_congruence_right  r
       (poly_add (poly_sub x y) (poly_sub y z))
       (poly_sub x z)
 
@@ -252,12 +302,12 @@ private let poly_eq_implies_ac_eq
     #t {| f: field t |} (#r: polynomial t {Some? (poly_deg r)}) (a b: algebraic t r)
   : Lemma (requires poly_eq a.ac_rep b.ac_rep)
           (ensures  ac_eq a b)
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     poly_eq_implies_sub_zero a.ac_rep b.ac_rep;
-    divides_zero #(polynomial t) #cr_p r;
-    symmetry #(polynomial t) #(cr_p.cr_r.r_add.acg_eq)
+    divides_zero  r;
+    symmetry #(polynomial t) 
              (poly_sub a.ac_rep b.ac_rep) (poly_zero #t);
-    divides_congruence_right #(polynomial t) #cr_p r
+    divides_congruence_right  r
       (poly_zero #t) (poly_sub a.ac_rep b.ac_rep)
 
 (* ---------------------------------------------------------------- *)
@@ -267,7 +317,7 @@ private let poly_eq_implies_ac_eq
 let ac_add_congruence #t #f (#r: polynomial t {Some? (poly_deg r)}) (a1 b1 a2 b2: algebraic t r)
   : Lemma (requires ac_eq a1 a2 /\ ac_eq b1 b2)
           (ensures  ac_eq (ac_add a1 b1) (ac_add a2 b2))
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     let x1 = a1.ac_rep in
     let y1 = b1.ac_rep in
     let x2 = a2.ac_rep in
@@ -275,12 +325,12 @@ let ac_add_congruence #t #f (#r: polynomial t {Some? (poly_deg r)}) (a1 b1 a2 b2
     poly_sub_reveal x1 x2;
     poly_sub_reveal y1 y2;
     poly_sub_reveal (poly_add x1 y1) (poly_add x2 y2);
-    divides_add #(polynomial t) #cr_p r (poly_sub x1 x2) (poly_sub y1 y2);
-    cr_sub_distributes_add #(polynomial t) #cr_p x1 y1 x2 y2;
-    symmetry #(polynomial t) #(cr_p.cr_r.r_add.acg_eq)
+    divides_add  r (poly_sub x1 x2) (poly_sub y1 y2);
+    cr_sub_distributes_add  x1 y1 x2 y2;
+    symmetry #(polynomial t) 
       (poly_sub (poly_add x1 y1) (poly_add x2 y2))
       (poly_add (poly_sub x1 x2) (poly_sub y1 y2));
-    divides_congruence_right #(polynomial t) #cr_p r
+    divides_congruence_right  r
       (poly_add (poly_sub x1 x2) (poly_sub y1 y2))
       (poly_sub (poly_add x1 y1) (poly_add x2 y2))
 
@@ -307,18 +357,18 @@ let ac_add_zero #t #f (#r: polynomial t {Some? (poly_deg r)}) (a: algebraic t r)
 let ac_neg_congruence #t #f (#r: polynomial t {Some? (poly_deg r)}) (a1 a2: algebraic t r)
   : Lemma (requires ac_eq a1 a2)
           (ensures  ac_eq (ac_neg a1) (ac_neg a2))
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     let x1 = a1.ac_rep in
     let x2 = a2.ac_rep in
     poly_sub_reveal x1 x2;
     poly_sub_reveal (poly_neg x1) (poly_neg x2);
-    divides_neg #(polynomial t) #cr_p r (poly_sub x1 x2);
+    divides_neg  r (poly_sub x1 x2);
     (* neg (x1 - x2) ~ -x1 + -(-x2) = -x1 - (-x2) *)
-    cr_neg_sub #(polynomial t) #cr_p x1 x2;
-    symmetry #(polynomial t) #(cr_p.cr_r.r_add.acg_eq)
+    cr_neg_sub  x1 x2;
+    symmetry #(polynomial t) 
       (poly_add (poly_neg x1) (poly_neg (poly_neg x2)))
       (poly_neg (poly_sub x1 x2));
-    divides_congruence_right #(polynomial t) #cr_p r
+    divides_congruence_right  r
       (poly_neg (poly_sub x1 x2))
       (poly_add (poly_neg x1) (poly_neg (poly_neg x2)))
 
@@ -441,3 +491,17 @@ instance algebraic_commutative_ring
       mul_commutativity = ac_mul_commutativity #t #f #r;
     };
   }
+
+(* Reveal that the commutative-ring instance's operations are exactly the
+   ac_* operations.  Needed by clients (e.g. the field construction) because
+   the instance is not `unfold`, so its projections do not reduce in SMT. *)
+let algebraic_ring_reveal (#t:Type) {| f: field t |} (#r: polynomial t {Some? (poly_deg r)})
+  : Lemma (
+      (let cr = algebraic_commutative_ring #t #f #r in
+       cr.cr_r.mul              == ac_mul  #t #f #r /\
+       cr.cr_r.one              == ac_one  #t #f #r /\
+       cr.cr_r.r_add.add        == ac_add  #t #f #r /\
+       cr.cr_r.r_add.neg        == ac_neg  #t #f #r /\
+       cr.cr_r.r_add.zero       == ac_zero #t #f #r /\
+       cr.cr_r.r_add.acg_eq.eq  == ac_eq   #t #f #r))
+  = ()

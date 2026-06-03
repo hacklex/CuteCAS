@@ -26,7 +26,6 @@ let deriv_zero (#t:Type) {| cr: commutative_ring t |}
     (* Now: d.deriv zero = d.deriv zero + d.deriv zero *)
     (* Cancel: x = x + x implies x = 0 *)
     let dz = d.deriv (zero <: t) in
-    reflexivity dz;
     add_congruence dz (neg dz) (dz + dz) (neg dz);
     add_negation dz;
     add_associativity dz dz (neg dz);
@@ -84,7 +83,6 @@ let deriv_one (#t:Type) {| cr: commutative_ring t |}
     add_congruence (d1 * (one <: t)) ((one <: t) * d1) d1 d1;
     (* D(1) = d1 + d1 *)
     (* Same cancellation: x = x+x implies x = 0 *)
-    reflexivity d1;
     add_congruence d1 (neg d1) (d1 + d1) (neg d1);
     add_negation d1;
     add_associativity d1 d1 (neg d1);

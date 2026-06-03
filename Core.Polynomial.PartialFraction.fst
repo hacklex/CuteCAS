@@ -99,3 +99,41 @@ let normalize_bezout_correct (#t:Type) {| f: field t |}
     assert (g == [c]);
     assert (poly_eq sg (poly_one #t));
     poly_eq_transitivity (poly_add a1 b1) sg (poly_one #t)
+
+(* ================================================================ *)
+(*  Named Bezout cofactors (cf. poly_div / poly_rem for poly_divmod) *)
+(*    bezout_left d1 d2  = fst (normalize_bezout d1 d2)   (cofactor of d1) *)
+(*    bezout_right d1 d2 = snd (normalize_bezout d1 d2)   (cofactor of d2) *)
+(*  characterized by bezout_identity:                                 *)
+(*    bezout_left*d1 + bezout_right*d2 ~ 1.                            *)
+(* ================================================================ *)
+
+let bezout_left (#t:Type) {| f: field t |} (d1 d2: polynomial t)
+  : Pure (polynomial t)
+         (requires Some? (poly_deg d1) /\ coprime #t #f d1 d2)
+         (ensures fun _ -> True)
+  = fst (normalize_bezout #t #f d1 d2)
+
+let bezout_right (#t:Type) {| f: field t |} (d1 d2: polynomial t)
+  : Pure (polynomial t)
+         (requires Some? (poly_deg d1) /\ coprime #t #f d1 d2)
+         (ensures fun _ -> True)
+  = snd (normalize_bezout #t #f d1 d2)
+
+let bezout_left_reveal (#t:Type) {| f: field t |} (d1 d2: polynomial t)
+  : Lemma (requires Some? (poly_deg d1) /\ coprime #t #f d1 d2)
+          (ensures bezout_left #t #f d1 d2 == fst (normalize_bezout #t #f d1 d2))
+  = ()
+
+let bezout_right_reveal (#t:Type) {| f: field t |} (d1 d2: polynomial t)
+  : Lemma (requires Some? (poly_deg d1) /\ coprime #t #f d1 d2)
+          (ensures bezout_right #t #f d1 d2 == snd (normalize_bezout #t #f d1 d2))
+  = ()
+
+(* Characterizing identity (cf. poly_divmod_correct). *)
+let bezout_identity (#t:Type) {| f: field t |} (d1 d2: polynomial t)
+  : Lemma (requires Some? (poly_deg d1) /\ coprime #t #f d1 d2)
+          (ensures poly_eq (poly_add (poly_mul (bezout_left #t #f d1 d2) d1)
+                                     (poly_mul (bezout_right #t #f d1 d2) d2))
+                           (poly_one #t))
+  = normalize_bezout_correct #t #f d1 d2

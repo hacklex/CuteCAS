@@ -330,7 +330,6 @@ let scalar_poly_succ (#t:Type) {| cr: commutative_ring t |} (k: nat)
     let rhs : polynomial t = poly_add (scalar_poly b) (poly_one #t) in
     nat_scale_succ #t #(cr.cr_r.r_add) k (one #t);
     add_commutativity (one <: t) b;
-    transitivity a (one + b) (b + (one <: t));
     let aux (i: nat) : Lemma (coeff lhs i = coeff rhs i) =
       if i = 0 then begin
         coeff_scalar_poly_zero a;
@@ -338,10 +337,6 @@ let scalar_poly_succ (#t:Type) {| cr: commutative_ring t |} (k: nat)
         coeff_scalar_poly_zero b;
         coeff_poly_one_zero #t ();
         add_congruence (coeff (scalar_poly b) 0) (coeff (poly_one #t) 0) b (one <: t);
-        symmetry (b + (one <: t)) a;
-        transitivity (coeff rhs 0) (b + (one <: t)) a;
-        symmetry (coeff rhs 0) a;
-        symmetry (coeff lhs 0) a;
         transitivity (coeff lhs 0) a (coeff rhs 0)
       end else begin
         coeff_scalar_poly_high a i;
@@ -350,9 +345,6 @@ let scalar_poly_succ (#t:Type) {| cr: commutative_ring t |} (k: nat)
         coeff_poly_one_high #t i;
         add_congruence (coeff (scalar_poly b) i) (coeff (poly_one #t) i) (zero <: t) (zero <: t);
         H.x_plus_zero (zero <: t);
-        transitivity (coeff rhs i) ((zero <: t) + (zero <: t)) (zero <: t);
-        symmetry (coeff rhs i) (zero <: t);
-        symmetry (coeff lhs i) (zero <: t);
         transitivity (coeff lhs i) (zero <: t) (coeff rhs i)
       end
     in

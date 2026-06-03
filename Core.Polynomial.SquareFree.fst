@@ -151,11 +151,8 @@ private let poly_div_helper (#t:Type) {| f: field t |}
     // Need: poly_eq (poly_add (poly_mul d quot) rem) (poly_add (poly_mul d c) poly_zero)
     poly_add_zero (poly_mul d c);
     // poly_eq (poly_add (poly_mul d c) poly_zero) (poly_mul d c) [from poly_add_zero]
-    symmetry (poly_add (poly_mul d c) (poly_zero #t)) (poly_mul d c);
     // poly_eq (poly_mul d c) (poly_add (poly_mul d c) poly_zero)
-    transitivity p (poly_mul d c) (poly_add (poly_mul d c) (poly_zero #t));
     // poly_eq p (poly_add (poly_mul d c) poly_zero)
-    symmetry (poly_add (poly_mul d quot) rem) p;
     // poly_eq (poly_add (poly_mul d quot) rem) p
     transitivity (poly_add (poly_mul d quot) rem) p
                  (poly_add (poly_mul d c) (poly_zero #t));
@@ -182,10 +179,7 @@ let poly_div_correct (#t:Type) {| f: field t |}
         poly_add_zero (poly_mul d quot);
         let pz = poly_zero #t in
         let dq = poly_mul d quot in
-        poly_eq_reflexivity dq;
         poly_add_congruence dq rem dq pz;
-        transitivity (poly_add dq rem) (poly_add dq pz) dq;
-        transitivity p (poly_add dq rem) dq;
         symmetry dq p
     in
     // Eliminate the existential: divides d p = ∃c. poly_eq p (poly_mul d c)
@@ -431,7 +425,7 @@ let rec flat_product_factor_divides (#t:Type) {| f: field t |}
           (decreases factors)
   = let pcrc : polynomial_commutative_ring t =
       polynomial_commutative_ring_instance #t #(cr_of_id t #(id_of_f t)) in
-    let cr_p : commutative_ring (polynomial t) = TC.solve in
+    
     H.elim_equatable_laws (polynomial t) ();
     H.trans_for_calc (polynomial t) ();
     match factors with
@@ -440,8 +434,7 @@ let rec flat_product_factor_divides (#t:Type) {| f: field t |}
           (* a | flat_product (a::rest) = poly_mul a (flat_product rest)
              witness: flat_product rest
              Need: poly_eq (poly_mul a (flat_product rest)) (poly_mul a (flat_product rest)) *)
-          poly_eq_reflexivity (poly_mul a (flat_product rest));
-          divides_intro #(polynomial t) #cr_p
+          divides_intro 
             a (poly_mul a (flat_product rest)) (flat_product rest)
         end
         else begin
@@ -473,11 +466,7 @@ let rec flat_product_factor_divides (#t:Type) {| f: field t |}
               let m3 = poly_mul (poly_mul a elem) c in
               let m4 = poly_mul (poly_mul elem a) c in
               let m5 = poly_mul elem (poly_mul a c) in
-              poly_eq_symmetry m3 m2;
-              poly_eq_transitivity m1 m2 m3;
-              poly_eq_transitivity m1 m3 m4;
-              poly_eq_transitivity m1 m4 m5;
-              divides_intro #(polynomial t) #cr_p elem m1 (poly_mul a c)
+              divides_intro  elem m1 (poly_mul a c)
           in
           Classical.forall_intro (Classical.move_requires aux)
         end
@@ -498,10 +487,10 @@ let yun_output_factor_divides_flat (#t:Type) {| f: field t |}
   : Lemma (requires k < L.length factors /\
                     poly_eq (flat_product factors) b)
           (ensures  divides (L.index factors k) b)
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     flat_product_factor_divides #t #f factors k;
     (* divides (L.index factors k) (flat_product factors) *)
-    divides_congruence_right #(polynomial t) #cr_p
+    divides_congruence_right 
       (L.index factors k)
       (flat_product factors) b
 
@@ -510,14 +499,14 @@ let product_implies_divides (#t:Type) {| f: field t |}
   (a b p: polynomial t)
   : Lemma (requires poly_eq (poly_mul a b) p)
           (ensures  divides a p /\ divides b p)
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     (* divides a p: witness is b. Need poly_eq p (poly_mul a b). *)
     poly_eq_symmetry (poly_mul a b) p;
-    divides_intro #(polynomial t) #cr_p a p b;
+    divides_intro  a p b;
     (* divides b p: witness is a. Need poly_eq p (poly_mul b a). *)
     poly_mul_commutativity a b;
     poly_eq_transitivity p (poly_mul a b) (poly_mul b a);
-    divides_intro #(polynomial t) #cr_p b p a
+    divides_intro  b p a
 
 (* Top-level consequence: gcd(p, p') divides p, and b₀ divides p *)
 let yun_initial_both_divide (#t:Type) {| f: field t |}
@@ -545,7 +534,7 @@ let yun_flat_product_identity (#t:Type) {| f: field t |}
   : Lemma (requires Some? (poly_deg p) /\ Some?.v (poly_deg p) >= 1)
           (ensures  (let a0 = poly_gcd #t #f p (poly_deriv p) in
                      poly_eq (poly_mul a0 (flat_product (yun #t #f p))) p))
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     H.elim_equatable_laws (polynomial t) ();
     H.trans_for_calc (polynomial t) ();
     let p' = poly_deriv p in
@@ -559,7 +548,6 @@ let yun_flat_product_identity (#t:Type) {| f: field t |}
     yun_loop_flat_invariant #t #f b0 d0 [] fuel;
     (* Step 2: poly_mul poly_one b0 ≈ b0 *)
     poly_mul_one b0;
-    poly_eq_transitivity (flat_product output) (poly_mul (poly_one #t) b0) b0;
     (* Step 3: a0 · flat_product(output) ≈ a0 · b0 *)
     poly_mul_right_congruence a0 (flat_product output) b0;
     (* Step 4: a0 · b0 ≈ p (from yun_initial_decomposition) *)
@@ -574,20 +562,19 @@ let yun_factor_divides_p (#t:Type) {| f: field t |}
   : Lemma (requires Some? (poly_deg p) /\ Some?.v (poly_deg p) >= 1 /\
                     k < L.length (yun #t #f p))
           (ensures  divides (L.index (yun #t #f p) k) p)
-  = let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = 
     H.elim_equatable_laws (polynomial t) ();
     H.trans_for_calc (polynomial t) ();
     let output = yun #t #f p in
     let a0 = poly_gcd #t #f p (poly_deriv p) in
     (* flat_product(output) | p: from yun_flat_product_identity, a0·fp ≈ p *)
     yun_flat_product_identity #t #f p;
-    poly_eq_symmetry (poly_mul a0 (flat_product output)) p;
     poly_mul_commutativity a0 (flat_product output);
     poly_eq_transitivity p (poly_mul a0 (flat_product output))
                            (poly_mul (flat_product output) a0);
-    divides_intro #(polynomial t) #cr_p (flat_product output) p a0;
+    divides_intro  (flat_product output) p a0;
     (* L.index output k | flat_product(output) *)
     flat_product_factor_divides #t #f output k;
     (* Transitivity: L.index output k | flat_product(output) | p *)
-    divides_trans #(polynomial t) #cr_p
+    divides_trans 
       (L.index output k) (flat_product output) p

@@ -115,6 +115,13 @@ let perm_product_unfold (#t: Type) {| cr: commutative_ring t |} (#n: pos)
            prod_range (fun k -> if k < n then m k (p.fwd k) else one) 0 n)
   = ()
 
+let perm_product_via (#t: Type) {| cr: commutative_ring t |} (#n: pos)
+  (m: square_matrix t n) (p: permutation n)
+  : Lemma (perm_product m p == prod_range (perm_entry m p) 0 n)
+  = assert (perm_product m p == prod_range (perm_entry m p) 0 n)
+      by (FStar.Tactics.norm [delta_only [`%perm_product; `%perm_entry]; iota; zeta; primops];
+          FStar.Tactics.trefl ())
+
 let det_unfold (#t: Type) {| cr: commutative_ring t |} (#n: pos) (m: square_matrix t n)
   : Lemma (det m == sum_over_perms n (leibniz_term m))
   = ()
@@ -287,8 +294,6 @@ let det_identity (#t: Type) {| cr: commutative_ring t |} (n: pos)
     det_unfold (id_matrix #t #_ #n);
     assert (parity p0 == true);
     assert (f p0 == perm_product (id_matrix #t #_ #n) p0);
-    transitivity (det (id_matrix #t #_ #n)) (sum_over_perms n f) (f p0);
-    transitivity (det (id_matrix #t #_ #n)) (f p0) (perm_product (id_matrix #t #_ #n) p0);
     transitivity (det (id_matrix #t #_ #n)) (perm_product (id_matrix #t #_ #n) p0) (one)
 
 (* -------------------------------------------------------------------- *)
@@ -514,7 +519,6 @@ let leibniz_term_row_swap
     then begin
       (* lhs = pp1, rhs = -(-(pp2)), need pp1 = pp2 = -(-(pp2)) *)
       double_negation_lemma pp2;
-      symmetry (-(-pp2)) pp2;
       transitivity pp1 pp2 (-(-pp2))
     end else begin
       (* lhs = -(pp1), rhs = -(pp2), need -(pp1) = -(pp2) *)
@@ -548,7 +552,6 @@ let det_row_swap
     (* But sum n (fcomp g (flip compose sigma)) = sum n g by reindex *)
     det_unfold (row_swap m i j);
     det_unfold m;
-    symmetry (sum_over_perms n g) (sum_over_perms n (fcomp g (flip compose sigma)));
     neg_congruence (sum_over_perms n (fcomp g (flip compose sigma)))
                    (sum_over_perms n g);
     neg_congruence (sum_over_perms n g) (det m)
@@ -800,7 +803,6 @@ let prod_range_extract_scalar_left
     mul_congruence l (bi' * r0) l (c * p);
     (* l * (c * p) = c * (l * p) via comm/assoc *)
     mul_associativity l c p;
-    symmetry ((l * c) * p) (l * (c * p));
     cr.cr_mic.mul_commutativity l c;
     mul_congruence (l * c) p (c * l) p;
     mul_associativity c l p;
@@ -808,7 +810,6 @@ let prod_range_extract_scalar_left
                   (l * c) * p;
                   (c * l) * p;
                   c * (l * p) ];
-    symmetry (prod_range body lo hi) (l * p);
     mul_congruence c (l * p) c (prod_range body lo hi);
     trans_lemma [ prod_range body' lo hi;
                   l * (bi' * r0);
@@ -986,8 +987,6 @@ let det_two_equal_rows_cr
         assert (leibniz_term (row_swap m i j) s = -b);
         leibniz_term_pointwise_eq (row_swap m i j) m s;
         assert (leibniz_term (row_swap m i j) s = a);
-        symmetry (leibniz_term (row_swap m i j) s) a;
-        transitivity a (leibniz_term (row_swap m i j) s) (-b);
         assert (a = -b);
         add_congruence a b (-b) b;
         acg.add_negation b;
@@ -1063,23 +1062,15 @@ private let prod_range_extract_add_left
     assert (l * ((c * v) * rr) = l * (c * (v * rr)));
     let p1 = v * rr in
     mul_associativity l c p1;
-    symmetry ((l * c) * p1) (l * (c * p1));
     cr.cr_mic.mul_commutativity l c;
     mul_congruence (l * c) p1 (c * l) p1;
     mul_associativity c l p1;
     trans_lemma [ l * (c * p1); (l * c) * p1; (c * l) * p1; c * (l * p1) ];
     assert (l * (c * (v * rr)) = c * (l * (v * rr)));
-    transitivity (l * ((c * v) * rr)) (l * (c * (v * rr))) (c * (l * (v * rr)));
-    symmetry (prod_range b lo hi) (l * (u * rr));
-    symmetry (prod_range br lo hi) (l * (v * rr));
     mul_congruence c (l * (v * rr)) c (prod_range br lo hi);
-    transitivity (l * ((c * v) * rr)) (c * (l * (v * rr))) (c * prod_range br lo hi);
     add_congruence (l * (u * rr)) (l * ((c * v) * rr))
                    (prod_range b lo hi) (c * prod_range br lo hi);
     assert (l * (u * rr) + l * ((c * v) * rr) = prod_range b lo hi + c * prod_range br lo hi);
-    transitivity (prod_range ba lo hi) (l * (bai * rr)) (l * ((u + c * v) * rr));
-    transitivity (prod_range ba lo hi) (l * ((u + c * v) * rr)) (l * (u * rr + (c * v) * rr));
-    transitivity (prod_range ba lo hi) (l * (u * rr + (c * v) * rr)) (l * (u * rr) + l * ((c * v) * rr));
     transitivity (prod_range ba lo hi) (l * (u * rr) + l * ((c * v) * rr))
                  (prod_range b lo hi + c * prod_range br lo hi)
 
@@ -1219,9 +1210,7 @@ let perm_product_row_split
     assert (body    in_ == upi);
     assert (body_v  in_ == vpi);
     one_mul_x vpi;
-    symmetry (one * vpi) vpi;
     add_congruence upi vpi upi (one * vpi);
-    transitivity (body_uv in_) (upi + vpi) (upi + one * vpi);
     assert (body_uv in_ = body in_ + one * body_v in_);
     prod_range_extract_add_left #t #cr body body_uv body_v 0 n in_ (one);
     assert (prod_range body_uv 0 n
@@ -1235,8 +1224,6 @@ let perm_product_row_split
     perm_product_unfold muv p;
     perm_product_unfold mu  p;
     perm_product_unfold mv  p;
-    symmetry (perm_product mu p) (prod_range body   0 n);
-    symmetry (perm_product mv p) (prod_range body_v 0 n);
     add_congruence (prod_range body 0 n) (prod_range body_v 0 n)
                    (perm_product mu p)   (perm_product mv p);
     transitivity (perm_product muv p) (prod_range body_uv 0 n)
@@ -1295,8 +1282,6 @@ let det_row_split
     det_unfold muv;
     det_unfold mu;
     det_unfold mv;
-    symmetry (det mu) (sum_over_perms n g);
-    symmetry (det mv) (sum_over_perms n h);
     add_congruence (sum_over_perms n g) (sum_over_perms n h)
                    (det mu)             (det mv);
     transitivity (det muv) (sum_over_perms n f)
@@ -1339,7 +1324,6 @@ let det_col_swap (#t: Type) {| cr: commutative_ring t |} (#n: pos)
     det_row_swap (transpose m) i j;
     det_transpose m;
     neg_congruence_lem (det (transpose m)) (det m);
-    symmetry (det (transpose (col_swap m i j))) (det (col_swap m i j));
     transitivity (det (col_swap m i j))
                  (det (transpose (col_swap m i j)))
                  (det (row_swap (transpose m) i j));
@@ -1377,7 +1361,6 @@ let det_col_scale (#t: Type) {| cr: commutative_ring t |} (#n: pos)
     det_row_scale (transpose m) i c;
     det_transpose m;
     mul_congruence c (det (transpose m)) c (det m);
-    symmetry (det (transpose (col_scale m i c))) (det (col_scale m i c));
     transitivity (det (col_scale m i c))
                  (det (transpose (col_scale m i c)))
                  (det (row_scale (transpose m) i c));
@@ -1415,7 +1398,6 @@ let det_col_add (#t: Type) {| cr: commutative_ring t |} (#n: pos)
     det_transpose (col_add m i j c);
     det_row_add (transpose m) i j c;
     det_transpose m;
-    symmetry (det (transpose (col_add m i j c))) (det (col_add m i j c));
     transitivity (det (col_add m i j c))
                  (det (transpose (col_add m i j c)))
                  (det (row_add (transpose m) i j c));
@@ -1491,17 +1473,8 @@ let det_col_split
     det_transpose cu;
     det_transpose cv;
     det_row_split mt j u v uv;
-    symmetry (det (transpose cuv)) (det cuv);
-    symmetry (det (transpose cu))  (det cu);
-    symmetry (det (transpose cv))  (det cv);
-    transitivity (det cuv) (det (transpose cuv)) (det ruv);
-    transitivity (det cu)  (det (transpose cu))  (det ru);
-    transitivity (det cv)  (det (transpose cv))  (det rv);
     assert (det ruv = det ru + det rv);
-    symmetry (det ru) (det cu);
-    symmetry (det rv) (det cv);
     add_congruence (det ru) (det rv) (det cu) (det cv);
-    transitivity (det cuv) (det ruv) (det ru + det rv);
     transitivity (det cuv) (det ru + det rv) (det cu + det cv)
 
 (* ====================================================================== *)
@@ -1629,10 +1602,8 @@ let det_permute_rows_even
       = leibniz_term_permute_rows_even m sigma s in
     Classical.forall_intro pointwise;
     sum_over_perms_congruence n f (fcomp g (flip compose sigma_inv)) (fun _ -> ());
-    symmetry (sum_over_perms n g) (sum_over_perms n (fcomp g (flip compose sigma_inv)));
     det_unfold (permute_rows m sigma);
     det_unfold m;
-    symmetry (det m) (sum_over_perms n g);
     transitivity (det (permute_rows m sigma))
                  (sum_over_perms n f)
                  (sum_over_perms n (fcomp g (flip compose sigma_inv)));
@@ -1661,10 +1632,8 @@ let det_permute_rows_odd
     sum_over_perms_congruence n f (fcomp neg (fcomp g (flip compose sigma_inv))) (fun _ -> ());
     sum_over_perms_neg_named #t #(acg_of_ring_local t cr.cr_r) n f
       (fcomp g (flip compose sigma_inv)) (fun _ -> ());
-    symmetry (sum_over_perms n g) (sum_over_perms n (fcomp g (flip compose sigma_inv)));
     det_unfold (permute_rows m sigma);
     det_unfold m;
-    symmetry (det m) (sum_over_perms n g);
     neg_congruence (sum_over_perms n (fcomp g (flip compose sigma_inv)))
                    (sum_over_perms n g);
     neg_congruence (sum_over_perms n g) (det m);
@@ -2731,7 +2700,6 @@ private let rec concat_fibers_from_sum_target (#t: Type) {| cr: commutative_ring
       let b = sum_over_perms nm1 (per_fiber_fn #t #cr f i j) in
       let c = sum_list (L.map f rest) in
       let d = sum_range h (Prims.op_Addition j_lo 1) n in
-      transitivity a b (g j);
       add_congruence a c (h j_lo) d;
       transitivity (sum_list (L.map f (concat_fibers_from i j_lo)))
                    (a `( + )` c)
@@ -2804,19 +2772,16 @@ private let rec prod_range_offset_lem
       transitivity (prod_range g 0 len)
                    (g 0 * prod_range g (nat_succ 0) len)
                    (g 0 * prod_range g' 0 len');
-      symmetry (prod_range f lo' hi) (prod_range g' 0 len');
       mul_congruence (g 0) (prod_range g' 0 len')
                      (g 0) (prod_range f lo' hi);
       transitivity (prod_range g 0 len)
                    (g 0 * prod_range g' 0 len')
                    (g 0 * prod_range f lo' hi);
-      symmetry (g 0) (f lo);
       mul_congruence (g 0) (prod_range f lo' hi)
                      (f lo) (prod_range f lo' hi);
       transitivity (prod_range g 0 len)
                    (g 0 * prod_range f lo' hi)
                    (f lo * prod_range f lo' hi);
-      symmetry (prod_range f lo hi) (f lo * prod_range f lo' hi);
       transitivity (prod_range g 0 len)
                    (f lo * prod_range f lo' hi)
                    (prod_range f lo hi);
@@ -2908,11 +2873,9 @@ let perm_product_inject_factor
     assert (lp = slp);
     assert (rp = srp);
     prod_range_split body_small 0 (i <: nat) nm1;
-    symmetry (prod_range body_small 0 nm1) (slp * srp);
     mul_congruence (m i j) rp (m i j) srp;
     mul_congruence lp (m i j * rp) slp (m i j * srp);
     mul_associativity slp (m i j) srp;
-    symmetry ((slp * m i j) * srp) (slp * (m i j * srp));
     mul_commutativity slp (m i j);
     mul_congruence (slp * m i j) srp (m i j * slp) srp;
     mul_associativity (m i j) slp srp;
@@ -2934,13 +2897,10 @@ let perm_product_inject_factor
                  (m i j * prod_range body_small 0 nm1);
     prod_range_eq_perm_product m sigma body_big;
     prod_range_eq_perm_product (minor m i j) sigma' body_small;
-    symmetry (prod_range body_big 0 n) (perm_product m sigma);
-    symmetry (prod_range body_small 0 nm1) (perm_product (minor m i j) sigma');
     mul_congruence (m i j) (prod_range body_small 0 nm1) (m i j) (perm_product (minor m i j) sigma');
     transitivity (prod_range body_big 0 n)
                  (m i j * prod_range body_small 0 nm1)
                  (m i j * perm_product (minor m i j) sigma');
-    symmetry (prod_range body_big 0 n) (perm_product m sigma);
     transitivity (perm_product m sigma)
                  (prod_range body_big 0 n)
                  (m i j * perm_product (minor m i j) sigma')
@@ -2965,7 +2925,6 @@ private let minus_one_pow_square (#t: Type) {| cr: commutative_ring t |} (k: nat
       minus_one_pow_odd #t #cr k;
       let acg : add_comm_group t = acg_of_ring_local t cr.cr_r in
       ring_neg_x_is_minus_one_times_x (-(one #t));
-      symmetry (-(-(one #t))) ((-(one #t)) * (-(one #t)));
       double_negation_lemma (one #t);
       transitivity ((-(one #t)) * (-(one #t)))
                    (-(-(one #t)))
@@ -3005,7 +2964,6 @@ let leibniz_inject_factor
         mul_associativity mop (m i j) pp_min;
         mul_congruence mop (m i j * pp_min) (one) (m i j * pp_min);
         one_mul_x (m i j * pp_min);
-        symmetry pp (m i j * pp_min);
         trans_lemma [ mop * m i j * pp_min;
                       mop * (m i j * pp_min);
                       one * (m i j * pp_min);
@@ -3018,9 +2976,7 @@ let leibniz_inject_factor
         mul_associativity mop (m i j) pp_min;
         mul_congruence mop (m i j * pp_min) (-(one)) (m i j * pp_min);
         ring_neg_x_is_minus_one_times_x (m i j * pp_min);
-        symmetry (-(m i j * pp_min)) ((-(one)) * (m i j * pp_min));
         neg_congruence_lem pp (m i j * pp_min);
-        symmetry (-pp) (-(m i j * pp_min));
         trans_lemma [ mop * m i j * pp_min;
                       mop * (m i j * pp_min);
                       (-(one)) * (m i j * pp_min);
@@ -3041,9 +2997,7 @@ let leibniz_inject_factor
                       one * (m i j * lt_min);
                       m i j * lt_min ];
         ring_neg_xy_is_x_times_neg_y (m i j) pp_min;
-        symmetry (-(m i j * pp_min)) (m i j * lt_min);
         neg_congruence_lem pp (m i j * pp_min);
-        symmetry (-pp) (-(m i j * pp_min));
         trans_lemma [ mop * m i j * lt_min;
                       m i j * lt_min;
                       -(m i j * pp_min);
@@ -3056,12 +3010,9 @@ let leibniz_inject_factor
         mul_associativity mop (m i j) lt_min;
         mul_congruence mop (m i j * lt_min) (-(one)) (m i j * lt_min);
         ring_neg_x_is_minus_one_times_x (m i j * lt_min);
-        symmetry (-(m i j * lt_min)) ((-(one)) * (m i j * lt_min));
         ring_neg_xy_is_x_times_neg_y (m i j) pp_min;
-        symmetry (-(m i j * pp_min)) (m i j * lt_min);
         neg_congruence_lem (m i j * lt_min) (-(m i j * pp_min));
         double_negation_lemma (m i j * pp_min);
-        symmetry pp (m i j * pp_min);
         trans_lemma [ mop * m i j * lt_min;
                       mop * (m i j * lt_min);
                       (-(one)) * (m i j * lt_min);
@@ -3124,7 +3075,6 @@ private let inner_sum_eq_cofactor
     transitivity (sum_over_perms nm1 f) (sum_over_perms nm1 g)
                  (c * sum_over_perms nm1 h);
     det_unfold #t #cr #nm1 (minor m i j);
-    symmetry (det #t #cr (minor m i j)) (sum_over_perms nm1 h);
     mul_congruence c (sum_over_perms nm1 h) c (det #t #cr (minor m i j));
     transitivity (sum_over_perms nm1 f) (c * sum_over_perms nm1 h)
                  (c * det #t #cr (minor m i j))

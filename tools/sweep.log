@@ -1,0 +1,13 @@
+== deslop sweep start 2026-06-03T02:12:03.6280909+07:00 ==
+[drop-tc-solve-slop.ps1]	Core.Algebra.Helpers.fst	Results: 0 changed, 0 failed, 26 skipped
+[drop-redundant-eq-laws.ps1]	Core.Algebra.Helpers.fst	Results: 3 changed, 0 failed, 23 skipped
+[drop-poly-mul-comm.ps1]	Core.Algebra.Helpers.fst	Results: 0 changed, 0 failed, 26 skipped
+=== Core.Algebra.Helpers.fst  changed=3  count-OK  (02:12:09) ===
+[drop-tc-solve-slop.ps1]	Core.Tactics.CanonRing.fst	Results: 0 changed, 0 failed, 79 skipped
+[drop-redundant-eq-laws.ps1]	Core.Tactics.CanonRing.fst	Results: 0 changed, 0 failed, 79 skipped
+[drop-poly-mul-comm.ps1]	Core.Tactics.CanonRing.fst	Results: 0 changed, 0 failed, 79 skipped
+=== Core.Tactics.CanonRing.fst  changed=0  count-OK  (02:12:10) ===
+[drop-tc-solve-slop.ps1]	Core.Algebra.Divisibility.fst	Results: 0 changed, 0 failed, 18 skipped
+[drop-redundant-eq-laws.ps1]	Core.Algebra.Divisibility.fst	Results: 0 changed, 0 failed, 18 skipped
+[drop-poly-mul-comm.ps1]	Core.Algebra.Divisibility.fst	Results: 0 changed, 0 failed, 18 skipped
+=== Core.Algebra.Divisibility.fst  changed=0  count-OK  (02:12:10) ===

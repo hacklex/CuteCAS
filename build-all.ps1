@@ -99,6 +99,7 @@ $modules = @(
   'Core.Matrix.ResultantMul.fst',
   'Core.Matrix.ResultantPeel.fst',
   'Core.Matrix.ResultantPoisson.fst',
+  'Core.Matrix.ResultantConverse.fst',
   'Core.Field.Berlekamp.fst',
   'Core.NatBinomial.fst',
   'Core.Algebra.Power.fst',
@@ -114,7 +115,9 @@ $modules = @(
   'Core.Field.BerlekampKernel.fst',
   'Core.Field.BerlekampCriterion.fst',
   'Core.Matrix.DetEval.fst',
-  'Core.Risch.LRTResultant.fst'
+  'Core.Risch.LRTResultant.fst',
+  'Core.Risch.RTCriterion.fst',
+  'Core.Risch.RTSoundness.fst'
 )
 
 if ($Clean) {

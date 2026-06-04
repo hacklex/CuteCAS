@@ -2224,3 +2224,14 @@ instance polynomial_integral_domain_instance
     pid_pcrc_coherence = ();
     poly_mul_cons_reveal = poly_mul_reveal;
   }
+
+(* ================================================================ *)
+(*  Public coeff/trim bridge: the i-th coefficient of a trimmed raw  *)
+(*  list is its i-th entry (or ring zero past the end).  Lets clients *)
+(*  reason about `coeff (trim l) i` without the private raw_coeff.    *)
+(* ================================================================ *)
+let coeff_trim (#t:Type) {| cr: commutative_ring t |} (l: list t) (i: nat)
+  : Lemma (coeff (trim l) i = (if i < L.length l then L.index l i else (zero <: t)))
+  = trim_preserves_coeff l i;          (* raw_coeff (trim l) i = raw_coeff l i *)
+    coeff_in_raw_eq (trim l) i;         (* coeff (trim l) i == raw_coeff (trim l) i *)
+    reflexivity (coeff (trim l) i)

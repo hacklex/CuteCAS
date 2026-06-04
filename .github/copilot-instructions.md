@@ -275,14 +275,106 @@ Rule §4 still applies: no `admit()` in final committed code. But during
 development iterations, `admit()` is the correct way to isolate failures.
 Remove all `admit()` calls before declaring a lemma done.
 
-## 8. Working with the plan
+## 7.5 Delegate lemma proofs to sub-agents — be economical with context
 
-There is a long-running session plan at
-`C:\Users\Alex\.copilot\session-state\<session-id>\plan.md`. Agents read it
-at session start, update it at meaningful milestones, and respect the phase
-structure laid out there. The phase plan and the rules above are
-authoritative; this `.github/copilot-instructions.md` file just makes the
-non-negotiables explicit to any future agent that hasn't seen the plan yet.
+Compaction is survivable (§8), but context is still worth conserving. The big
+win: **keep the main context focused on the big picture and hand individual
+lemma proofs to sub-agents.** A small lemma proved in a fresh agent context does
+not suffer from — and does not add — the irrelevant litter of the orchestrating
+session. So:
+
+- **Dispatch atomic lemmas to agents; orchestrate from the main loop.** You hold
+  the plan and the architecture; agents grind out one concrete proof each.
+- **Hand each agent a precise, self-contained task:** the exact lemma statement
+  to prove, and — when you are confident a particular definition/lemma is
+  *unavoidable* for the proof — point to it by name (and module) so the agent
+  doesn't burn tokens rediscovering it. Give directions only where they reliably
+  save effort; don't over-script.
+- **Every agent prompt must require following `fstar-lessons.md`** (the proof
+  checklist: no signature lambdas, no `if`/`match` in specs, minimize explicit
+  args, no redundant reflexivity when `elim_equatable_laws` is present, instance
+  pinning, etc.). Either tell the agent to read it, or inline the relevant rules.
+- **The time budget applies to *you*, not to agents.** Agents receive concrete
+  tasks and must return **either the expected result (green, admit-free) or an
+  honest "could not prove X"** — never lazy prose about how a lemma "would take
+  1000 lines / several sessions." If an agent stalls into that, the task was too
+  big: **split it into smaller lemmas and dispatch those.**
+- **Never dispatch a genuinely too-big task.** Keep each atomic unit small enough
+  for an agent to finish in one session. Right-sizing the decomposition is your
+  job, not the agent's.
+
+(`AGENTS.md` §3 covers the agent escalation cap and sub-agent prompt rules;
+`fstar-lessons.md` is the shared proof-style checklist for all agents.)
+
+## 8. Working with the plan — `STATUS.md` is the source of truth
+
+**`STATUS.md` (repo root) is the single source of truth.** It is the
+lemma-level status matrix for the whole tower (every module, every
+definition/lemma/instance, a gloss, a ✅/🚧/📋/🔒 status). Read it first.
+**Update it whenever you finish any kind of work** (a lemma proven, a module
+added, a status changed, a blocker resolved) — the green build is the authority
+for ✅.
+
+- **`plan.md`** is the *current session* plan only: exactly what is planned for
+  this long session, with per-lemma detail for the planned modules. It is narrow
+  and disposable; the long-horizon frontier lives in `STATUS.md` Part VII.
+- When the session plan finishes with > 30 minutes left, author the next part's
+  `plan.md` from `STATUS.md` Part VII, then drill it.
+- **Compaction-resilient:** develop each lemma standalone and transfer to the
+  main file only once green, so the tree is never broken across a compaction.
+  After a compaction, re-read `STATUS.md` + `plan.md`, find the first non-✅
+  item, and continue. The documents are the durable state, not the conversation.
+
+**Anchor the clock first.** Whenever the user explicitly states a time budget,
+your *first* action is to record the wall-clock start time from the system clock
+(`Get-Date` / `date` — never guess it) and compute the target end. You cannot
+track a budget you never anchored; re-check the clock periodically and at the end.
+
+**No early exits.** A time budget is a *lower* bound, not an upper bound — keep
+drilling lemmas until the session plan is done. None of the following is a reason
+to stop early; each has a response you take *instead* of stopping:
+- *"Can't finish the whole module"* → ship every lemma you can, record progress
+  in `STATUS.md`/`plan.md`. Module completeness is never a precondition.
+- *"I'll run overtime"* → fine; the limit is the floor. Take the time the work
+  needs. Late-with-green-lemmas beats early-with-unfinished-work.
+- *"Context is about to compact"* → fine; durable progress is in the docs and the
+  green tree. A compaction costs at most the thought process on one unfinished
+  lemma. Let it happen and continue; never stop in anticipation of it.
+- *"I've COMPLETED a coherent milestone — clean place to stop / hand off / write a
+  final report"* → THE rationalization that broke this rule twice (2026-06-03,
+  -04). Completing a milestone is the trigger to start the next one, never a stop.
+  "End on a high note / better review artifact / fresh context for the next piece"
+  is the same impulse. Do not write an end-of-session "final report" while work
+  remains — a one-line progress note is OK *only if followed by another
+  work-advancing tool call in the same turn.*
+- *"My context is long / marathon session"* → not a stop. Long ≠ *critically* low;
+  compaction is safe (durable docs). There is **no context-based stop at all.**
+  The response to long context is to **delegate more to sub-agents** (fresh
+  context each), not to stop.
+- *Any other rationalization* ("cleaner to hand off," "next piece is fiddly,"
+  "safer to checkpoint," "low budget," "more than the nominal goal already") is
+  the same impulse in disguise — if your reason feels *novel/sophisticated*, that
+  novelty is the tell. Not valid while planned lemmas remain. If one specific
+  lemma is blocked, mark it 🔒 in `STATUS.md` and move to the next.
+
+**HARD GATE — before any sign-off.** You may end a turn without a
+work-advancing tool call ONLY if (a) the executable integrator is complete +
+proven in both cases, OR (b) the user just interrupted/told you to stop.
+Otherwise your next action MUST be a tool call on the first non-✅ item in
+`plan.md` (or author the next part from `STATUS.md` Part VII, then drill it). If
+you catch yourself drafting a closing summary, delete it and pick up the next
+lemma. See `AGENTS.md` §0.5.1 for the full rule + postmortem.
+
+The only legitimate stop is the whole project's terminal goal: a complete
+executable integrator, machine-checked correct in **both** the positive case (an
+elementary antiderivative exists → produced and verified) and the negative case
+(none exists → proven; Liouville/Risch decision). When the current `plan.md`
+empties, immediately author the next part from `STATUS.md` Part VII and keep
+drilling — an empty plan triggers the next plan, it never ends the session.
+
+`AGENTS.md` §0.5 / §0.5.1 state this workflow in full; the design/safety rules
+there and above remain authoritative. (The former
+`C:\Users\Alex\.copilot\session-state\<id>\plan.md` location is retired.)
 
 ## 9. F\* MCP server
 

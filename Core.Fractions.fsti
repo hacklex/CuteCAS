@@ -75,6 +75,31 @@ instance val fraction_field (t:Type) (d: integral_domain t)
   : field (fraction d)
 
 (* ------------------------------------------------------------------ *)
+(* Reveal lemmas: let external modules reason about the numerator and  *)
+(* denominator of a fraction sum, and bridge the published `=`         *)
+(* operator on `fraction d` to cross-multiplication in `t`.            *)
+(* ------------------------------------------------------------------ *)
+
+(* num/den of a sum: matches the body of `fraction_add`.               *)
+val fraction_add_reveal (#t:Type) {| d: integral_domain t |} (x y: fraction d)
+  : Lemma (Fraction?.num (fraction_add x y)
+             == ((Fraction?.num x * Fraction?.den y)
+               + (Fraction?.den x * Fraction?.num y)) /\
+           Fraction?.den (fraction_add x y)
+             == (Fraction?.den x * Fraction?.den y))
+
+(* num/den of the additive constant `fraction_zero`: `0/1`. *)
+val fraction_zero_reveal (t:Type) {| d: integral_domain t |}
+  : Lemma (Fraction?.num (fraction_zero t #d) == (zero <: t) /\
+           Fraction?.den (fraction_zero t #d) == (one  <: t))
+
+(* The published `=` on `fraction d` (resolved through `fraction_field`)
+   is cross-multiplication in `t`. *)
+val fraction_eq_reveal (#t:Type) {| d: integral_domain t |} (x y: fraction d)
+  : Lemma ((x = y) <==> ((Fraction?.num x * Fraction?.den y)
+                       = (Fraction?.den x * Fraction?.num y)))
+
+(* ------------------------------------------------------------------ *)
 (* Convenience: division as a partial operation on raw t              *)
 (* ------------------------------------------------------------------ *)
 

@@ -27,6 +27,149 @@ this section, stop and confirm with the owner.
    absolute. When unsure whether an action could lose work, it can —
    do not run it; ask the owner.
 
+## 0.5 Source of truth & session workflow
+
+**`STATUS.md` is the single source of truth.** It is the lemma-level status
+matrix for the whole tower: every module on `build-all.ps1`, every
+definition/lemma/instance, a one-line gloss, and a status (✅ completed /
+🚧 WIP / 📋 planned / 🔒 blocked). Read it first to orient.
+
+- **Update `STATUS.md` whenever you finish *any* kind of work** — a lemma
+  proven, a module added/renamed, a status changing from 🚧/📋 to ✅, a blocker
+  resolved. This is not optional bookkeeping; it is how the next agent (or the
+  post-compaction you) knows what is real. The build being green is the
+  authority for ✅.
+- **`plan.md` is the current session plan** — exactly what is planned for *this*
+  long session, with **per-lemma detail** for the planned modules (each lemma:
+  name, statement, proof approach). It is narrow and disposable, not a roadmap;
+  `STATUS.md` Part VII holds the long-horizon frontier.
+- **`README.md`** is the human-facing project overview.
+
+**The session loop:**
+0. **If the user states a time budget, the FIRST action is to record the
+   wall-clock start time** — run the system clock (`Get-Date` / `date`), never
+   guess or assume it — and compute the target end (`start + budget`). You cannot
+   track a budget you never anchored. Re-check the clock periodically and at the
+   end. The budget is a *lower* bound (§0.5.1): the target end is the earliest
+   acceptable stopping point for *that segment of plan work*, not a deadline to
+   trim scope against, and never overrides the single terminal stop condition.
+1. Drill the lemmas in `plan.md`, in order. Develop each in a scratch file
+   (§2.1), transfer once it verifies green, then **update `STATUS.md`** for the
+   affected declaration(s).
+2. When the session plan is **finished**, immediately author the *next* part's
+   `plan.md` from `STATUS.md` Part VII (~30 min on a per-lemma breakdown), then
+   start drilling it. An empty plan is the trigger to plan the next part, never a
+   reason to stop — see §0.5.1 for the single terminal stop condition.
+
+**Do not fear compaction.** Dropping one unfinished lemma mid-proof is fine —
+develop standalone, commit to the main file only when green, so a compaction
+never leaves the tree broken. After a compaction, you resume from a summary:
+just **re-read `STATUS.md` and `plan.md`**, find the first non-✅ item, and
+continue. The documents are the durable state; the conversation is not.
+
+### 0.5.1 No early exits — there is no valid reason to stop short
+
+A time budget is a **lower bound, not an upper bound.** When given "work for N
+hours," N is the *minimum*; finishing the planned work matters more than the
+clock. The default is to **keep drilling lemmas until the session plan is done**.
+The following are **NOT** reasons to stop, wrap up, or "consolidate" early —
+each has a defined response, and you take that response instead of stopping:
+
+1. **"I won't be able to finish the whole module."** Irrelevant. Ship every
+   lemma you *can* — develop it, verify it green, transfer it, update
+   `STATUS.md`. A partially-completed module with 6 of 9 lemmas green and the
+   remaining 3 precisely scoped in `plan.md` is a *good* outcome, not a failure.
+   Module completeness is never a precondition for progress.
+
+2. **"I'm going to run over the time limit."** No problem. The limit is the
+   floor. Take as much time past it as the work needs — being an hour (or more)
+   "late" with finished, green lemmas is correct; being early with unfinished
+   work on the clock is not. Never trim scope to hit a deadline.
+
+3. **"Context is about to be compacted."** No problem. All durable progress is
+   in `STATUS.md` / `plan.md` / the green tree. A compaction costs at most the
+   *thought process on the single unfinished lemma* — not the lemma itself, not
+   any shipped work. After it, re-read the docs and resume. Never stop *in
+   anticipation* of a compaction; let it happen and continue through it.
+
+4. **Any other rationalization.** "Cleaner to hand off now," "the next piece is
+   fiddly/greenfield," "safer to checkpoint," "risk of a spiral," "low remaining
+   budget" — these are all the same early-exit impulse wearing a different hat.
+   None is valid while planned lemmas remain and the tree is green. The correct
+   move is always: pick the next lemma in `plan.md`, develop it standalone, and
+   keep going. If a *specific* lemma is genuinely blocked, document the blocker
+   in `STATUS.md` (🔒 + reason) and move to the next lemma — do not stop the
+   whole session.
+
+5. **"I've COMPLETED a coherent milestone — this is a clean place to stop / hand
+   off / write a final report."** This is the most seductive version and the one
+   that has bitten this project **twice** (see postmortem). Completing a milestone
+   is **not** a stop condition — it is the trigger to start the next one
+   immediately. The satisfying-narrative pull — "end on a high note," "a clean
+   checkpoint is a better artifact for the user to review," "fresh context will
+   serve the next piece better," "natural milestone boundary" — IS the early-exit
+   impulse. There is no "good stopping point" short of the terminal condition
+   below. Do **not** write an end-of-session "final report" while the terminal
+   condition is unmet and budget/work remain: a one-line progress note is fine,
+   but it must be **followed by another work-advancing tool call in the same turn**,
+   never a sign-off.
+
+**On context length — the escape hatch to kill.** "My context is long / this has
+been a marathon" is **not** a reason to stop. Long context ≠ *critically* low
+context. Auto-compaction is a designed, safe feature (durable docs + green tree),
+so there is **no context-based stop condition at all** — if compaction fires
+mid-work, it fires; post-compaction you resume from `STATUS.md`/`plan.md`. The
+correct response to a long context is to **delegate more to sub-agents** (they run
+in their own fresh context — §3 / `fstar-lessons.md`), which lets you keep driving
+indefinitely without growing your own context. Stopping is never the response to
+context pressure.
+
+**HARD GATE — run this literally before any sign-off.** Before you end a turn
+*without* a tool call that advances a lemma / proof / plan, you MUST pass this
+check:
+  - (a) Is the **executable rational-function integrator complete and
+        machine-checked correct in BOTH the positive and negative cases** (the
+        terminal condition below)?  — OR —
+  - (b) Did the **user just interrupt or explicitly tell you to stop**?
+If neither is true you are **not permitted to sign off.** Your next action MUST be
+a tool call advancing the first non-✅ item in `plan.md` (or, if `plan.md` is
+✅-complete, authoring the next part from `STATUS.md` Part VII and then immediately
+drilling its first lemma). "I'll summarize and wait" / "checkpoint here" is a
+violation. **If you catch yourself drafting a closing summary, stop, delete it,
+and call a tool on the next lemma instead.**
+
+**Meta-tell.** If your reason for stopping feels *novel or sophisticated*
+("marathon context," "better review artifact," "natural milestone boundary," "I've
+delivered more than the nominal goal"), that novelty IS the tell that it is a
+rationalization — this list cannot enumerate every disguise, which is why the
+HARD GATE above is the backstop. When in doubt, keep drilling.
+
+There is effectively **one legitimate stop for the entire project**: the
+**executable rational-function integrator is complete and machine-checked
+correct in *both* directions** —
+- the **positive case** (an elementary antiderivative exists → it is produced,
+  with a verified proof that its derivative equals the integrand), and
+- the **negative case** (no elementary antiderivative exists → that
+  non-existence is proven; the Liouville/Risch decision).
+
+Short of that final deliverable you never stop. **When the current `plan.md`
+empties, immediately author the next part's plan from `STATUS.md` Part VII and
+keep drilling.** An empty session plan is the trigger to plan the next part —
+never a reason to halt.
+
+**Postmortem — this failure happened TWICE (2026-06-03 and 2026-06-04).** Both
+times a multi-hour budget was abandoned ~1h early with the tree green and ample
+tractable work remaining. The 2026-06-04 instance: a "3-hour" session stopped at
+~1h48 (≈1h12 of budget left), justified by "completed a coherent milestone" +
+"marathon context length" + "a clean checkpoint is a better artifact for review"
++ writing a "final report." Every one of those is a banned rationalization above;
+the work that remained (tier-2 relative soundness — and simply more
+converse/criterion lemmas, each landed in ~25 min via sub-agent delegation) was
+immediately startable. The HARD GATE and item 5 were added *because the
+persuasive prose alone was out-rationalized twice.* If you are reading this near a
+decision to stop: you are almost certainly about to do it a third time — run the
+gate, and pick up the next lemma.
+
 ## 1. Design rules (the forest invariant)
 
 These are non-negotiable. Every PR / commit / agent action on the
@@ -381,6 +524,52 @@ When a `.fst` exceeds ~600 LOC or ~25 lemmas, split along a natural
 seam. Use `.fst` + `.fsti` pairs for any heavy module:
 declarations + class definitions in `.fsti`, proofs and helpers
 in `.fst`.
+
+### 2.11 Program against the instance, not the implementation — ABSOLUTE RULE
+
+The whole point of constructing the instance tower is to *use* it. The rule
+applies to the **generic ring algebra** — the operations every ring has and
+their laws. It does **not** forbid polynomial-specific notions. Draw the line by
+two buckets:
+
+**Bucket A — generic ring operations + their laws (a typeclass equivalent
+exists).** Once the instance is built, **always use the generic form
+downstream; never the `poly_*` form:**
+- write **`a * (b + c)`**, not `poly_mul a (poly_add b c)`;
+- invoke **`mul_commutativity`**, **`left_distributivity`**,
+  **`add_associativity`**, … (the bare class-method names — *not*
+  `poly_mul_commutativity`, *not* a projection like `cr.mic.mul_commutativity`).
+  TC resolution supplies the instance.
+- `poly_add`/`poly_mul`/`poly_neg`/`poly_sub`/`poly_zero`/`poly_one` and their
+  law-lemmas (`poly_mul_commutativity`, `poly_left_distributivity`, …), and the
+  analogous `ac_*` / `fp_*` operations, appear **only while constructing that
+  structure's instance** (and in the reveal lemmas that bridge the two). They
+  must not appear in client code afterward.
+
+**Bucket B — polynomial-specific notions (no generic name; not every ring is a
+polynomial ring).** These are **fine to use anywhere**, including in the same
+proof as Bucket-A generic lemmas:
+- operations: `coeff`, `monomial`, `poly_deg`, `poly_lc`, the Euclidean division
+  `poly_divmod` / `poly_div` / `poly_rem`, `poly_deriv`, `poly_eval`, …;
+- their property/fact lemmas: `coeff_poly_mul`, `poly_divmod_correct`, degree
+  bounds, `monomial_*`, etc.
+You may freely reason with, e.g., `mul_commutativity` (generic) and
+`poly_divmod_correct` (polynomial-specific) together — they compose because the
+instance's `*` *is* `poly_mul`. (The only caution the user flagged: a
+polynomial-specific lemma stated over `poly_mul` still unifies with the generic
+`*` form because they are the same term — so mixing the two does not break.)
+
+**Write implementation-agnostic libraries** where the structure is generic:
+`let p_squared (#t:Type) {| commutative_ring t |} (p: polynomial t) = p * p` is
+correct because the polynomial commutative-ring instance is in scope. Prefer
+generic `{| commutative_ring t |}` / `{| field t |}` signatures — but reach for
+Bucket-B polynomial facts whenever the goal is genuinely about polynomials.
+
+This removes a large class of slop from lemma statements and proofs, and is what
+keeps the non-trivial theorems tractable. (Much existing code predates this rule
+and violates Bucket A; it will be cleansed over time. **All *new* proofs follow
+it.**) Closely related: `fstar-lessons.md` §4 (strip redundant explicit args)
+and the instance-pinning note there.
 
 ## 3. Agent rules
 

@@ -1,212 +1,248 @@
-# CuteCAS plan — current state (2026-06-01)
+# Session plan — §A base-field RT criterion COMPLETE; next = tier-2 / executable path
 
-> **READ FIRST.** This top section is the source of truth and supersedes
-> every entry beneath it. The "Milestone archive" at the bottom keeps the
-> historical narrative for context, but where it disagrees with this
-> section, this section wins. Engineering rules live in `AGENTS.md`
-> (design/forest invariant + workflow) and `.github/copilot-instructions.md`
-> (repo-wide non-negotiables: CRLF, **never write to git / never risk data
-> loss**, no `admit`/`assume` in committed code, resource budget).
+> **⏱ SESSION CLOCK (survives compaction — re-read this after any compaction).**
+> Budget **3h**, anchored from the system clock. **Start 2026-06-04 11:17:55 +0700.**
+> **Target floor 2026-06-04 14:17:55 +0700.** The target is a *lower* bound
+> (AGENTS §0.5.1): do NOT stop at 14:17 if planned/STATUS work remains — keep
+> drilling until the only terminal stop (executable integrator, both cases) or an
+> explicit user stop. Re-run `date` periodically to check elapsed.
 
-## 0. Status at a glance
-
-- **60 modules** (44 `.fst` + 16 `.fsti`), **all verify clean from the
-  cache, zero `admit()`, zero `assume`.** (The only `admit`/`assume`
-  textual hits are two *comments* in `Core.Polynomial.Irreducible.fst`.)
-- **Build / reverify:** `.\build-all.ps1` (regenerated 2026-06-01 with the
-  full topological order; `-KeepGoing` to collect all failures, sequential
-  per the resource rules). Toolchain: **F\* 2026.05.10** at `C:\FStar`,
-  Z3, run with `--include . --cache_checked_modules --cache_dir obj`.
-- **This session (2026-06-01) did:** full-tree reverify; **found + fixed one
-  regression** — `Core.Fractions.fst` `fr_mig` passed the ring to
-  `mul_is_group` positionally instead of as the instance-implicit `#(…)`
-  (skewfield⇒domain refactor fallout); regenerated the missing
-  `build-all.ps1`; removed dead scratch (`Scratch*.fst`) and stale refactor
-  logs; refreshed this plan. Then **proved Hermite soundness** end-to-end —
-  single step (`hermite_step_correct` + `normalize_bezout_correct`) lifted
-  through the recursion to full reduction (`hermite_reduce_power_correct`) —
-  and **completed the LRT resultant** (`res_x` over `k[z]`). Tree stays
-  60/60 green, zero admits/assumes.
-
-## 1. Layout & where the rules live
-
-- **Flat repo.** All `Core.*.{fst,fsti}` at the repo root.
-- **`AGENTS.md`** — the forest/TC design invariant (one instance per edge,
-  `@@@no_method` bundle fields, marker classes, no `unfold instance`,
-  **no lambdas in signatures**, public-signature hygiene, sliding-`admit`
-  debugging, resource budget, agent escalation cap).
-- **`.github/copilot-instructions.md`** — CRLF everywhere; **§2 never write
-  to git, §1.5 never risk data loss** (two 2000+ LOC files were destroyed
-  by past agents mishandling shell scripts — this is why both rules are
-  absolute); no `admit`/`assume`; default limits (no `#push-options`).
-- **`legacy/AlgebraTypes.fst`** — old monolithic types, reference only, not
-  on the include path.
-- **`C:\Projects\cutecas-backup\`** (external) — pre-cleanup snapshot of the
-  retired `FStar.CAS.*` tower. Kept for reference (it still holds modules
-  with no `Core.*` equivalent: `Modules`, `Grouplikes`, `Multiplicative`,
-  `Function.Enum`). Delete only on explicit owner instruction.
-
-## 2. Verified foundation (proven, admit-free)
-
-| Area | Modules | Notes |
-|---|---|---|
-| Typeclass tower | `Core.Algebra` (+ `.Notation`, `.Int`, `.Helpers`, `.Combinators`, `.Divisibility`, `.Test`, `.NotationTest`) | diamond-free forest; `field → skewfield → domain → ring` edges; divisibility chain `integral_domain ← gcd_domain ← ufd ← euclidean_domain` |
-| Canon tactics | `Core.Tactics.CanonRing`, `Core.Tactics.CanonCommGroup` | reflective ring / comm-group canonicalizers |
-| Sums & perms | `Core.FinSum`, `Core.Permutation` (+ `.Enum`, `.Sum`), `Core.Vector` | |
-| Matrices | `Core.Matrix` (+ `.Ring`, `.MultiDistrib`, `.Determinant`, `.Determinant.Mul`, `.Adjugate`, `.KernelDet`, `.NullVec`, `.Sylvester`, `.Resultant`) | **Cauchy–Binet `det_mul` (G4)** proven; adjugate; `null_vec_implies_det_zero`; Sylvester + `resultant`; `syl_null_vec_is_null` |
-| Fractions | `Core.Fractions` | `field_of_fractions : integral_domain t → field (fraction t)` |
-| Polynomials | `Core.Polynomial` (+ `.Coeff`, `.Div`, `.GCD`, `.Derivative`, `.SquareFree`, `.Unique`, `.PPInvariant`, `.Factorization`, `.Irreducible`, `.Tests`) | ring/ID, Euclidean `divmod` + correctness + degree bound, GCD (+ Bézout/`ext_gcd`, congruence), **Yun square-free**, derivative, factorization machinery |
-| Algebraic constants | `Core.AlgebraicConstant` | ℚ[c]/R(c) layer |
-| Differential substrate | `Core.Derivation` | `derivation_on` record (additivity, Leibniz, congruence) + derived `deriv_{zero,neg,one,sub}` + `poly_derivation` |
-
-## 3. Risch frontier (Phases 3–4): implemented but **soundness UNPROVEN**
-
-These six modules typecheck (every signature is `ensures fun _ -> True`)
-but prove **no** correctness. They are the entire remaining body of work
-for the headline "verified ℚ(x) integrator" goal.
-
-- **`Core.RationalDeriv`** — `rational_deriv` = quotient rule
-  `D(p/q) = (p'q − pq')/q²` on `fraction(polynomial t)`. Proven supports:
-  `rational_deriv_reveal`, `den_squared_nonzero`, `poly_to_rational`.
-  **Deferred:** `D(p/1) ~ poly_deriv p / 1` compatibility (comment only).
-- **`Core.Polynomial.PartialFraction`** — `normalize_bezout` +
-  `partial_fraction_two` (two-factor PF via `ext_gcd`). ✅ **`normalize_bezout_correct`
-  proven** (2026-06-01): the returned `(s,t)` satisfy `s·d1 + t·d2 ≡ 1`.
-- **`Core.Risch.Hermite`** — `hermite_step` + `hermite_reduce_power` compute
-  the reduction `∫A/Dⁿ = G/Dⁿ⁻¹ + ∫C/Dⁿ⁻¹`. ✅ **Full-reduction soundness
-  proven** (2026-06-01): `hermite_step_correct` (single step,
-  `A ≡ G'·D − (n−1)·G·D' + C·D`) lifted through the recursion to
-  **`hermite_reduce_power_correct`** — combining the rational parts into the
-  numerator `N = combined_num parts D` over `D^(n-1)`, it proves the
-  cleared-denominator identity `A ≡ N'·D − (n−1)·N·D' + final·D^(n-1)` by
-  induction on `n` (helpers `g_deriv_general`, `hermite_algebra`,
-  `scalar_poly_succ`, `reduce_pure`).
-- **`Core.Risch.LRT`** — ✅ **resultant computation completed** (2026-06-01):
-  `lrt_resultant_raw` now returns the real `res_x(p − z·q', q) ∈ k[z]` via
-  `Core.Matrix.Resultant.resultant` instantiated at the coefficient ring
-  `polynomial t` (no manual bridge needed — `resultant` builds the Sylvester
-  matrix internally); `lrt` stores it in `root_sum.rs_resultant`.
-  ✅ **Structural residue soundness proven** (2026-06-01):
-  `lrt_log_argument_divides_q` and `lrt_log_argument_divides_residue` — each
-  log-argument `v_c = gcd(p−c·q', q)` is a genuine factor of `q` and satisfies
-  the residue condition `v_c | (p−c·q')` (from the GCD divisibility axioms).
-  **Still blocked:** the full derivative identity
-  `d/dx[Σ cᵢ·log vᵢ] = p/q` (sum over the roots `cᵢ` of `R`) — needs the
-  splitting field of `R` and resultant specialization (see §5).
-- **`Core.Risch.Rational`** — `integrate_rational_single_factor` orchestrates
-  `poly_antideriv` + Hermite + LRT for the single-squarefree-factor case.
-  No end-to-end soundness yet.
-
-## 4. Phase roadmap
-
-| Phase | Scope | Status |
-|---|---|---|
-| 0–1 | Typeclass tower + canon tactics | ✅ done |
-| 1.5 | Perms, det, Cauchy–Binet, adjugate, Sylvester, resultant, kernel/null-vec | ✅ done |
-| 1.75 | Algebraic constants ℚ[c]/R(c) (ring + **field** at irreducible `r`) | ✅ `Core.AlgebraicConstant` (+ `.Field`) |
-| 2a | Euclidean division (+ correctness + degree bound) | ✅ `Core.Polynomial.Div` |
-| 2b | Polynomial GCD + Bézout | ✅ `Core.Polynomial.GCD` |
-| 2c | Square-free factorization (Yun) | ✅ `Core.Polynomial.SquareFree` |
-| 2d | Resultant ⇔ common factor | ✅ `Core.Matrix.Resultant` + `KernelDet`/`NullVec` |
-| 3 | Rational functions + derivations | 🟡 substrate done (`Derivation`, `RationalDeriv`, `PartialFraction`); abstract soundness statement not yet built |
-| 4 | Risch for ℚ(x): Hermite + LRT | 🟡 Hermite full-reduction soundness ✅; LRT resultant computation ✅; **LRT soundness still pending** |
-| 5.0 | Factorization in ℚ[x] (for completeness) | 🟡 `Factorization`/`Irreducible` present (verify clean) |
-| 5 | Liouville completeness for rationals | ⏳ not started |
-| 6 | Tower extensions (exp/log layers) | ⏳ stretch |
-
-## 5. What's next — pursuing the ℚ executable integrator + proof
-
-> See **`current-blockers.md`** for the full corrected analysis (ℚ
-> specialization, primitive-element tower collapse, the Mignotte→Lagrange
-> factor-bound correction, and why the executable never needs ℝ/ℂ).
-
-Hermite full-reduction soundness and the LRT resultant computation are done
-(2026-06-01). Decision (2026-06-01): pursue **both** the executable LRT
-integrator and its proof over **ℚ**, slowly — no timeline. Dependency order:
-
-1. **Full LRT soundness** (`d/dx[Σ cᵢ·log vᵢ] = p/q`). Structural residue
-   soundness is done; the derivative identity is **blocked on missing
-   foundations**, in dependency order:
-   a. ✅ **DONE** — **`poly_eval` as a ring homomorphism** `polynomial t → t`
-      (`Core.Polynomial.Eval.fst`: eval_zero/one/add/neg/mul/congruence). Also
-      spun off `Core.FinSum.Convolution.sum_range_convolution` (Cauchy product).
-   b. **Determinant specialization**: `det` commutes with a ring hom applied
-      entrywise, giving **resultant specialization** `R(c) = res_x(p−c·q', q)`.
-      Combined with the proven `resultant_zero_of_common_divisor` (and a
-      converse), this yields the base-field Rothstein–Trager criterion
-      `R(c)=0 ⟺ deg(gcd(p−c·q', q)) ≥ 1`.
-   c. **Soundness over a given splitting field (ℚ, char 0)**:
-      ✅ **DONE (2026-06-02)** — `Core.AlgebraicConstant` (CR-only) is upgraded
-      to a **field** at an irreducible factor:
-      `Core.AlgebraicConstant.Field.algebraic_field : field (algebraic t r)`
-      for `poly_irreducible r` (inverse via Bézout/`ext_gcd`; no `admit`/`assume`).
-      By the **primitive element theorem** the splitting field is a *single*
-      extension `ℚ(θ)` (no type-changing tower). **Remaining:**
-      **resultant=∏-over-roots → partial fractions → RT correspondence →
-      assembly** gives the derivative identity *relative to* a provided `ℚ(θ)`.
-      Companion prereq B (root theory — factor theorem, squarefree ⟹ `q'(α)≠0`)
-      is ✅ **DONE (2026-06-02)**: `Core.Polynomial.Root`
-      (`factor_theorem`, `squarefree_root_deriv_nonzero`).
-   d. **Construction (makes it executable)**: 𝔽_p → Berlekamp → Hensel →
-      recombination with the **Lagrange/Kronecker** coefficient bound (NOT
-      Mignotte — keeps it ℂ-free) ⇒ factorization over ℚ ⇒ `ℚ(θ)`. Large but
-      **finite, not research-frontier**.
-2. **Phase-3 abstraction.** Build `differential_field (fraction (poly K))`
-   (and finish the `rational_deriv ↔ poly_deriv` compatibility) so soundness
-   can be *stated* abstractly as `D(integrate p q) = p/q` instead of ad hoc
-   per algorithm — the umbrella that connects the proven Hermite/LRT pieces.
-
-## 6. Acceptance gates (see `AGENTS.md` §5)
-
-G1 ring distrib ✅ · G2 `fin_sum` from `commutative_ring` ✅ ·
-G3 `det_eq_fin_sum_transpose` ✅ · G4 `perm_product_to_multidistrib`
-(Cauchy–Binet) ✅ · G5 `euclidean_domain` chain ✅ (polynomial-over-field
-ED structure available; classes + GCD/divmod correctness proven).
-
-## 7. Known doc/code drifts (found 2026-06-01)
-
-- **`AGENTS.md` §1.3** says marker classes take their base as an *explicit*
-  dependent param `(r: ring t)`, but the live code uses instance-implicit
-  `{| r: ring t |}` (e.g. `mul_is_group`, `mul_is_commutative`). The `#(…)`
-  call convention follows from the actual code. Reconcile the doc or the
-  code when convenient (this is what bit `fr_mig`).
-- **`.github/copilot-instructions.md` §8** points at a Copilot
-  `session-state/<id>/plan.md`; the live plan is this file. Treat this file
-  as authoritative.
+> **RESUME POINTER (fresh session, 2026-06-04 — updated).** Tree is GREEN (full
+> build exit 0, 95 modules). §A (RT criterion) is done. **Tier-2 RT soundness is
+> now ESSENTIALLY COMPLETE** in the new module `Core.Risch.RTSoundness` (59 green
+> top-level decls, admit-free). Capstone proven:
+> **`rt_soundness_partition`** — `d/dx[Σ_i c_i·log(∏ group_i)] = p/q` relative to a
+> residue-homogeneous ordered partition of `q`'s roots (`L.flatten groups == roots`).
+> En route, fully green & reusable: `partial_fraction_decomposition`
+> (`p/q = Σ_b (p(β_b)/q'(β_b))/(x−β_b)`), `interpolation_identity`,
+> `low_degree_many_roots_zero` (interpolation uniqueness), `scaled_log_deriv`
+> (`c·v'/v = Σ c/(x−β)`), `log_deriv_prod_linears`, the whole fraction-sum algebra
+> (`frac_sum`/`frac_sum_append`/`frac_sum_flatten`/`frac_sum_eq_of_residue_eq`).
+> Also added public reveals to `Core.Fractions` (`fraction_add_reveal`,
+> `fraction_eq_reveal`, `fraction_zero_reveal`).
+>
+> NEW untracked files to commit: `Core.Risch.RTSoundness.fst` (+ prior
+> `Core.Matrix.ResultantConverse.fst`, `Core.Risch.RTCriterion.fst`). Modified:
+> `Core.Fractions.fst/.fsti` (additive reveals), `build-all.ps1` (added RTSoundness).
+>
+> **START NEXT (the ONE remaining gap to fully-unconditional T8):**
+>  - **T6 `vc_factorization`**: `gcd(p−c·q', q) ~ ∏_{β: q(β)=0 ∧ r_β=c}(x−β)`.
+>    Sub-pieces: (a) common-root characterization `(p−c·q')(β)=0 ∧ q(β)=0 ⟺
+>    q(β)=0 ∧ residue=c` (via `q'(β)≠0`); (b) gcd-of-split = ∏ common linear factors
+>    (a real gcd-theory lemma — `gcd_divides`/`gcd_is_maximal` + the ∏-of-distinct
+>    construction). This discharges `rt_soundness_partition`'s residue-homogeneous-
+>    partition hypothesis by exhibiting the algorithm's gcd output as that partition.
+>  - THEN the **executable ℚ-factorization path** (§C Hensel #30 → §D → §E → §F)
+>    for the runnable integrator (tier-1). §C Hensel is greenfield (ℤ/pᵏ reduction
+>    maps); the `fp_comm_ring (p^k)` ring already exists.
+> Apply `AGENTS.md §0.5.1` (the HARD GATE — keep drilling; only the executable
+> integrator or an explicit stop ends a session).
 
 ---
 
-## Milestone archive (compact, newest first)
+## ACTIVE SESSION PLAN (2026-06-04, 3h) — Tier-2 relative RT soundness
 
-- **2026-06-01 (proofs)** — Hermite soundness proven end-to-end:
-  `hermite_step_correct` (single step, `A ≡ G'·D − (n−1)·G·D' + C·D`) via
-  `g_deriv_general` + the abstract `hermite_algebra` cancellation (canon_ring)
-  + `normalize_bezout_correct` (Bézout `≡ 1`); then lifted through the
-  recursion to `hermite_reduce_power_correct`
-  (`A ≡ N'·D − (n−1)·N·D' + final·D^(n-1)`, `N = combined_num parts D`) by
-  induction, using `scalar_poly_succ` and the `reduce_pure` ring identity.
-  LRT resultant completed:
-  `lrt_resultant_raw` now computes `res_x(p − z·q', q) ∈ k[z]` through
-  `Core.Matrix.Resultant.resultant` at coefficient ring `polynomial t`;
-  `LRT → Resultant` build edge added and `build-all.ps1` reordered.
-- **2026-06-01 (hygiene)** — Matrix theorems (det/adj/resultant), Yun's
-  algorithm, skewfield⇒domain refactor, FinSum/Adjugate utilities; algebraic
-  constants; vectors+matrices; polynomial `D/dx`, `divmod`, GCD.
-  Risch/derivation skeleton modules added. Reverified the tree (60/60),
-  fixed the `Fractions` regression, rebuilt `build-all.ps1`, cleaned scratch.
-- **2026-05-27** — flat-repo cleanup; polynomial UFD + Euclidean-division
-  tower; monic-normalization scaffold.
-- **2026-05-25** — polynomial UFD landed (GCD congruence via structural
-  induction); `polynomial_gcd_domain`; monic-normalization scaffold.
-- **2026-05-24** — GCD divisibility core; divmod structural correctness +
-  remainder degree bound; `polynomial_integral_domain` instance.
-- **2026-05-23** — 4-agent perf/hygiene audit; `z3rlimit`/fuel reductions;
-  public-signature hygiene refactor (H3+H4+H5) complete across the tower.
-- **2026-05-22** — foundation port (Algebra, FinSum, Permutation, Matrix.*),
-  canon tactics, **`det_mul` / Cauchy–Binet verified (G4 passed)** —
-  validated the diamond-free forest architecture end-to-end; polynomial
-  multiplication ring tower.
+**Goal:** the rational-function identity `Σ_c c·(v_c'/v_c) = p/q` — the derivative
+of the LRT answer `Σ cᵢ·log vᵢ` — **relative to a given splitting field** K of R·q
+(K a parameter, not constructed). Foundations confirmed present & green: Poisson
+`resultant=lc^n·∏eval` (`ResultantPoisson.poisson`), `poly_split_distinct_roots`,
+`eval_poly_prod_linears`, `factor_theorem`, `squarefree_root_deriv_nonzero`,
+`partial_fraction_two`/`bezout_identity`, Leibniz `poly_deriv_mul`+linearity,
+`rational_deriv` (quotient rule), `algebraic_field`, `rt_criterion` (§A done).
 
-> Older rationale (why the forest rewrite exists, the original migration
-> phases, the pointwise-combinator decision, the lambda-in-postcondition
-> survey) is preserved in git history and distilled into `AGENTS.md`.
+**New module:** `Core.Risch.RTSoundness.fst` (add to `build-all.ps1` only once green).
+Develop standalone; transfer/verify via fstar-mcp; update STATUS Part VII §A per lemma.
+
+Decomposition (dependency order). **The combinatorial heart (Phase 1) is FRACTION-FREE**
+— since `(x−β_j) | v`, each `v/(x−β_j)` is an *exact* polynomial, so the log-derivative
+identity is a polynomial identity until the final assembly.
+
+### Phase 1 — log-derivative core (fraction-free)  [START HERE]
+- **T1 `poly_deriv_linear`**: `poly_eq (poly_deriv (poly_linear a)) poly_one`.
+  (D(x−a) = trim[nat_scale 1 one] = [one] = poly_one.) Tiny; unblocks all of Phase 1.
+- **T3a `deriv_prod_linears_step`** (the reusable Leibniz cons-step, cleaner than an
+  explicit skip-sum and sufficient downstream): `poly_eq
+  (poly_deriv (poly_prod_linears (a::rest)))
+  (poly_add (poly_prod_linears rest) (poly_mul (poly_linear a) (poly_deriv (poly_prod_linears rest))))`.
+  I.e. for `v=(x−a)·w`, `v' = w + (x−a)·w'` — the log-derivative recursion
+  `v'/v = 1/(x−a) + w'/w`. Via `poly_deriv_mul` + T1 + `poly_mul_one` + congruences.
+  (The explicit `Σ_a ∏_{i≠a}` skip-sum form is deferred; introduce only if assembly needs it.)
+
+### Phase 2 — simple-pole residues
+- ✅ **T4 `simple_residue`**: if `q ~ poly_mul (poly_linear b) w` then
+  `poly_eval (poly_deriv q) b = poly_eval w b` (q'(β)=w(β)). GREEN.
+- **T5 `partial_fraction_simple`** (rational-fn identity): for q = lc·∏(x−β_j)
+  squarefree, deg p < deg q: `p/q = Σ_j r_j/(x−β_j)`, `r_j = p(β_j)/q'(β_j)`.
+  **Route = interpolation** (chosen over iterated `partial_fraction_two` — avoids
+  fraction-induction bookkeeping until the very end). Building blocks:
+    - **L0 `prod_linears_peel`**: for `b ∈ roots`,
+      `poly_prod_linears roots ~ poly_mul (poly_linear b) (poly_prod_linears (remove1 b roots))`.
+      Induction on roots; head case definitional, tail case uses poly_mul comm/assoc.
+    - **L1 `low_degree_many_roots_zero`** (interpolation uniqueness, reusable):
+      `r` with `all_distinct roots`, `r(β)=0 ∀β∈roots`, and `(Some?(poly_deg r) ⇒
+      deg r < length roots)` ⇒ `poly_eq r poly_zero`. Induction peeling a root via
+      `factor_theorem`/`factor_forward` (so `(x−β)|r`, `r~(x−β)·r'`),
+      `root_survives_division` (rest stay roots of `r'`), degree drops by 1.
+    - **L2 `deriv_split_eval`**: q ~ lc·∏(x−β_j) ⇒ `q'(β_k) = lc·∏_{i≠k}(β_k−β_i)`
+      (= residue denominator), via L0 + T4 + `eval_poly_prod_linears`.
+    - **T5 assembly**: `P := Σ_j r_j·(q/(x−β_j))` (each cofactor an exact poly via L0);
+      `p ~ P` by L1 applied to `p−P` (agrees at all β_k by L2, deg < n); hence
+      `p/q = P/q = Σ_j r_j/(x−β_j)`.
+
+### Phase 2.5 — fraction-level partial fractions (GREEN as of 2026-06-04)
+- ✅ **interpolation_identity** (THE fraction-free heart): `p ~ residue_sum p roots roots`.
+- ✅ **pf_same_denom**: `p/q = (residue_sum)/q` as fractions (`fraction_eq_reveal`).
+- ✅ **residue_term_as_simple**: each summand `(r_b·cofactor_b)/q = r_b/(x−β_b)`.
+- 🚧 **pf_decomp** (in progress): `p/q = Σ_b r_b/(x−β_b)` (frac_sum of simple terms);
+  needs frac-add congruence + same-denom-split, both from the public Fractions reveals.
+
+### Phase 3 — RT grouping + assembly (capstone)
+- **T6 `vc_factorization`**: `v_c := gcd(p−c·q', q) ~ ∏_{j: r_j=c}(x−β_j)` —
+  the roots partition by residue value `c` (a root of R). Via `rt_criterion` +
+  `factor_theorem` + `poly_split_distinct_roots`.
+- **T7 `log_deriv_vc`**: lift T3 to the fraction: `v_c'/v_c = Σ_{j:r_j=c} 1/(x−β_j)`.
+- **T8 `rt_soundness`** (capstone): `Σ_c c·(v_c'/v_c) = p/q`. Assembly of T5+T7
+  over the residue partition. This is the tier-2 headline.
+
+**Session order:** Phase 1 fully (T1→T2→T3), then T4→T5, then push into Phase 3.
+Delegate each atomic lemma to a sub-agent with the precise statement + key lemmas
+(per AGENTS §0.5 / delegate-lemmas memory). T8 may carry into the next session;
+that is NOT a stop condition — when this plan empties, author the next part.
+
+---
+
+## (archived) Session plan — finish §A (LRT soundness, step 1)
+
+> **Status (2026-06-04).** The **RT resultant specialization is DONE and green**
+> (generic form): `Core.Risch.LRTResultant.resultant_eval_specialized` proves
+> `poly_eval (resultant pzq q_emb) c = resultant n dq (p − poly_scale c q') q`.
+> All of §A.1–§A.5 (see `STATUS.md` Part VII §A) are ✅. Two pieces remain to
+> close §A; both are precisely scoped below.
+>
+> **Source of truth is `STATUS.md`.** Update it after each lemma goes green.
+> Develop in a scratch file (open `Core.Risch.LRTResultant`), transfer when green.
+
+## TASK 1 — literal `lrt_resultant_raw` corollary — ✅ DONE (2026-06-04)
+
+`lrt_resultant_specializes` is proven and green in `Core.Risch.LRTResultant.fst`
+(with helpers `trim_length_le`, `coeff_zero_above_k_of_scale`, `poly_scale_deg_le`).
+So **`poly_eval(lrt_resultant_raw p q) c = res_x(p − c·q', q)` is fully proven.**
+The reference code below is retained for context; the actual proof needed no
+`admit` (poly_scale_deg_le mirrors `poly_add_degree_bound`). **Next task is TASK 2.**
+
+```fstar
+(* needs: open Core.Polynomial.Derivative; module RES = Core.Matrix.Resultant *)
+let rec trim_length_le (#t:Type) {| cr: commutative_ring t |} (cs: list t)
+  : Lemma (ensures L.length (trim #t #cr cs) <= L.length cs) (decreases cs)
+  = match cs with [] -> () | _ :: cs' -> trim_length_le #t #cr cs'
+
+(* MISSING HELPER — prove this (the only gap):
+   deg(poly_scale c qq) <= deg qq, i.e. its high coeffs vanish.
+   Approach: coeff (poly_scale c qq) i = c * coeff qq i (poly_mul_singleton_coeff);
+   for i >= k > deg qq, coeff qq i = 0 (coeff_above_degree), so coeff = c*0 = 0.
+   Then "all coeffs >= k are zero ==> poly_deg < k" — find/prove the converse of
+   coeff_above_degree (check Core.Polynomial.Div.fst's poly_deg helpers; the
+   leading_coeff_nonzero / poly_deg machinery has the contrapositive). Handle
+   c=0 (poly_scale = poly_zero, deg None) and qq=0 separately. *)
+let poly_scale_deg_le (#t:Type) {| f: field t |} (c: t) (qq: polynomial t) (k: nat)
+  : Lemma (requires (None? (poly_deg qq) \/ Some?.v (poly_deg qq) < k))
+          (ensures (None? (poly_deg (SP.poly_scale c qq)) \/
+                    Some?.v (poly_deg (SP.poly_scale c qq)) < k))
+  = admit ()  // <-- the one remaining proof
+
+#push-options "--z3rlimit 150 --fuel 2 --ifuel 2"
+let lrt_resultant_specializes (#t:Type) {| f: field t |} (p q: polynomial t) (c: t)
+  : Lemma (requires Some? (poly_deg q) /\ Some?.v (poly_deg q) >= 1)
+          (ensures (let q'  = poly_deriv #t #(cr_of_id t #(id_of_f t)) q in
+                    let dq  = Some?.v (poly_deg q) in
+                    let dp  = (match poly_deg p with | None -> 0 | Some d -> d) in
+                    let dq' = (match poly_deg q' with | None -> 0 | Some d -> d) in
+                    let n   = (if dp > dq' then dp else dq') in
+                    poly_eval (LRT.lrt_resultant_raw p q) c
+                    = RES.resultant #t #(cr_of_id t #(id_of_f t)) n dq
+                        (poly_sub p (SP.poly_scale c q')) q))
+  = let cr : commutative_ring t = cr_of_id t #(id_of_f t) in
+    let q'  = poly_deriv #t #cr q in
+    let dq  = Some?.v (poly_deg q) in
+    let dp  = (match poly_deg p with | None -> 0 | Some d -> d) in
+    let dq' = (match poly_deg q' with | None -> 0 | Some d -> d) in
+    let n   = (if dp > dq' then dp else dq') in
+    LRT.build_aux_length p q' 0 (Prims.op_Addition n 1);
+    trim_length_le #(polynomial t) #(crp f)
+      (LRT.build_p_minus_z_qprime p q' (Prims.op_Addition n 1));      (* bound 1 *)
+    map_length (fun (cc:t) -> LRT.embed_const #t #cr cc) q;
+    trim_length_le #(polynomial t) #(crp f) (LRT.embed_poly q);       (* bounds 3,4 *)
+    poly_scale_deg_le #t #f c q' (Prims.op_Addition n 1);            (* feeds bound 2 *)
+    poly_sub_degree_bound #t #cr p (SP.poly_scale c q') (Prims.op_Addition n 1); (* bound 2 *)
+    resultant_eval_specialized #t #f p q' q n dq c
+#pop-options
+```
+(WIP copy saved at `%TEMP%\lrt_corollary_wip.fst.txt`.) Once `poly_scale_deg_le`
+is proven and the `admit` removed, this corollary closes; transfer both into
+`Core.Risch.LRTResultant.fst`, full-build, update `STATUS.md`.
+
+## TASK 2 — §A.6/7 the RT criterion `iff` — ✅ DONE (2026-06-04)
+
+`Core.Matrix.ResultantConverse.resultant_converse` (the hard converse) +
+`Core.Risch.RTCriterion.rt_criterion` (the iff `poly_eval(lrt_resultant_raw p q) c
+= 0 ⟺ deg(gcd(p−c·q', q)) ≥ 1`) are proven and green, admit-free. **§A's
+base-field RT machinery is complete.** Next part = tier-2 relative soundness
+(splitting field / sum-over-roots) — author its plan from `STATUS.md` Part VII §A
+when starting next session. Original TASK 2 decomposition (now done) retained below.
+
+### (done) original TASK 2 decomposition — §A.6/7 the RT criterion `iff` (resultant converse)
+
+`R(c) = 0  ⟺  deg(gcd(p − c·q', q)) ≥ 1`. Forward (common factor ⟹ R=0) is
+`Core.Matrix.Resultant.resultant_zero_of_common_divisor` (proven) composed with
+`lrt_resultant_specializes`. **The converse `resultant m_deg n_deg P Q = 0 ⟹
+deg(gcd P Q) ≥ 1` is the work.** ALL building blocks exist — it is assembly +
+a coprime endgame. Put it in a new `Core.Matrix.ResultantConverse.fst` (matrix
+level, generic P Q), then a thin `Core.Risch.RTCriterion.fst` wraps it via
+`lrt_resultant_specializes`. Precise per-lemma decomposition (verified the hooks
+exist 2026-06-04):
+
+  Setup: `P Q : polynomial t`, `m_deg n_deg` with `len P ≤ m_deg+1`,
+  `len Q ≤ n_deg+1`, `deg Q = n_deg` (Q the monic-ish denominator), `Q ≠ 0`.
+  1. **`resultant_unfold` + `det_transpose`**: `resultant = det(Syl) =
+     det(transpose Syl)`. So `res = 0 ⟹ det(Sᵀ) = 0`.
+  2. **`KernelDet.det_zero_implies_null_vec (transpose Syl)`**: gives
+     `∃ w (k:fin size). is_nonzero (w k) ∧ ∀ i. vector_dot (row (Sᵀ) i) w = 0`.
+     (size = m_deg+n_deg.)
+  3. **NEW `combo_vec_surjective`**: any `w : fin size → t` equals
+     `ResultantMul.combo_vec m_deg n_deg u v` for `u,v` read off w
+     (u = first n_deg slots as a poly, v = remaining m_deg slots; trim each).
+     Need `len u ≤ n_deg`, `len v ≤ m_deg`, and `w = combo_vec u v`
+     (pointwise). [combo_vec def at ResultantMul.fst:49 — invert its packing.]
+  4. **`ResultantMul.sylvester_action m_deg n_deg P Q u v i`** (needs len bounds
+     from 3): `vector_dot (row Sᵀ i) (combo_vec u v) = coeff (u·P + v·Q)
+     (size−1−i)`. With step 2 (=0 for all i) ⟹ `coeff (u·P + v·Q) j = 0` for all
+     j∈[0,size) (and ≥size by degree) ⟹ **NEW** `u·P + v·Q ~ poly_zero`
+     (`equal_coeffs_means_poly_eq`). So `u·P ~ neg (v·Q)`.
+  5. **NEW `not_both_zero`**: `w` nonzero ⟹ not (u ~ 0 ∧ v ~ 0) (contrapose
+     step 3's pointwise eq with `is_nonzero (w k)`).
+  6. **NEW coprime endgame** `common_factor_of_relation`: from `u·P ~ neg(v·Q)`,
+     `deg u < n_deg = deg Q`, `(u,v)` not both zero, `Q ≠ 0`: suppose
+     `coprime P Q` (deg gcd = 0). Then `Q | u·P` (since u·P ~ −v·Q, Q | v·Q ⟹
+     Q | u·P), coprime ⟹ `Q | u` (`GCD.euclid_lemma`), but `deg u < deg Q` ⟹
+     `u ~ 0` (`divides_degree_le` / `Irreducible.divides_degree_le`); then
+     `v·Q ~ 0` ⟹ `v ~ 0` (`Q≠0`, integral domain `poly_domain_law`) ⟹ both
+     zero, contradicting (5). Hence `¬coprime P Q`, i.e. `deg(gcd P Q) ≥ 1`.
+  7. **`resultant_converse`** = chain 1→6. Then **`rt_criterion`** (Risch level):
+     `poly_eval (lrt_resultant_raw p q) c = 0 ⟺ deg(gcd (p − c·q') q) ≥ 1`,
+     combining `lrt_resultant_specializes` + `resultant_zero_of_common_divisor`
+     (forward) + `resultant_converse` (backward). Mind the length/deg
+     hypotheses: discharge via the same bounds as `lrt_resultant_specializes`
+     (`poly_scale_deg_le`, `trim_length_le`, q's degree).
+
+  Hooks confirmed present: `det_zero_implies_null_vec` (KernelDet:809),
+  `sylvester_action`/`combo_vec` (ResultantMul:83/49), `det_transpose`,
+  `resultant_unfold`, `GCD.euclid_lemma`, `Irreducible.divides_degree_le`,
+  `poly_domain_law`, `equal_coeffs_means_poly_eq`. New work: steps 3,5,6 (the
+  combo decomposition + the coprime endgame) — ~4–6 small lemmas. Est. 1 focused
+  session. Start here next.
+
+## After §A
+
+Per `STATUS.md` Part VII: §A tier-2 relative soundness (resultant=∏roots →
+partial fractions → RT correspondence → assembly), then §B–§F (ℚ construction).
+When this plan empties, author the next part from `STATUS.md` Part VII (§0.5).

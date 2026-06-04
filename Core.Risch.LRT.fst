@@ -72,14 +72,38 @@ let p_minus_z_qprime_coeff (#t:Type) {| cr: commutative_ring t |}
    of x^0, x^1, ..., x^(n-1) where n = max(deg p, deg q') + 1.
    We then trim it to get a proper `polynomial (polynomial t)`. *)
 
+(* top-level recursive builder (lifted from a local `aux` so its index/length
+   are characterizable externally — needed by the RT-specialization proof). *)
+let rec build_aux (#t:Type) {| cr: commutative_ring t |}
+  (p q': polynomial t) (i: nat) (fuel: nat)
+  : Tot (list (polynomial t)) (decreases fuel)
+  = if fuel = 0 then []
+    else p_minus_z_qprime_coeff p q' i
+         :: build_aux p q' (Prims.op_Addition i 1) (Prims.op_Subtraction fuel 1)
+
 let build_p_minus_z_qprime (#t:Type) {| cr: commutative_ring t |}
   (p q': polynomial t) (n: nat)
   : list (polynomial t)
-  = let rec aux (i: nat) (fuel: nat)
-      : Tot (list (polynomial t)) (decreases fuel)
-      = if fuel = 0 then []
-        else p_minus_z_qprime_coeff p q' i :: aux (Prims.op_Addition i 1) (Prims.op_Subtraction fuel 1)
-    in aux 0 n
+  = build_aux p q' 0 n
+
+(* build_aux has exactly `fuel` entries *)
+let rec build_aux_length (#t:Type) {| cr: commutative_ring t |}
+  (p q': polynomial t) (i: nat) (fuel: nat)
+  : Lemma (ensures L.length (build_aux p q' i fuel) == fuel) (decreases fuel)
+  = if fuel = 0 then ()
+    else build_aux_length p q' (Prims.op_Addition i 1) (Prims.op_Subtraction fuel 1)
+
+(* the k-th entry of build_aux is the (i+k)-th z-coefficient *)
+let rec build_aux_index (#t:Type) {| cr: commutative_ring t |}
+  (p q': polynomial t) (i: nat) (fuel: nat) (k: nat)
+  : Lemma (requires k < L.length (build_aux p q' i fuel))
+          (ensures L.index (build_aux p q' i fuel) k
+                   == p_minus_z_qprime_coeff p q' (Prims.op_Addition i k))
+          (decreases fuel)
+  = if fuel = 0 then ()
+    else if k = 0 then ()
+    else build_aux_index p q' (Prims.op_Addition i 1)
+                              (Prims.op_Subtraction fuel 1) (Prims.op_Subtraction k 1)
 
 (* Embed q into k[z][x]: each coefficient c of q becomes [c] in k[z] *)
 let embed_poly (#t:Type) {| cr: commutative_ring t |}

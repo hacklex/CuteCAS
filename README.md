@@ -1,56 +1,67 @@
 # CuteCAS
-Abstract Algebra for [FStar](https://www.fstar-lang.org/)
 
-# What's this?
+A formally-verified small computer-algebra core in [F\*](https://www.fstar-lang.org/),
+built bottom-up from an abstract algebra typeclass tower toward a **verified and
+executable rational-function integrator** (Risch / Lazard–Rioboo–Trager over ℚ).
 
-For now, just a sandbox where I play with F* and try implementing abstract algebra notions there.
-Some files here are future parts of F* core library (some are already there).
-I will eventually remove those that are already part of fstar's ulib.
+Every committed module verifies clean, with **zero `admit` / `assume` / `sorry`**
+and **no ℝ/ℂ axioms** — the whole development stays over ℤ / ℚ / 𝔽_p / ℤ/pᵏ and
+explicit algebraic extensions.
 
-# What's done already?
+## Status
 
-* abstract equivalence relation (symmetric, reflexive, transitive function of type `t -> t -> bool`);
-* binary operations (with lemmas on commutativity, associativity, neutral elements, absorbers, inverses);
-* grouplike structures (magma -> semigroup -> monoid -> group) with separately defined commutative versions;
-* ringlike structures (ring -> domain -> euclidean domain -> skewfield -> field) with distributivity lemmas and unit/normal decomposition for euclidean domains;
-* fields of fractions (over arbitrary integral domains)
-* commutative rings of polynomials (over arbitrary commutative rings)
+- **91 modules** verify clean from cache (foundation → linear algebra →
+  polynomials → finite fields/Berlekamp → algebraic constants/derivations/
+  fractions → Risch skeleton).
+- **Proven headline results:** Cauchy–Binet `det_mul`, Laplace/adjugate,
+  resultant ⇔ common factor, the Poisson product formula, the polynomial UFD +
+  Euclidean tower, Yun square-free factorization, `poly_eval` as a ring
+  homomorphism commuting with `det` (resultant specialization), field of
+  fractions, `algebraic t r` is a **field** at an irreducible `r`, Hermite
+  full-reduction soundness, Frobenius/Fermat over 𝔽_p, the X^p−X split, CRT,
+  and the Berlekamp forward + reverse split and reducibility criterion.
+- **In progress:** the full LRT derivative identity and the ℚ-construction
+  (Berlekamp–Zassenhaus: Hensel lift, recombination, primitive element) feeding
+  the executable integrator.
 
-# What's next?
+The exhaustive, per-lemma status of every module lives in **`STATUS.md`** — that
+file is the source of truth for what is done and what remains.
 
-* completing framework for euclidean domains (div/rem, gcd/eea)
-* enhancing fields of fractions over euclidean domains by introducing the reduced fractions via EEA/GCD
-* introduce the notion of polynomial ring over a field, prove it to be a domain, and provide the framework for it
-* head towards differential fields. See my [F# CAS sketch](https://github.com/hacklex/AbstractMathTypes) for details
+## Documents
 
-# What could I use this for?
+| File | Role |
+|---|---|
+| **`STATUS.md`** | **Source of truth.** Lemma-level status matrix for the whole tower; long-horizon frontier (Part VII). Updated after any finished work. |
+| `plan.md` | The *current* session's plan: exactly what is being drilled now, per-lemma. Narrow and disposable. |
+| `AGENTS.md` | Engineering rules: the diamond-free typeclass-forest design invariant, proof-development workflow, source-of-truth/session workflow (§0.5). |
+| `.github/copilot-instructions.md` | Repo-wide non-negotiables: CRLF, never write to git, never risk data loss, no admit/assume, resource budget. |
 
-Currently, this is not usable. It still lacks key features and functions, and the code itself is still a mess.
-I rewrite and refine it as the time permits (since it's just my pet project), but overall, lots of stuff in the files is still
-very chaotic and unreadable. Still, even though I work on adding comments and prettifying the code, I prioritize 
-getting it to work well over getting it to look nicely. After all, a lot of lemmas currently take too much resources
-and require ridiculous values of `z3rlimit` to be verified.
+## Building
 
-# This F* code is BAD!
+```powershell
+.\build-all.ps1            # verify the whole tower in dependency order (stop at first failure)
+.\build-all.ps1 -KeepGoing # verify all, collect every failure
+```
 
-I know. It quite probably is. I'm currently learning the language and would be glad to improve the code if you tell me 
-what exactly can be improved here, and how. So, feel free to drop an issue, or make a pull request, or just fork and 
-then show me something good, if you feel like it.
+Toolchain: F\* at `C:\FStar` with Z3, run with
+`--include . --cache_checked_modules --cache_dir obj`. Modules are verified
+**sequentially** (one at a time, default resource limits) per the resource
+rules in `AGENTS.md`.
 
-In fact, you might even notice how the code gets better as I advance from basic stuff like semigroups to slightly more advanced 
-stuff like proving certain properties of a field of fractions. That is because I gain experience in the process of writing this 
-framework, and the further I advance, the better my code becomes. 
+## Architecture in one paragraph
 
-I'd love to get the feedback on the code quality. Don't hesitate, don't pull the punches. I only aim to get better with this language :)
+The algebra is a **diamond-free forest of typeclasses**:
+`equatable → add_comm_group → ring → commutative_ring`, with
+`field → skewfield → domain → ring` edges and a single divisibility chain
+`integral_domain ← gcd_domain ← ufd ← euclidean_domain`. Exactly one `instance`
+sits on each ordered class pair, bundle fields are `@@@no_method`, and
+**signatures contain no lambdas** (named combinators only) so unification stays
+predictable. Reflective `canon_ring` / `canon_comm_group` tactics discharge ring
+and group equalities. See `AGENTS.md` for the full invariant.
 
-# UPD. March 2022: Polynomial ring is completed
+## History
 
-Alright, I've finally pulled it. The last boss that is polynomial multiplication associativity, has been finally conquered.
-Had to carefully construct a 3D matrix from the three polynomials, assert that its fold would equal the three polynomials product
-in both multiplication orders, and apply transitivity to assert that multiplication in both orders yields equivalent results.
-
-More than hundred lines of the main lemma. Another hundred buried in auxiliaries. That was the largest proof I've completed so far :)
-
-# Riding to F* core
-
-It seems like the guys from F* team liked my algebra types, so these types will eventually become part of F*'s standard library.
+This began as a personal sandbox for learning F\* by formalizing abstract
+algebra (equivalence relations, grouplikes, ringlikes, fields of fractions,
+polynomial rings — some of which fed into F\*'s standard library). It has since
+grown into the verified-CAS effort described above.

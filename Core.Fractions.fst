@@ -768,6 +768,33 @@ instance fraction_field (t:Type) (d: integral_domain t)
     f_one_ne_zero  = fr_one_ne_zero t d;
   }
 
+(* Reveal lemma: num/den of a sum. Transparent here; the only side
+   condition is the denominator's `is_nonzero` refinement. *)
+let fraction_add_reveal (#t:Type) {| d: integral_domain t |} (x y: fraction d)
+  : Lemma (Fraction?.num (fraction_add x y)
+             == ((Fraction?.num x * Fraction?.den y)
+               + (Fraction?.den x * Fraction?.num y)) /\
+           Fraction?.den (fraction_add x y)
+             == (Fraction?.den x * Fraction?.den y))
+  = prod_den_nonzero x y
+
+(* Reveal lemma: the published `=` on `fraction d` (resolved through
+   `fraction_field`) is cross-multiplication in `t`. The `=` operator is
+   `unfold`, and the whole projection chain
+   field -> skewfield -> ring -> add_comm_group -> equatable consists of
+   `unfold instance`s ending at `fraction_equatable`, whose `eq` is
+   `fun x y -> fraction_eq x y`; so `(x = y)` reduces to `fraction_eq x y`,
+   which is definitionally `(x.num * y.den) = (x.den * y.num)`. *)
+let fraction_zero_reveal (t:Type) {| d: integral_domain t |}
+  : Lemma (Fraction?.num (fraction_zero t #d) == (zero <: t) /\
+           Fraction?.den (fraction_zero t #d) == (one  <: t))
+  = ()
+
+let fraction_eq_reveal (#t:Type) {| d: integral_domain t |} (x y: fraction d)
+  : Lemma ((x = y) <==> ((Fraction?.num x * Fraction?.den y)
+                       = (Fraction?.den x * Fraction?.num y)))
+  = assert ((x = y) == fraction_eq x y)
+
 (* ================================================================ *)
 (*  §10. Published convenience: ( / )                               *)
 (* ================================================================ *)

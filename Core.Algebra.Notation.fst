@@ -30,6 +30,13 @@ open Core.Algebra.Int
 
 unfold let succ (x:nat) : nat = x + 1
 
+(* Plain integer addition, exposed as an infix operator so that nat/int
+   arithmetic in indices, refinements and decreases clauses can be written
+   `a ++ b` even when `( + )` below is overloaded to the ring add.  Binary
+   `( - )` is left untouched (Prims integer subtraction), so plain
+   subtraction `a - b` already works; the TC-overloaded difference is `( -- )`. *)
+unfold let (++) = Prims.op_Addition
+
 unfold let ( = ) (#t:Type) {| e: equatable t |} (x y:t) : bool = e.eq x y
 
 unfold let ( <> ) (#t:Type) {| e: equatable t |} (x y:t) : bool = not (e.eq x y)
@@ -45,4 +52,5 @@ unfold let op_Minus (#t:Type) {| g: add_comm_group t |} (x:t) : t =
 
 unfold let ( -- ) (#t:Type) {| g: add_comm_group t |} (x y:t) : t =
   g.add x (g.neg y)
+  
 

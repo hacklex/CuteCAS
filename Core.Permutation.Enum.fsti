@@ -20,7 +20,7 @@ module L = FStar.List.Tot
 (*  The enumeration.                                                    *)
 (* -------------------------------------------------------------------- *)
 
-val all_permutations (n: nat) : Tot (list (permutation n)) (decreases n)
+val all_permutations (n: nat) : Tot (list (permutation n))
 
 val all_permutations_zero (_:unit)
   : Lemma (all_permutations 0 == [identity 0])
@@ -39,7 +39,6 @@ unfold let permutation_in_list
 
 val all_permutations_complete (n: nat) (p: permutation n)
   : Lemma (ensures permutation_in_list p (all_permutations n))
-          (decreases n)
 
 (* -------------------------------------------------------------------- *)
 (*  Pairwise-distinct (mod perm_eq) predicate.                          *)
@@ -57,4 +56,3 @@ let rec all_distinct (#n: nat) (xs: list (permutation n)) : prop
 
 val all_permutations_no_dup (n: nat)
   : Lemma (ensures all_distinct (all_permutations n))
-          (decreases n)

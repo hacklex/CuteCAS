@@ -9,9 +9,9 @@ module Core.Permutation
 *)
 
 module TC = FStar.Tactics.Typeclasses
-module Atomic = Core.Algebra
+
 open Core.Algebra
-open Core.Algebra
+
 
 (* Basic operations *)
 

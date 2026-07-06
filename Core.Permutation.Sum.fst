@@ -102,31 +102,31 @@ let sum_over_perms_congruence
   (n: nat) (f g: permutation n -> t)
   (h: (s: permutation n) -> Lemma (f s = g s))
   : Lemma (ensures sum_over_perms n f = sum_over_perms n g)
-  = sum_list_map_congruence f g (all_permutations n) (fun s -> h s)
+  = sum_list_map_congruence f g (all_permutations n) h
 
 (* Negation distributes over sum_over_perms. *)
 let sum_over_perms_neg
   (#t: Type) {| g: add_comm_group t |}
   (n: nat) (f: permutation n -> t)
-  : Lemma (sum_over_perms n (pointwise_neg f) = neg (sum_over_perms n f))
+  : Lemma (sum_over_perms n (pointwise_neg f) = (- (sum_over_perms n f)))
   = sum_list_map_neg f (all_permutations n)
 
 let sum_over_perms_neg_named
   (#t: Type) {| g: add_comm_group t |}
   (n: nat) (nf f: permutation n -> t)
-  (h: (s: permutation n) -> Lemma (nf s = neg (f s)))
-  : Lemma (ensures sum_over_perms n nf = neg (sum_over_perms n f))
+  (h: (s: permutation n) -> Lemma (nf s = (- (f s))))
+  : Lemma (ensures sum_over_perms n nf = (- (sum_over_perms n f)))
   = elim_equatable_laws t ();
     trans_for_calc t ();
-    sum_over_perms_neg #t #g n f;
+    sum_over_perms_neg n f;
     let h' (s: permutation n) : Lemma (nf s = pointwise_neg f s)
       = h s;
         pointwise_neg_unfold f s;
-        symmetry (pointwise_neg f s) (neg (f s)) in
-    sum_over_perms_congruence #t #g n nf (pointwise_neg f) h';
+        symmetry (pointwise_neg f s) ((- (f s))) in
+    sum_over_perms_congruence n nf (pointwise_neg f) h';
     transitivity (sum_over_perms n nf)
                  (sum_over_perms n (pointwise_neg f))
-                 (neg (sum_over_perms n f))
+                 ((- (sum_over_perms n f)))
 
 (* Pointwise additivity. *)
 let sum_over_perms_add
@@ -169,13 +169,13 @@ let sum_over_perms_mul_left_named
   : Lemma (ensures  sum_over_perms n cf = c * sum_over_perms n f)
   = elim_equatable_laws t ();
     trans_for_calc t ();
-    sum_over_perms_mul_left #t #r n c f;
+    sum_over_perms_mul_left n c f;
     let h' (s: permutation n) : Lemma (cf s = pointwise_mul (const c) f s)
       = h s;
         pointwise_mul_unfold (const c) f s;
         const_unfold c s;
         symmetry (pointwise_mul (const c) f s) (c * f s) in
-    sum_over_perms_congruence #t #r.r_add n cf (pointwise_mul (const c) f) h';
+    sum_over_perms_congruence n cf (pointwise_mul (const c) f) h';
     transitivity (sum_over_perms n cf)
                  (sum_over_perms n (pointwise_mul (const c) f))
                  (c * sum_over_perms n f)
@@ -189,10 +189,10 @@ let sum_over_perms_zero
   (#t: Type) {| m: add_comm_group t |}
   (f: permutation 0 -> t)
   : Lemma (sum_over_perms 0 f = f (identity 0) + zero)
-  = all_permutations_zero ();
+  = elim_equatable_laws t ();
+    all_permutations_zero ();
     sum_list_cons (f (identity 0)) [];
-    sum_list_nil #t #m;
-    reflexivity (f (identity 0) + zero)
+    sum_list_nil #t #m
 #pop-options
 
 let respects_perm_eq_intro
@@ -225,9 +225,7 @@ let rec perm_eq_count (#n: nat) (p: permutation n) (xs: list (permutation n)) : 
   = match xs with
     | [] -> 0
     | h :: tl ->
-        Prims.op_Addition
-          (if perm_eq p h then 1 else 0)
-          (perm_eq_count p tl)
+        (if perm_eq p h then 1 else 0) ++ perm_eq_count p tl
 
 let perm_eq_count_nil (#n: nat) (p: permutation n)
   : Lemma (perm_eq_count p [] == 0)
@@ -235,7 +233,7 @@ let perm_eq_count_nil (#n: nat) (p: permutation n)
 
 let perm_eq_count_cons (#n: nat) (p h: permutation n) (tl: list (permutation n))
   : Lemma (perm_eq_count p (h :: tl) ==
-           Prims.op_Addition (bool_to_nat (perm_eq p h)) (perm_eq_count p tl))
+           bool_to_nat (perm_eq p h) ++ perm_eq_count p tl)
   = ()
 
 let list_perm (#n: nat) (xs ys: list (permutation n)) : prop
@@ -247,7 +245,7 @@ let list_perm (#n: nat) (xs ys: list (permutation n)) : prop
 
 let rec perm_eq_count_append (#n: nat) (p: permutation n) (xs ys: list (permutation n))
   : Lemma (ensures perm_eq_count p (L.append xs ys) ==
-                   Prims.op_Addition (perm_eq_count p xs) (perm_eq_count p ys))
+                   perm_eq_count p xs ++ perm_eq_count p ys)
           (decreases xs)
   = match xs with
     | [] -> ()
@@ -256,9 +254,7 @@ let rec perm_eq_count_append (#n: nat) (p: permutation n) (xs ys: list (permutat
 let perm_eq_count_map_cons (#n #m: nat) (f: permutation m -> permutation n)
   (p: permutation n) (h: permutation m) (tl: list (permutation m))
   : Lemma (perm_eq_count p (L.map f (h :: tl)) ==
-           Prims.op_Addition
-             (bool_to_nat (perm_eq p (f h)))
-             (perm_eq_count p (L.map f tl)))
+           bool_to_nat (perm_eq p (f h)) ++ perm_eq_count p (L.map f tl))
   = ()
 
 let perm_eq_count_map_nil (#n #m: nat) (f: permutation m -> permutation n)
@@ -315,8 +311,7 @@ let rec sum_list_append
     match xs with
     | [] ->
         sum_list_nil #t #m;
-        zero_plus_x (sum_list ys);
-        symmetry (zero + sum_list ys) (sum_list ys)
+        zero_plus_x (sum_list ys)
     | h :: tl ->
         sum_list_append tl ys;
         sum_list_cons h tl;
@@ -345,7 +340,7 @@ let rec split_at_match (#n: nat) (p: permutation n) (xs: list (permutation n))
              perm_eq p m /\
              perm_eq_count p pre == 0 /\
              perm_eq_count p xs ==
-               Prims.op_Addition 1 (perm_eq_count p (L.append pre post)))
+               1 ++ perm_eq_count p (L.append pre post))
          (decreases xs)
   = match xs with
     | h :: tl ->
@@ -460,8 +455,7 @@ let rec sum_list_perm_invariance
     trans_for_calc t ();
     match xs with
     | [] ->
-        list_perm_empty_implies_empty ys;
-        reflexivity (sum_list #t #m [])
+        list_perm_empty_implies_empty ys
     | h :: tl ->
         perm_eq_bool_refl h;
         assert (perm_eq_count h (h :: tl) >= 1);
@@ -470,7 +464,7 @@ let rec sum_list_perm_invariance
         (* ys == pre ++ mm :: post, perm_eq h mm *)
         list_perm_cancel_match h mm tl pre post;
         (* list_perm tl (pre ++ post) *)
-        sum_list_perm_invariance #t #m #n f tl (L.append pre post);
+        sum_list_perm_invariance f tl (L.append pre post);
         (* sum_list (map f tl) = sum_list (map f (pre ++ post)) *)
         L.map_append f pre (mm :: post);
         (* L.map f ys = L.map f pre ++ (f mm :: L.map f post) *)
@@ -703,7 +697,7 @@ let sum_over_perms_reindex
           (ensures  sum_over_perms n f =
                     sum_over_perms n (fcomp f (flip compose q)))
   = rmul_q_yields_list_perm n q;
-    sum_list_perm_invariance #t #m #n f
+    sum_list_perm_invariance f
       (all_permutations n)
       (L.map (flip compose q) (all_permutations n));
     map_map_eq (flip compose q) f (all_permutations n)
@@ -792,7 +786,7 @@ let sum_over_perms_reindex_inverse
           (ensures  sum_over_perms n f =
                     sum_over_perms n (fcomp f inverse))
   = inverse_yields_list_perm n;
-    sum_list_perm_invariance #t #m #n f
+    sum_list_perm_invariance f
       (all_permutations n)
       (L.map inverse (all_permutations n));
     map_map_eq inverse f (all_permutations n)
@@ -871,7 +865,7 @@ private let rec sum_list_pick
             in
             Classical.move_requires neq_qh ();
             assert (~(perm_eq q h));
-            sum_list_pick #n #t #m tl f q;
+            sum_list_pick tl f q;
             add_congruence (f h) (sum_list (L.map f tl)) (zero #t) (f q);
             zero_plus_x (f q);
             assert (sum_list (L.map f (h :: tl)) = f h + sum_list (L.map f tl));
@@ -887,7 +881,8 @@ let sum_over_perms_single
            Lemma (requires ~(perm_eq p0 q)) (ensures f q = zero))
   : Lemma (requires respects_perm_eq #t f)
           (ensures sum_over_perms n f = f p0)
-  = all_permutations_no_dup n;
+  = elim_equatable_laws t ();
+    all_permutations_no_dup n;
     all_permutations_complete n p0;
     let xs = all_permutations n in
     eliminate exists (q: permutation n). L.memP q xs /\ perm_eq p0 q
@@ -907,13 +902,11 @@ let sum_over_perms_single
         in
         Classical.forall_intro (Classical.move_requires only_q);
         sum_list_pick xs f q;
-        reflexivity (sum_over_perms n f);
-        reflexivity (sum_list (L.map f xs));
         perm_eq_sym p0 q;
         respects_perm_eq_elim f q p0;
-        let eq : equatable t = TC.solve in
-        eq.transitivity (sum_over_perms n f) (sum_list (L.map f xs)) (f q);
-        eq.transitivity (sum_over_perms n f) (f q) (f p0)
+
+        transitivity (sum_over_perms n f) (sum_list (L.map f xs)) (f q);
+        transitivity (sum_over_perms n f) (f q) (f p0)
       end
 #pop-options
 
@@ -1162,8 +1155,110 @@ private let partner_swap (#n: nat) (s y tau: permutation n)
     perm_eq_trans s (compose (compose s tau) tau) (compose y tau)
     (* Chain gives perm_eq s (compose y tau). *)
 
+(* Single-element τ-closure step for the partition list (pre ++ post).
+   Given that xs = h :: (pre ++ m' :: post) is τ-closed and all_distinct,
+   and m' is the τ-partner of h, then the τ-partner of any s in (pre ++ post)
+   is also in (pre ++ post). Peeled out of sum_orbit_partition_zero so each VC
+   stays small. *)
+#push-options "--fuel 2 --ifuel 1 --z3rlimit 5"
+private let closure_pp_step
+  (#n: nat)
+  (h tau: permutation n)
+  (pre post: list (permutation n))
+  (m': permutation n)
+  (s: permutation n)
+  : Lemma (requires
+              perm_eq (compose tau tau) (identity n) /\
+              all_distinct (h :: L.append pre (m' :: post)) /\
+              perm_eq (compose h tau) m' /\
+              (forall (u: permutation n).
+                  permutation_in_list u (h :: L.append pre (m' :: post)) ==>
+                  permutation_in_list (compose u tau)
+                                      (h :: L.append pre (m' :: post))) /\
+              permutation_in_list s (L.append pre post))
+          (ensures  permutation_in_list (compose s tau) (L.append pre post))
+  = let tl = L.append pre (m' :: post) in
+    let xs = h :: tl in
+    let pp = L.append pre post in
+    let m = compose h tau in
+    assert (perm_eq m m');
+    (* s ∈ pre ++ post ⊆ tl ⊆ xs, so partner ∈ xs. *)
+    in_list_append s pre post;
+    let bridge_to_tl () : Lemma (permutation_in_list s tl)
+      = L.append_memP pre (m' :: post) (in_list_witness s pp);
+        let q = in_list_witness s pp in
+        L.append_memP pre post q
+    in
+    bridge_to_tl ();
+    assert (permutation_in_list s tl);
+    let to_xs () : Lemma (permutation_in_list s xs)
+      = let q = in_list_witness s tl in
+        assert (L.memP q xs)
+    in
+    to_xs ();
+    assert (permutation_in_list (compose s tau) xs);
+    let part = compose s tau in
+    (* (a) ~(perm_eq part h). *)
+    let part_neq_h () : Lemma (requires perm_eq part h) (ensures False)
+      = partner_swap s h tau;
+        assert (perm_eq s m);
+        assert (perm_eq m m');
+        perm_eq_trans s m m';
+        assert (perm_eq s m');
+        in_list_drop_not_perm_eq pre post m';
+        assert (~(perm_eq m' s));
+        perm_eq_sym s m';
+        assert False
+    in
+    Classical.move_requires part_neq_h ();
+    (* (b) ~(perm_eq part m'). *)
+    let part_neq_mprime () : Lemma (requires perm_eq part m') (ensures False)
+      = assert (perm_eq part m');
+        perm_eq_sym m m';
+        assert (perm_eq m' m);
+        let pt = compose s tau in
+        assert (perm_eq pt m');
+        perm_eq_trans pt m' m;
+        assert (perm_eq pt m);
+        assert (perm_eq pt (compose h tau));
+        perm_eq_right_cancel s h tau;
+        assert (perm_eq s h);
+        let qs = in_list_witness s pp in
+        L.append_memP pre post qs;
+        L.append_memP pre (m' :: post) qs;
+        assert (L.memP qs tl);
+        assert (~(perm_eq h qs));
+        perm_eq_sym s h;
+        perm_eq_trans h s qs;
+        assert (perm_eq h qs)
+    in
+    Classical.move_requires part_neq_mprime ();
+    assert (~(perm_eq part h));
+    assert (~(perm_eq part m'));
+    in_list_cons_drop_head h part tl;
+    assert (permutation_in_list part tl);
+    let qp = in_list_witness part tl in
+    L.append_memP pre (m' :: post) qp;
+    if FStar.IndefiniteDescription.strong_excluded_middle (L.memP qp pre) then begin
+      L.append_memP pre post qp;
+      assert (L.memP qp pp);
+      assert (permutation_in_list part pp)
+    end else begin
+      assert (L.memP qp (m' :: post));
+      if FStar.IndefiniteDescription.strong_excluded_middle (qp == m') then begin
+        assert (perm_eq part m');
+        assert False
+      end else begin
+        assert (L.memP qp post);
+        L.append_memP pre post qp;
+        assert (L.memP qp pp);
+        assert (permutation_in_list part pp)
+      end
+    end
+#pop-options
+
 (* Main lemma: pair-cancel on a τ-closed all_distinct list. *)
-#push-options "--fuel 4 --ifuel 2 --z3rlimit 80 --split_queries always"
+#push-options "--fuel 4 --ifuel 2 --z3rlimit 20 --split_queries always"
 private let rec sum_orbit_partition_zero
   (#t: Type) {| g: add_comm_group t |}
   (#n: nat) (f: permutation n -> t) (tau: permutation n) (xs: list (permutation n))
@@ -1180,8 +1275,8 @@ private let rec sum_orbit_partition_zero
           (decreases L.length xs)
   = match xs with
     | [] ->
-        sum_list_nil #t #(g);
-        reflexivity (zero #t)
+        elim_equatable_laws t ();
+        sum_list_nil #t #(g)
     | h :: tl ->
         elim_equatable_laws t ();
         trans_for_calc t ();
@@ -1249,116 +1344,18 @@ private let rec sum_orbit_partition_zero
         zero_plus_x spp;
         assert (zero #t + spp = spp);
         (* Build sxs = spp via stepwise transitivity. *)
-        (* Establish τ-closure on (pre ++ post). *)
-        let closure_aux (s: permutation n)
-          : Lemma (requires permutation_in_list s pp)
-                  (ensures  permutation_in_list (compose s tau) pp)
-          = (* s ∈ pre ++ post ⊆ tl ⊆ xs, so partner ∈ xs. *)
-            in_list_append s pre post;
-            (* Either way, s ∈ tl. *)
-            let bridge_to_tl () : Lemma (permutation_in_list s tl)
-              = L.append_memP pre (m' :: post) (in_list_witness s pp);
-                let q = in_list_witness s pp in
-                L.append_memP pre post q
-                (* q ∈ pre or q ∈ post; in either case, q ∈ pre ++ m'::post = tl. *)
-            in
-            bridge_to_tl ();
-            assert (permutation_in_list s tl);
-            (* Hence permutation_in_list s xs. *)
-            let to_xs () : Lemma (permutation_in_list s xs)
-              = let q = in_list_witness s tl in
-                assert (L.memP q xs)
-            in
-            to_xs ();
-            assert (permutation_in_list (compose s tau) xs);
-            let part = compose s tau in
-            (* Want: ~(perm_eq part h) and ~(perm_eq part m'). *)
-            (* (a) ~(perm_eq part h). Suppose perm_eq part h, i.e. perm_eq (compose s tau) h.
-                   Then perm_eq s (compose h tau) = m ≡ m'. But s ∈ pp and
-                   pp excludes anything ≡ m'. Contradiction. *)
-            let part_neq_h () : Lemma (requires perm_eq part h) (ensures False)
-              = partner_swap s h tau;
-                (* perm_eq s (compose h tau) = perm_eq s m. *)
-                assert (perm_eq s m);
-                (* perm_eq m m', so perm_eq s m'. *)
-                assert (perm_eq m m');
-                perm_eq_trans s m m';
-                assert (perm_eq s m');
-                (* But pp excludes anything perm_eq m'. *)
-                in_list_drop_not_perm_eq pre post m';
-                assert (~(perm_eq m' s));
-                (* perm_eq s m' gives perm_eq m' s; contradiction. *)
-                perm_eq_sym s m';
-                assert False
-            in
-            Classical.move_requires part_neq_h ();
-            (* (b) ~(perm_eq part m'). Suppose perm_eq part m'. Then perm_eq part m
-                   (transitivity, perm_eq m' m), i.e. perm_eq (compose s tau) m ≡ compose h tau.
-                   By partner_swap with y = compose h tau (which we'd derive again)... easier: directly
-                   right-cancel tau to get perm_eq s h. But all_distinct (h :: tl) gives
-                   ~(perm_eq h q) for q ∈ tl ⊇ pp. Contradiction. *)
-            let part_neq_mprime () : Lemma (requires perm_eq part m') (ensures False)
-              = (* perm_eq part m', m' ≡ m, so perm_eq part m i.e. perm_eq (compose s tau) (compose h tau). *)
-                assert (perm_eq part m');
-                perm_eq_sym m m';
-                assert (perm_eq m' m);
-                (* perm_eq (compose s tau) m = compose h tau. *)
-                let pt = compose s tau in
-                assert (perm_eq pt m');
-                perm_eq_trans pt m' m;
-                assert (perm_eq pt m);  (* by transitivity, perm_eq m' m *)
-                (* compose h tau = m by definition (== reflexive). *)
-                assert (perm_eq pt (compose h tau));
-                perm_eq_right_cancel s h tau;
-                assert (perm_eq s h);
-                (* s ∈ pp ⊆ tl. all_distinct (h :: tl) ⇒ ~(perm_eq h s). *)
-                let qs = in_list_witness s pp in
-                L.append_memP pre post qs;
-                (* qs ∈ pre or qs ∈ post; either way, qs ∈ pre ++ m'::post = tl. *)
-                L.append_memP pre (m' :: post) qs;
-                assert (L.memP qs tl);
-                (* all_distinct xs gives ~(perm_eq h qs). *)
-                assert (~(perm_eq h qs));
-                (* perm_eq s h, perm_eq s qs, so perm_eq h qs. Contradiction. *)
-                perm_eq_sym s h;
-                perm_eq_trans h s qs;
-                assert (perm_eq h qs)
-            in
-            Classical.move_requires part_neq_mprime ();
-            assert (~(perm_eq part h));
-            assert (~(perm_eq part m'));
-            (* part is in xs = h :: tl, but not perm_eq h, so part is in tl up to perm_eq. *)
-            in_list_cons_drop_head h part tl;
-            assert (permutation_in_list part tl);
-            (* tl = pre ++ m' :: post; part is in tl but ~(perm_eq part m'),
-               so part is in pre ++ post. *)
-            let qp = in_list_witness part tl in
-            L.append_memP pre (m' :: post) qp;
-            (* qp ∈ pre or qp ∈ m' :: post. *)
-            if FStar.IndefiniteDescription.strong_excluded_middle (L.memP qp pre) then begin
-              L.append_memP pre post qp;
-              assert (L.memP qp pp);
-              assert (permutation_in_list part pp)
-            end else begin
-              assert (L.memP qp (m' :: post));
-              (* qp == m' or L.memP qp post. *)
-              if FStar.IndefiniteDescription.strong_excluded_middle (qp == m') then begin
-                assert (perm_eq part m');
-                assert False
-              end else begin
-                assert (L.memP qp post);
-                L.append_memP pre post qp;
-                assert (L.memP qp pp);
-                assert (permutation_in_list part pp)
-              end
-            end
-        in
-        Classical.forall_intro (Classical.move_requires closure_aux);
+        (* Establish τ-closure on (pre ++ post) via the peeled-out helper. *)
+        assert (xs == h :: L.append pre (m' :: post));
+        introduce forall (s: permutation n).
+            permutation_in_list s pp ==>
+            permutation_in_list (compose s tau) pp
+        with introduce _ ==> _
+        with _. closure_pp_step h tau pre post m' s;
         (* Recursive call on (pre ++ post). *)
         L.append_length pre (m' :: post);
         L.append_length pre post;
         assert (L.length pp < L.length xs);
-        sum_orbit_partition_zero #t #g #n f tau pp;
+        sum_orbit_partition_zero f tau pp;
         assert (spp = zero #t);
         (* Hence sxs = spp = zero. *)
         transitivity sxs spp (zero #t)
@@ -1381,4 +1378,4 @@ let sum_over_perms_pair_cancel
       = all_permutations_complete n (compose s tau)
     in
     Classical.forall_intro closure;
-    sum_orbit_partition_zero #t #g #n f tau xs
+    sum_orbit_partition_zero f tau xs

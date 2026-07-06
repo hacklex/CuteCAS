@@ -17,7 +17,7 @@ module Core.Permutation.Enum
 *)
 
 module TC = FStar.Tactics.Typeclasses
-module Atomic = Core.Algebra
+
 open Core.Algebra
 open Core.Permutation
 open Core.FinSum

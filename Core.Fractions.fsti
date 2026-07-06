@@ -88,6 +88,13 @@ val fraction_add_reveal (#t:Type) {| d: integral_domain t |} (x y: fraction d)
            Fraction?.den (fraction_add x y)
              == (Fraction?.den x * Fraction?.den y))
 
+(* num/den of a product: matches the body of `fraction_mul`.           *)
+val fraction_mul_reveal (#t:Type) {| d: integral_domain t |} (x y: fraction d)
+  : Lemma (Fraction?.num (fraction_mul x y)
+             == (Fraction?.num x * Fraction?.num y) /\
+           Fraction?.den (fraction_mul x y)
+             == (Fraction?.den x * Fraction?.den y))
+
 (* num/den of the additive constant `fraction_zero`: `0/1`. *)
 val fraction_zero_reveal (t:Type) {| d: integral_domain t |}
   : Lemma (Fraction?.num (fraction_zero t #d) == (zero <: t) /\
@@ -98,6 +105,13 @@ val fraction_zero_reveal (t:Type) {| d: integral_domain t |}
 val fraction_eq_reveal (#t:Type) {| d: integral_domain t |} (x y: fraction d)
   : Lemma ((x = y) <==> ((Fraction?.num x * Fraction?.den y)
                        = (Fraction?.den x * Fraction?.num y)))
+
+(* The published ring `+`/`*` on `fraction d` ARE `fraction_add`/`fraction_mul`. *)
+val fraction_ring_add_reveal (#t:Type) {| d: integral_domain t |} (x y: fraction d)
+  : Lemma ((x + y) == fraction_add x y)
+
+val fraction_ring_mul_reveal (#t:Type) {| d: integral_domain t |} (x y: fraction d)
+  : Lemma ((x * y) == fraction_mul x y)
 
 (* ------------------------------------------------------------------ *)
 (* Convenience: division as a partial operation on raw t              *)

@@ -259,9 +259,9 @@ private let mul_is_group_means_domain (#t:Type) (#r: ring t) (mig: mul_is_group 
   Classical.move_requires backward ();
   Classical.move_requires forward ()
 
-instance d_of_sf (t:Type) {| sf: skewfield t |} : domain t = {
+unfold instance d_of_sf (t:Type) {| sf: skewfield t |} : domain t = {
   d_r = sf.sf_r;
-  domain_law = mul_is_group_means_domain #t #sf.sf_r sf.sf_mig;
+  domain_law = mul_is_group_means_domain sf.sf_mig;
 }
 
 (* ---------------------------------------------------------------- *)
@@ -275,7 +275,7 @@ class commutative_ring (t:Type) = {
 
 unfold instance r_of_cr (t:Type) {| cr: commutative_ring t |} : ring t = cr.cr_r
 
-instance mic_of_cr (t:Type) {| cr: commutative_ring t |}
+unfold instance mic_of_cr (t:Type) {| cr: commutative_ring t |}
   : mul_is_commutative t #(r_of_cr t) = cr.cr_mic
 
 (* ---------------------------------------------------------------- *)

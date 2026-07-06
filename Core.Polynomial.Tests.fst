@@ -46,63 +46,54 @@ open Core.Tactics.CanonRing
 (* ================================================================== *)
 
 (*  Each test below takes only `{| cr: commutative_ring t |}` and
-    derives `commutative_ring (polynomial t)` via the unfold instance
-    `cr_of_pcr`.  The bodies invoke ONLY the typeclass-resolved axioms;
-    they must NEVER call poly_add_*/poly_mul_*/... directly.            *)
+    derives `commutative_ring (polynomial t)` via the registered
+    `polynomial_cr` instance.  The bodies invoke ONLY the typeclass-resolved
+    axioms; they must NEVER call poly_add_*/poly_mul_*/... directly.     *)
 
 let t_add_commutativity_via_tc
       (#t:Type) {| cr: commutative_ring t |} (p q: polynomial t)
   : Lemma ((p + q) = (q + p))
-  = let _ : polynomial_commutative_ring t = polynomial_commutative_ring_instance in
-    add_commutativity p q
+  =add_commutativity p q
 
 let t_add_associativity_via_tc
       (#t:Type) {| cr: commutative_ring t |} (p q r: polynomial t)
   : Lemma (((p + q) + r) = (p + (q + r)))
-  = let _ : polynomial_commutative_ring t = polynomial_commutative_ring_instance in
-    add_associativity p q r
+  =add_associativity p q r
 
 let t_add_zero_right_via_tc
       (#t:Type) {| cr: commutative_ring t |} (p: polynomial t)
   : Lemma ((p + zero) = p)
-  = let _ : polynomial_commutative_ring t = polynomial_commutative_ring_instance in
-    add_zero p
+  =add_zero p
 
 let t_add_negation_via_tc
       (#t:Type) {| cr: commutative_ring t |} (p: polynomial t)
   : Lemma ((p + (- p)) = zero)
-  = let _ : polynomial_commutative_ring t = polynomial_commutative_ring_instance in
-    add_negation p
+  =add_negation p
 
 let t_mul_commutativity_via_tc
       (#t:Type) {| cr: commutative_ring t |} (p q: polynomial t)
   : Lemma ((p * q) = (q * p))
-  = let _ : polynomial_commutative_ring t = polynomial_commutative_ring_instance in
-    mul_commutativity p q
+  =mul_commutativity p q
 
 let t_mul_associativity_via_tc
       (#t:Type) {| cr: commutative_ring t |} (p q r: polynomial t)
   : Lemma (((p * q) * r) = (p * (q * r)))
-  = let _ : polynomial_commutative_ring t = polynomial_commutative_ring_instance in
-    mul_associativity p q r
+  =mul_associativity p q r
 
 let t_left_distributivity_via_tc
       (#t:Type) {| cr: commutative_ring t |} (p q r: polynomial t)
   : Lemma ((p * (q + r)) = ((p * q) + (p * r)))
-  = let _ : polynomial_commutative_ring t = polynomial_commutative_ring_instance in
-    left_distributivity p q r
+  =left_distributivity p q r
 
 let t_right_distributivity_via_tc
       (#t:Type) {| cr: commutative_ring t |} (p q r: polynomial t)
   : Lemma (((p + q) * r) = ((p * r) + (q * r)))
-  = let _ : polynomial_commutative_ring t = polynomial_commutative_ring_instance in
-    right_distributivity r p q
+  =right_distributivity r p q
 
 let t_mul_one_via_tc
       (#t:Type) {| cr: commutative_ring t |} (p: polynomial t)
   : Lemma ((p * one) = p)
-  = let _ : polynomial_commutative_ring t = polynomial_commutative_ring_instance in
-    mul_one p
+  =mul_one p
 
 (* ================================================================== *)
 (*  Section B — poly_* / typeclass-op interchangeability                *)
@@ -117,32 +108,27 @@ let t_mul_one_via_tc
 let t_zero_is_poly_zero
       (#t:Type) {| cr: commutative_ring t |}
   : Lemma ((zero #(polynomial t)) == (poly_zero #t))
-  = let pcrc : polynomial_commutative_ring t = polynomial_commutative_ring_instance in
-    pcrc.poly_zero_reveal
+  = ()
 
 let t_add_is_poly_add
       (#t:Type) {| cr: commutative_ring t |} (p q: polynomial t)
   : Lemma ((p + q) == poly_add p q)
-  = let _ : polynomial_commutative_ring t = polynomial_commutative_ring_instance in
-    ()
+  =()
 
 let t_mul_is_poly_mul
       (#t:Type) {| cr: commutative_ring t |} (p q: polynomial t)
   : Lemma ((p * q) == poly_mul p q)
-  = let _ : polynomial_commutative_ring t = polynomial_commutative_ring_instance in
-    ()
+  =()
 
 let t_neg_is_poly_neg
       (#t:Type) {| cr: commutative_ring t |} (p: polynomial t)
   : Lemma ((- p) == poly_neg p)
-  = let _ : polynomial_commutative_ring t = polynomial_commutative_ring_instance in
-    ()
+  =()
 
 let t_eq_is_poly_eq
       (#t:Type) {| cr: commutative_ring t |} (p q: polynomial t)
   : Lemma ((p = q) == poly_eq p q)
-  = let _ : polynomial_commutative_ring t = polynomial_commutative_ring_instance in
-    polynomial_equatable_eq_reveal cr p q
+  =polynomial_equatable_eq_reveal cr p q
 
 (* ================================================================== *)
 (*  Section C — bridging poly-form lemmas with TC-form lemmas           *)
@@ -156,23 +142,20 @@ let t_bridge_poly_add_commutativity_into_tc
       (#t:Type) {| cr: commutative_ring t |} (p q: polynomial t)
   : Lemma (requires poly_eq (poly_add p q) (poly_add q p))
           (ensures  (p + q) = (q + p))
-  = let _ : polynomial_commutative_ring t = polynomial_commutative_ring_instance in
-    polynomial_equatable_eq_reveal cr (poly_add p q) (poly_add q p)
+  =polynomial_equatable_eq_reveal cr (poly_add p q) (poly_add q p)
 
 let t_bridge_tc_add_commutativity_into_poly
       (#t:Type) {| cr: commutative_ring t |} (p q: polynomial t)
   : Lemma (requires (p + q) = (q + p))
           (ensures  poly_eq (poly_add p q) (poly_add q p))
-  = let _ : polynomial_commutative_ring t = polynomial_commutative_ring_instance in
-    polynomial_equatable_eq_reveal cr (poly_add p q) (poly_add q p)
+  =polynomial_equatable_eq_reveal cr (poly_add p q) (poly_add q p)
 
 (*  Compose a poly-form lemma producing `poly_eq` with a TC-form lemma
     consuming `=`.  No reveal calls inside the body — only the lemmas. *)
 let t_compose_poly_mul_commutativity_into_tc_associativity
       (#t:Type) {| cr: commutative_ring t |} (p q r: polynomial t)
   : Lemma (((p * q) * r) = (r * (p * q)))
-  = let _ : polynomial_commutative_ring t = polynomial_commutative_ring_instance in
-    poly_mul_commutativity (poly_mul p q) r;
+  =poly_mul_commutativity (poly_mul p q) r;
     polynomial_equatable_eq_reveal cr (poly_mul (poly_mul p q) r) (poly_mul r (poly_mul p q))
 
 (* ================================================================== *)
@@ -181,7 +164,7 @@ let t_compose_poly_mul_commutativity_into_tc_associativity
 
 let t_deg_zero_is_none
       (#t:Type) {| cr: commutative_ring t |}
-  : Lemma (poly_deg (poly_zero #t) == None)
+  : Lemma (deg (poly_zero #t) < 0)
   = ()
 
 let t_lc_zero_is_zero
@@ -191,12 +174,12 @@ let t_lc_zero_is_zero
 
 let t_deg_of_monomial_nonzero
       (#t:Type) {| cr: commutative_ring t |} (c: t {not (c = zero)}) (n: nat)
-  : Lemma (poly_deg (monomial c n) == Some n)
+  : Lemma (deg (monomial c n) == n)
   = monomial_deg c n
 
 let t_deg_of_monomial_zero_is_none
       (#t:Type) {| cr: commutative_ring t |} (n: nat)
-  : Lemma (poly_deg (monomial (zero <: t) n) == None)
+  : Lemma (deg (monomial (zero <: t) n) < 0)
   = monomial_deg (zero <: t) n;
     reflexivity (zero <: t)
 
@@ -217,36 +200,31 @@ let t_monomial_coeff_above
 let t_canon_ring_neg_neg
       (#t:Type) {| cr: commutative_ring t |} (p: polynomial t)
   : Lemma ((- (- p)) = p)
-  = let pcrc : polynomial_commutative_ring t = polynomial_commutative_ring_instance in
-    let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = let cr_p : commutative_ring (polynomial t) = TC.solve in
     assert ((- (- p)) = p) by canon_ring ()
 
 let t_canon_ring_neg_add
       (#t:Type) {| cr: commutative_ring t |} (p q: polynomial t)
   : Lemma ((- (p + q)) = ((- p) + (- q)))
-  = let pcrc : polynomial_commutative_ring t = polynomial_commutative_ring_instance in
-    let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = let cr_p : commutative_ring (polynomial t) = TC.solve in
     assert ((- (p + q)) = ((- p) + (- q))) by canon_ring ()
 
 let t_canon_ring_mul_zero
       (#t:Type) {| cr: commutative_ring t |} (p: polynomial t)
   : Lemma ((p * zero) = (zero #(polynomial t)))
-  = let pcrc : polynomial_commutative_ring t = polynomial_commutative_ring_instance in
-    let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = let cr_p : commutative_ring (polynomial t) = TC.solve in
     assert ((p * zero) = (zero #(polynomial t))) by canon_ring ()
 
 let t_canon_ring_swap_mid
       (#t:Type) {| cr: commutative_ring t |} (a b c d: polynomial t)
   : Lemma (((a * b) * (c * d)) = ((a * c) * (b * d)))
-  = let pcrc : polynomial_commutative_ring t = polynomial_commutative_ring_instance in
-    let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = let cr_p : commutative_ring (polynomial t) = TC.solve in
     assert (((a * b) * (c * d)) = ((a * c) * (b * d))) by canon_ring ()
 
 let t_canon_ring_distribute
       (#t:Type) {| cr: commutative_ring t |} (a b c: polynomial t)
   : Lemma ((c * (a + b)) = ((c * a) + (c * b)))
-  = let pcrc : polynomial_commutative_ring t = polynomial_commutative_ring_instance in
-    let cr_p : commutative_ring (polynomial t) = TC.solve in
+  = let cr_p : commutative_ring (polynomial t) = TC.solve in
     assert ((c * (a + b)) = ((c * a) + (c * b))) by canon_ring ()
 (* ================================================================== *)
 (*  Section F — integral_domain axioms on polynomial t                  *)
@@ -256,13 +234,11 @@ let t_id_domain_law_via_tc
       (#t:Type) {| id: integral_domain t |} (p q: polynomial t)
   : Lemma (requires not (p = zero) /\ not (q = zero))
           (ensures  not ((p * q) = zero))
-  = let pidc : polynomial_integral_domain t = polynomial_integral_domain_instance in
-    (* The integral-domain instance gives this directly via
+  = (* The integral-domain instance gives this directly via
        `domain_law` on `polynomial t`. *)
-    pidc.pid.id_d.domain_law p q
+    domain_law p q
 
 let t_id_one_ne_zero_via_tc
       (#t:Type) {| id: integral_domain t |}
   : Lemma (not ((one #(polynomial t)) = (zero #(polynomial t))))
-  = let pidc : polynomial_integral_domain t = polynomial_integral_domain_instance in
-    pidc.pid.id_one_ne_zero
+  = (polynomial_id #t #id).id_one_ne_zero

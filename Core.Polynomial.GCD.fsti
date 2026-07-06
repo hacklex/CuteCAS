@@ -24,7 +24,6 @@ module Core.Polynomial.GCD
      - coprime + euclid_lemma
 *)
 
-module TC = FStar.Tactics.Typeclasses
 module L  = FStar.List.Tot
 
 open Core.Algebra
@@ -45,7 +44,7 @@ val degree_measure (#t:Type) {| cr: commutative_ring t |}
 
 val degree_measure_zero_iff_zero
     (#t:Type) {| cr: commutative_ring t |} (p: polynomial t)
-  : Lemma (degree_measure p == 0 <==> None? (poly_deg p))
+  : Lemma (degree_measure p == 0 <==> deg p < 0)
 
 (* ------------------------------------------------------------------ *)
 (*  Euclidean GCD                                                     *)
@@ -56,31 +55,31 @@ val poly_gcd (#t:Type) {| f: field t |} (p q: polynomial t)
 
 (* Reveal: when q has no degree (i.e. q = poly_zero), the GCD is p. *)
 val poly_gcd_base (#t:Type) {| f: field t |} (p q: polynomial t)
-  : Lemma (requires None? (poly_deg q))
-          (ensures  poly_gcd #t #f p q == p)
+  : Lemma (requires deg q < 0)
+          (ensures  poly_gcd p q == p)
 
 (* Reveal: otherwise, the recursion descends as (q, p mod q). *)
 val poly_gcd_step (#t:Type) {| f: field t |} (p q: polynomial t)
-  : Lemma (requires Some? (poly_deg q))
-          (ensures  (let (_, r) = poly_divmod #t #f p q in
-                     poly_gcd #t #f p q == poly_gcd #t #f q r))
+  : Lemma (requires deg q >= 0)
+          (ensures  (let (_, r) = poly_divmod p q in
+                     poly_gcd p q == poly_gcd q r))
 
 (* ------------------------------------------------------------------ *)
 (*  GCD divisibility axioms                                           *)
 (*                                                                    *)
 (*  `divides` is interpreted in `commutative_ring (polynomial t)`,    *)
-(*  resolved automatically through `polynomial_commutative_ring_instance`.*)
+(*  resolved automatically through the `polynomial_cr` instance.       *)
 (* ------------------------------------------------------------------ *)
 
 val gcd_divides_left (#t:Type) {| f: field t |} (p q: polynomial t)
-  : Lemma (divides (poly_gcd #t #f p q) p)
+  : Lemma (divides (poly_gcd p q) p)
 
 val gcd_divides_right (#t:Type) {| f: field t |} (p q: polynomial t)
-  : Lemma (divides (poly_gcd #t #f p q) q)
+  : Lemma (divides (poly_gcd p q) q)
 
 val gcd_is_maximal (#t:Type) {| f: field t |} (p q d: polynomial t)
   : Lemma (requires divides d p /\ divides d q)
-          (ensures  divides d (poly_gcd #t #f p q))
+          (ensures  divides d (poly_gcd p q))
 
 (* ------------------------------------------------------------------ *)
 (*  Extended GCD (Bézout)                                             *)
@@ -93,13 +92,13 @@ val poly_ext_gcd (#t:Type) {| f: field t |} (p q: polynomial t)
         (decreases (degree_measure q))
 
 val ext_gcd_correct (#t:Type) {| f: field t |} (p q: polynomial t)
-  : Lemma (ensures (let (a, b, g) = poly_ext_gcd #t #f p q in
-                    poly_eq (add (mul a p) (mul b q)) g))
+  : Lemma (ensures (let (a, b, g) = poly_ext_gcd p q in
+                    ((a * p + b * q) = g)))
           (decreases (degree_measure q))
 
 val ext_gcd_is_gcd (#t:Type) {| f: field t |} (p q: polynomial t)
-  : Lemma (ensures (let (_, _, g) = poly_ext_gcd #t #f p q in
-                    poly_eq g (poly_gcd #t #f p q)))
+  : Lemma (ensures (let (_, _, g) = poly_ext_gcd p q in
+                    (g = poly_gcd p q)))
           (decreases (degree_measure q))
 
 (* ------------------------------------------------------------------ *)
@@ -108,9 +107,8 @@ val ext_gcd_is_gcd (#t:Type) {| f: field t |} (p q: polynomial t)
 
 val gcd_congruence (#t:Type) {| f: field t |}
                    (x1 x2 y1 y2: polynomial t)
-  : Lemma (requires poly_eq x1 x2 /\ poly_eq y1 y2)
-          (ensures  poly_eq (poly_gcd #t #f x1 y1)
-                            (poly_gcd #t #f x2 y2))
+  : Lemma (requires (x1 = x2) /\ (y1 = y2))
+          (ensures  (poly_gcd x1 y1 = poly_gcd x2 y2))
           (decreases (degree_measure y1))
 
 (* ------------------------------------------------------------------ *)
@@ -139,7 +137,7 @@ val polynomial_euclidean_domain_chain_instance
 val coprime (#t:Type) {| f: field t |} (p q: polynomial t) : bool
 
 val coprime_reveal (#t:Type) {| f: field t |} (p q: polynomial t)
-  : Lemma (coprime #t #f p q = (poly_deg (poly_gcd #t #f p q) = Some 0))
+  : Lemma (coprime p q = (deg (poly_gcd p q) = 0))
 
 (* ------------------------------------------------------------------ *)
 (*  Singleton characterization and inverse                             *)
@@ -148,22 +146,19 @@ val coprime_reveal (#t:Type) {| f: field t |} (p q: polynomial t)
 (* A polynomial of degree 0 is exactly [lc p] with lc p ≠ zero. *)
 val degree_zero_is_singleton
     (#t:Type) {| cr: commutative_ring t |} (p: polynomial t)
-  : Lemma (requires poly_deg p == Some 0)
-          (ensures  p == [poly_lc p] /\ not ((poly_lc p) = (zero <: t)))
+  : Lemma (requires deg p == 0)
+          (ensures  p == [poly_lc p] /\ not (poly_lc p = zero))
 
 (* For c ≠ zero, [inv c] * [c] ≈ poly_one (field inverse at poly level). *)
 val singleton_inv_mul_singleton
     (#t:Type) {| f: field t |} (c: t)
-  : Lemma (requires not (c = (zero <: t)))
-          (ensures  (let cinv = f.f_sf.sf_mig.inv c in
-                     let lhs : polynomial t = [cinv] in
-                     let rhs : polynomial t = [c] in
-                     poly_eq (poly_mul lhs rhs) (poly_one #t)))
+  : Lemma (requires not (c = zero))
+          (ensures  [inv c] * [c] = poly_one)
 
 (* Euclid's lemma: if p and q are coprime and p divides a*q, then p
    divides a. *)
 val euclid_lemma (#t:Type) {| f: field t |} (p q a: polynomial t)
-  : Lemma (requires Some? (poly_deg p) /\
+  : Lemma (requires deg p >= 0 /\
                     coprime p q /\
-                    divides p (poly_mul a q))
+                    divides p (a * q))
           (ensures  divides p a)

@@ -59,11 +59,11 @@ private let matrix_eq_colwise_iff_eq_pointwise (#t: Type) {| eq: equatable t |} 
 
 private let rec matrix_rows_eq_from (#t: Type) {| equatable t |} #n (a b: square_matrix t n) (i: fin n)
   : Tot bool (decreases (n - i)) = 
-  if i = (n-1) then matrix_row_eq a b i else matrix_row_eq a b i && matrix_rows_eq_from a b (succ i)
+  if i = (n-1) then matrix_row_eq a b i else matrix_row_eq a b i && matrix_rows_eq_from a b (i ++ 1)
 
 private let rec matrix_cols_eq_from (#t: Type) {| equatable t |} #n (a b: square_matrix t n) (j: fin n)
   : Tot bool (decreases (n - j)) = 
-  if j = (n-1) then matrix_col_eq a b j else matrix_col_eq a b j && matrix_cols_eq_from a b (succ j)
+  if j = (n-1) then matrix_col_eq a b j else matrix_col_eq a b j && matrix_cols_eq_from a b (j ++ 1)
  
 private let matrix_eq_by_rows (#t: Type) {| equatable t |} #n (a b: square_matrix t n)
   : bool = matrix_rows_eq_from a b 0
@@ -79,7 +79,7 @@ private let matrix_eq_by_rows_to_prop (#t: Type) {| equatable t |} #n (a b: squa
             (decreases (n - from))= 
     if from < n-1 then begin
       assert (matrix_row_eq a b from);
-      aux a b (succ from)
+      aux a b (from ++ 1)
     end else () in
   aux a b 0
  
@@ -91,7 +91,7 @@ private let matrix_eq_by_cols_to_prop (#t: Type) {| equatable t |} #n (a b: squa
             (decreases (n - from))= 
     if from < n-1 then begin
       assert (matrix_col_eq a b from);
-      aux a b (succ from)
+      aux a b (from ++ 1)
     end else () in
   aux a b 0
 
@@ -103,7 +103,7 @@ private let matrix_eq_prop_rowwise_to_eq_by_rows (#t: Type) {| equatable t |} #n
             (decreases (n - from))= 
   if from < n-1 then begin
     assert (matrix_row_eq a b from);
-    aux a b (succ from)
+    aux a b (from ++ 1)
   end else () in
 aux a b 0
 
@@ -115,7 +115,7 @@ private let matrix_eq_prop_colwise_to_eq_by_cols (#t: Type) {| equatable t |} #n
             (decreases (n - from))= 
   if from < n-1 then begin
     assert (matrix_col_eq a b from);
-    aux a b (succ from)
+    aux a b (from ++ 1)
   end else () in
 aux a b 0
 
@@ -228,7 +228,7 @@ let matrix_eq_bool_transitivity
 
 let matrix_neg (#t: Type) {| add_comm_group t |} (#n: pos)
                (a: square_matrix t n) : square_matrix t n
-  = fun i j -> neg (a i j)
+  = fun i j -> (- (a i j))
 
 let matrix_add_congruence
   (#t: Type) {| add_comm_group t |} #n
@@ -283,3 +283,300 @@ let matrix_add_negation
   = Classical.forall_intro #t add_negation;
     matrix_eq_bool_iff_pointwise (matrix_add (matrix_neg a) a) (zero_matrix);
     matrix_eq_bool_iff_pointwise (matrix_add a (matrix_neg a)) (zero_matrix)
+
+(* ===== merged from Core.Matrix.Ring - matrix ring instance + mul laws (matrix_mul_* private) ===== *)
+
+(* ----------------------------------------------------------------- *)
+(*  Congruence of matrix_mul                                         *)
+(* ----------------------------------------------------------------- *)
+
+let matrix_mul_pointwise_congruence
+  (#t: Type) {| r: ring t |} (#n: pos)
+  (a b c d: square_matrix t n) (i j: fin n)
+  : Lemma (requires matrix_eq a c /\ matrix_eq b d)
+          (ensures matrix_mul a b i j = matrix_mul c d i j)
+  = elim_equatable_laws t ();
+    trans_for_calc t ();
+    matrix_mul_to_fin_sum a b i j;
+    matrix_mul_to_fin_sum c d i j;
+    let pf (k: fin n) : Lemma (pointwise_mul (row a i) (col b j) k 
+                              = pointwise_mul (row c i) (col d j) k)
+      = mul_congruence (a i k) (b k j) (c i k) (d k j)
+    in
+    fin_sum_congruence (pointwise_mul (row a i) (col b j))
+                       (pointwise_mul (row c i) (col d j)) pf
+
+let matrix_mul_congruence
+  (#t: Type) {| r: ring t |} (#n: pos)
+  (a b c d: square_matrix t n)
+  : Lemma (requires matrix_eq_bool a c /\ matrix_eq_bool b d)
+          (ensures matrix_eq_bool (matrix_mul a b) (matrix_mul c d))
+  = matrix_eq_bool_iff_pointwise a c;
+    matrix_eq_bool_iff_pointwise b d;
+    let pf (i j: fin n) : Lemma (matrix_mul a b i j = matrix_mul c d i j)
+      = matrix_mul_pointwise_congruence a b c d i j
+    in
+    Classical.forall_intro_2 pf;
+    matrix_eq_bool_iff_pointwise (matrix_mul a b) (matrix_mul c d)
+
+(* ----------------------------------------------------------------- *)
+(*  Left/right identities                                            *)
+(* ----------------------------------------------------------------- *)
+
+#push-options "--fuel 2 --ifuel 1 --z3rlimit 60"
+let matrix_mul_left_identity_pointwise
+  (#t: Type) {| r: ring t |} (#n: pos)
+  (a: square_matrix t n) (i j: fin n)
+  : Lemma (matrix_mul id_matrix a i j = a i j)
+  = elim_equatable_laws t ();
+    trans_for_calc t ();
+    matrix_mul_to_fin_sum id_matrix a i j;
+    fin_sum_congruence (pointwise_mul (row id_matrix i) (col a j))
+                       (pointwise_mul (fin_kronecker_delta i) (col a j)) (fun _ -> ());
+    fin_sum_kronecker i (col a j)
+
+let matrix_mul_right_identity_pointwise
+  (#t: Type) {| r: ring t |} (#n: pos)
+  (a: square_matrix t n) (i j: fin n)
+  : Lemma (matrix_mul a id_matrix i j = a i j)
+  = elim_equatable_laws t ();
+    trans_for_calc t ();
+    matrix_mul_to_fin_sum a id_matrix i j;
+    let pf (k: fin n) : Lemma (pointwise_mul (row a i) (col id_matrix j) k
+                              = pointwise_mul (fin_kronecker_delta j) (row a i) k)
+      = if k = j then (x_mul_one (a i k); one_mul_x (a i k))
+        else (x_mul_zero (a i k); zero_mul_x (a i k))
+    in
+    fin_sum_congruence (pointwise_mul (row a i) (col id_matrix j))
+                       (pointwise_mul (fin_kronecker_delta j) (row a i)) pf;
+    fin_sum_kronecker j (row a i)
+#pop-options
+
+let matrix_mul_left_identity
+  (#t: Type) {| r: ring t |} (#n: pos) (a: square_matrix t n)
+  : Lemma (matrix_eq_bool (matrix_mul id_matrix a) a)
+  = let id_mat = id_matrix in
+    let pf (i j: fin n) : Lemma (matrix_mul id_mat a i j = a i j)
+      = matrix_mul_left_identity_pointwise a i j
+    in
+    Classical.forall_intro_2 pf;
+    matrix_eq_bool_iff_pointwise (matrix_mul id_mat a) a
+
+let matrix_mul_right_identity
+  (#t: Type) {| r: ring t |} (#n: pos) (a: square_matrix t n)
+  : Lemma (matrix_eq_bool (matrix_mul a id_matrix) a)
+  = let id_mat = id_matrix in
+    let pf (i j: fin n) : Lemma (matrix_mul a id_mat i j = a i j)
+      = matrix_mul_right_identity_pointwise a i j
+    in
+    Classical.forall_intro_2 pf;
+    matrix_eq_bool_iff_pointwise (matrix_mul a id_mat) a
+
+(* ----------------------------------------------------------------- *)
+(*  Associativity                                                    *)
+(* ----------------------------------------------------------------- *)
+
+(* Clean proof using only combinators, no lambdas. 
+   Goal: (AB)C_{ij} = A(BC)_{ij}
+   
+   Strategy (all sums are fin_sum):
+     LHS == Σₗ (AB)ᵢₗ·cₗⱼ
+         == Σₗ (Σₖ aᵢₖ·bₖₗ)·cₗⱼ           (expand AB)
+         == Σₗ Σₖ (aᵢₖ·bₖₗ)·cₗⱼ            (fin_sum_mul_right)
+         == Σₗ Σₖ aᵢₖ·(bₖₗ·cₗⱼ)            (ring associativity)
+         == Σₖ Σₗ aᵢₖ·(bₖₗ·cₗⱼ)            (fin_sum_swap)
+         == Σₖ aᵢₖ·(Σₗ bₖₗ·cₗⱼ)            (fin_sum_mul_left)
+         == Σₖ aᵢₖ·(BC)ₖⱼ                   (fold BC)
+         == RHS
+*)
+
+let matrix_mul_assoc_clean
+  (#t: Type) {| r: ring t |} (#n: pos)
+  (a b c: square_matrix t n) (i j: fin n)
+  : Lemma (matrix_mul (matrix_mul a b) c i j
+        = matrix_mul a (matrix_mul b c) i j)
+  = elim_equatable_laws t ();
+    trans_for_calc t ();
+    let ab = matrix_mul a b in
+    let bc = matrix_mul b c in
+    let ri  = row a i in    (* ri k  = a i k *)
+    let cj  = col c j in    (* cj l  = c l j *)
+
+    (* The key curried double-sum: double_lk l k = aᵢₖ·(bₖₗ·cₗⱼ) *)
+    let double_lk (l: fin n) (k: fin n) : t = ri k * (b k l * cj l) in
+    let rhs_summand (k: fin n) : t = ri k * bc k j in
+
+    (* ——— LHS unfolding ———
+       matrix_mul ab c i j 
+       == fin_sum (pointwise_mul (row ab i) cj)         [matrix_mul_to_fin_sum]
+       Each summand: (row ab i) l * cj l 
+                   = ab i l * cj l
+                   = fin_sum (pointwise_mul ri (col b l)) * cj l   [step1]
+                   = fin_sum (double_lk l)                         [step2]
+                   = fin_sum_curry double_lk l *)
+    let lhs_to_double (l: fin n) : Lemma (pointwise_mul (row ab i) cj l = fin_sum_curry double_lk l) = 
+        matrix_mul_to_fin_sum a b i l;
+        fin_sum_mul_right (pointwise_mul (row a i) (col b l)) (col c j l);
+        Classical.forall_intro_3 #t mul_associativity;
+        fin_sum_congruence
+          (pointwise_mul (pointwise_mul (row a i) (col b l)) (const (col c j l)))
+          (double_lk l) (fun _ -> ())
+    in
+    matrix_mul_to_fin_sum (matrix_mul a b) c i j;
+    fin_sum_congruence (pointwise_mul (row (matrix_mul a b) i) (col c j)) 
+                       (fin_sum_curry double_lk) lhs_to_double;
+    (* Now: matrix_mul ab c i j = fin_sum (fin_sum_curry double_lk) *)
+    (* ——— Sum swap ———
+       fin_sum (fin_sum_curry double_lk) = fin_sum (fin_sum_curry (swap_args double_lk)) *)
+    fin_sum_swap double_lk;
+    (* ——— RHS folding ———
+       fin_sum_curry (swap_args double_lk) k
+       = fin_sum (swap_args double_lk k)
+       = Σₗ double_lk l k
+       = Σₗ aᵢₖ·(bₖₗ·cₗⱼ)
+       = aᵢₖ · Σₗ bₖₗ·cₗⱼ                  [fin_sum_mul_left]
+       = aᵢₖ · (BC)ₖⱼ                       [fold BC]
+       = rhs_summand k *)
+    let double_to_rhs (k: fin n) : Lemma
+      (fin_sum_curry (swap_args double_lk) k = rhs_summand k)
+      = fin_sum_congruence (swap_args double_lk k)
+          (pointwise_mul (const (row a i k)) (pointwise_mul (row b k) (col c j))) (fun _ -> ());
+        fin_sum_mul_left (row a i k) (pointwise_mul (row b k) (col c j));
+        matrix_mul_to_fin_sum b c k j;
+        mul_congruence (row a i k) (fin_sum (pointwise_mul (row b k) (col c j)))
+                         (row a i k) (matrix_mul b c k j)
+    in
+    fin_sum_congruence (fin_sum_curry (swap_args double_lk)) rhs_summand double_to_rhs;
+    (* Now: fin_sum (fin_sum_curry (swap_args double_lk)) = fin_sum rhs_summand *)
+
+    (* RHS: matrix_mul a (matrix_mul b c) i j = fin_sum rhs_summand *)
+    matrix_mul_to_fin_sum a (matrix_mul b c) i j;
+    fin_sum_congruence (pointwise_mul (row a i) (col (matrix_mul b c) j)) rhs_summand (fun _ -> ())    
+
+let matrix_mul_associativity
+  (#t: Type) {| r: ring t |} (#n: pos) (a b c: square_matrix t n)
+  : Lemma (matrix_eq_bool (matrix_mul (matrix_mul a b) c)
+                          (matrix_mul a (matrix_mul b c)))
+  = Classical.forall_intro_2 (matrix_mul_assoc_clean a b c);
+    matrix_eq_bool_iff_pointwise (matrix_mul (matrix_mul a b) c)
+                                 (matrix_mul a (matrix_mul b c))
+
+(* ----------------------------------------------------------------- *)
+(*  Left distributivity:  a * (b + c) = a*b + a*c                    *)
+(* ----------------------------------------------------------------- *)
+
+#push-options "--fuel 2 --ifuel 1 --z3rlimit 80"
+let matrix_left_distributivity_pointwise
+  (#t: Type) {| r: ring t |} (#n: pos)
+  (a b c: square_matrix t n) (i j: fin n)
+  : Lemma (matrix_mul a (matrix_add b c) i j
+        = matrix_add (matrix_mul a b) (matrix_mul a c) i j)
+  = elim_equatable_laws t ();
+    matrix_mul_to_fin_sum a (matrix_add b c) i j;
+    matrix_mul_to_fin_sum a b i j;
+    matrix_mul_to_fin_sum a c i j;
+    let pf (k: fin n) : Lemma (pointwise_mul (row a i) (col (matrix_add b c) j) k 
+                              = pointwise_mul (row a i) (col b j) k + pointwise_mul (row a i) (col c j) k)
+      = left_distributivity (a i k) (b k j) (c k j) in
+    fin_sum_add_ext (pointwise_mul (row a i) (col b j))
+                    (pointwise_mul (row a i) (col c j))
+                    (pointwise_mul (row a i) (col (matrix_add b c) j)) pf;
+    add_congruence (fin_sum (pointwise_mul (row a i) (col b j)))
+                   (fin_sum (pointwise_mul (row a i) (col c j)))
+                   (matrix_mul a b i j) (matrix_mul a c i j)
+#pop-options
+
+let matrix_left_distributivity
+  (#t: Type) {| r: ring t |} (#n: pos) (a b c: square_matrix t n)
+  : Lemma (matrix_eq_bool (matrix_mul a (matrix_add b c))
+                          (matrix_add (matrix_mul a b) (matrix_mul a c)))
+  = let pf (i j: fin n) : Lemma (matrix_mul a (matrix_add b c) i j
+                              = matrix_add (matrix_mul a b) (matrix_mul a c) i j)
+      = matrix_left_distributivity_pointwise a b c i j
+    in
+    Classical.forall_intro_2 pf;
+    matrix_eq_bool_iff_pointwise (matrix_mul a (matrix_add b c))
+                                 (matrix_add (matrix_mul a b) (matrix_mul a c))
+
+(* ----------------------------------------------------------------- *)
+(*  Right distributivity:  (b + c) * a = b*a + c*a                   *)
+(*  Note arg order matches `r.right_distributivity x y z`:           *)
+(*    (y+z)*x = y*x + z*x  — first arg is the RIGHT factor.          *)
+(* ----------------------------------------------------------------- *)
+
+#push-options "--fuel 2 --ifuel 1 --z3rlimit 80"
+let matrix_right_distributivity_pointwise
+  (#t: Type) {| r: ring t |} (#n: pos)
+  (a b c: square_matrix t n) (i j: fin n)
+  : Lemma (matrix_mul (matrix_add a b) c i j = matrix_add (matrix_mul a c) (matrix_mul b c) i j) = 
+    elim_equatable_laws t ();
+    matrix_mul_to_fin_sum (matrix_add a b) c i j;
+    matrix_mul_to_fin_sum a c i j;
+    matrix_mul_to_fin_sum b c i j;
+    let pf (k: fin n) : Lemma (pointwise_mul (row (matrix_add a b) i) (col c j) k
+                              = pointwise_mul (row a i) (col c j) k + pointwise_mul (row b i) (col c j) k)
+      = right_distributivity (c k j) (a i k) (b i k)
+    in
+    fin_sum_add_ext (pointwise_mul (row a i) (col c j))
+                    (pointwise_mul (row b i) (col c j))
+                    (pointwise_mul (row (matrix_add a b) i) (col c j)) pf;
+    add_congruence (fin_sum (pointwise_mul (row a i) (col c j)))
+                   (fin_sum (pointwise_mul (row b i) (col c j)))
+                   (matrix_mul a c i j) (matrix_mul b c i j)
+#pop-options
+
+let matrix_right_distributivity
+  (#t: Type) {| r: ring t |} (#n: pos) (a b c: square_matrix t n)
+  : Lemma (matrix_eq_bool (matrix_mul (matrix_add b c) a)
+                          (matrix_add (matrix_mul b a) (matrix_mul c a)))
+  = Classical.forall_intro_2 (matrix_right_distributivity_pointwise b c a);
+    matrix_eq_bool_iff_pointwise (matrix_mul (matrix_add b c) a)
+                                 (matrix_add (matrix_mul b a) (matrix_mul c a))
+
+(* ----------------------------------------------------------------- *)
+(*  Zero absorption (derived: needed for the ring instance closure)  *)
+(* ----------------------------------------------------------------- *)
+
+#push-options "--fuel 2 --ifuel 1 --z3rlimit 40"
+let matrix_left_absorption_pointwise
+  (#t: Type) {| r: ring t |} (#n: pos)
+  (a: square_matrix t n) (i j: fin n)
+  : Lemma (matrix_mul zero_matrix a i j = zero)
+  = matrix_mul_to_fin_sum zero_matrix a i j;
+    Classical.forall_intro #t (zero_mul_x);
+    fin_sum_zero_ext (pointwise_mul (row zero_matrix i) (col a j)) (fun _ -> ())
+#pop-options
+
+let matrix_left_absorption
+  (#t: Type) {| r: ring t |} (#n: pos) (a: square_matrix t n)
+  : Lemma (matrix_eq_bool (matrix_mul zero_matrix a) zero_matrix)
+  = Classical.forall_intro_2 (matrix_left_absorption_pointwise a);    
+    matrix_eq_bool_iff_pointwise (matrix_mul zero_matrix a) zero_matrix
+
+#push-options "--fuel 2 --ifuel 1 --z3rlimit 40"
+let matrix_right_absorption_pointwise
+  (#t: Type) {| r: ring t |} (#n: pos)
+  (a: square_matrix t n) (i j: fin n)
+  : Lemma (matrix_mul a zero_matrix i j = zero) = 
+    matrix_mul_to_fin_sum a zero_matrix i j;
+    Classical.forall_intro #t (x_mul_zero);
+    fin_sum_zero_ext (pointwise_mul (row a i) (col zero_matrix j)) (fun _ -> ())
+#pop-options
+
+let matrix_right_absorption
+  (#t: Type) {| r: ring t |} (#n: pos) (a: square_matrix t n)
+  : Lemma (matrix_eq_bool (matrix_mul a zero_matrix) zero_matrix)
+  = Classical.forall_intro_2 (matrix_right_absorption_pointwise a);   
+    matrix_eq_bool_iff_pointwise (matrix_mul a zero_matrix) zero_matrix
+
+(* ----------------------------------------------------------------- *)
+(*  ring (square_matrix t n) instance                                *)
+(* ----------------------------------------------------------------- *)
+
+(* merged left∧right multiplicative identity (implements the fsti val; used by matrix_ring). *)
+let matrix_mul_identity #t {| r: ring t |} (#n: pos) (a: square_matrix t n)
+  : Lemma ((matrix_mul a id_matrix `matrix_eq_bool` a) /\ (matrix_mul id_matrix a `matrix_eq_bool` a)) =
+  matrix_mul_left_identity a;
+  matrix_mul_right_identity a
+
+(* matrix_ring instance now lives (transparently) in Core.Matrix.fsti. *)

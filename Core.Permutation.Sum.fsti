@@ -51,7 +51,7 @@ val sum_over_perms_congruence
 val sum_over_perms_neg
   (#t: Type) {| g: add_comm_group t |}
   (n: nat) (f: permutation n -> t)
-  : Lemma (sum_over_perms n (pointwise_neg f) = neg (sum_over_perms n f))
+  : Lemma (sum_over_perms n (pointwise_neg f) = (- (sum_over_perms n f)))
 
 (* Named-function variant of sum_over_perms_neg.
    Useful when the caller is in a commutative_ring context (where projecting
@@ -62,8 +62,8 @@ val sum_over_perms_neg
 val sum_over_perms_neg_named
   (#t: Type) {| g: add_comm_group t |}
   (n: nat) (nf f: permutation n -> t)
-  (h: (s: permutation n) -> Lemma (nf s = neg (f s)))
-  : Lemma (ensures sum_over_perms n nf = neg (sum_over_perms n f))
+  (h: (s: permutation n) -> Lemma (nf s = (- (f s))))
+  : Lemma (ensures sum_over_perms n nf = (- (sum_over_perms n f)))
 
 (* Sum-of-pointwise-sum is sum of sums. *)
 val sum_over_perms_add
@@ -143,17 +143,17 @@ val perm_eq_count_nil (#n: nat) (p: permutation n)
 
 val perm_eq_count_cons (#n: nat) (p h: permutation n) (tl: list (permutation n))
   : Lemma (perm_eq_count p (h :: tl) ==
-           Prims.op_Addition (bool_to_nat (perm_eq p h)) (perm_eq_count p tl))
+           ((bool_to_nat (perm_eq p h)) ++ (perm_eq_count p tl)))
 
 val perm_eq_count_append (#n: nat) (p: permutation n) (xs ys: list (permutation n))
   : Lemma (perm_eq_count p (L.append xs ys) ==
-           Prims.op_Addition (perm_eq_count p xs) (perm_eq_count p ys))
+           ((perm_eq_count p xs) ++ (perm_eq_count p ys)))
 
 (* Unfolding perm_eq_count through L.map: one step. *)
 val perm_eq_count_map_cons (#n #m: nat) (f: permutation m -> permutation n)
   (p: permutation n) (h: permutation m) (tl: list (permutation m))
   : Lemma (perm_eq_count p (L.map f (h :: tl)) ==
-           Prims.op_Addition
+           ( ++ )
              (bool_to_nat (perm_eq p (f h)))
              (perm_eq_count p (L.map f tl)))
 

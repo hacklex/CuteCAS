@@ -30,15 +30,15 @@ private let vec_eq_downfrom_iff_prop #t {| equatable t |} #n (v1 v2: vector t n)
 
 private let rec vec_eq_from (#t: Type) {| eq: equatable t |} #n (v1 v2: vector t n) (i: fin n)
   : Tot bool (decreases n-i)
-  = if i = (n-1) then v1 i = v2 i else (v1 i = v2 i) && vec_eq_from v1 v2 (succ i)
+  = if i = (n-1) then v1 i = v2 i else (v1 i = v2 i) && vec_eq_from v1 v2 (i ++ 1)
 
 private let rec vec_eq_from_when_prop #t {| equatable t |} #n (v1 v2: vector t n) (i: fin n)
   : Lemma (ensures vec_eq_prop_ranged v1 v2 i (n-1) ==> vec_eq_from v1 v2 i)
-          (decreases n-i) = if i < n-1 then vec_eq_from_when_prop v1 v2 (succ i)
+          (decreases n-i) = if i < n-1 then vec_eq_from_when_prop v1 v2 (i ++ 1)
 
 private let rec vec_eq_prop_when_from #t {| equatable t |} #n (v1 v2: vector t n) (i: fin n)
   : Lemma (ensures vec_eq_from v1 v2 i ==> vec_eq_prop_ranged v1 v2 i (n-1))
-          (decreases n-i) = if i < n-1 then vec_eq_prop_when_from v1 v2 (succ i)
+          (decreases n-i) = if i < n-1 then vec_eq_prop_when_from v1 v2 (i ++ 1)
 
 private let vec_eq_from_iff_prop #t {| equatable t |} #n (v1 v2: vector t n) (i: fin n)
   : Lemma (vec_eq_from v1 v2 i <==> vec_eq_prop_ranged v1 v2 i (n-1))

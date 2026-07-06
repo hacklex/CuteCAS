@@ -22,6 +22,7 @@ module Core.Risch.Rational
 module L  = FStar.List.Tot
 module TC = FStar.Tactics.Typeclasses
 module H  = Core.Algebra.Helpers
+module PA = Core.Risch.PolyAntideriv
 
 open Core.Algebra
 open Core.Algebra.Notation
@@ -66,27 +67,26 @@ let poly_antideriv (#t:Type) {| f: field t |}
   : Pure (polynomial t)
          (requires char_zero f)
          (ensures fun _ -> True)
-  = let cr : commutative_ring t = cr_of_id t #(id_of_f t) in
-    let n = L.length p in
+  = let n = L.length p in
     if n = 0 then poly_zero #t
     else
       let rec build_coeffs (k: nat) (fuel: nat)
-        : Pure (list t) (requires fuel <= n /\ Prims.op_Addition k fuel == n)
+        : Pure (list t) (requires fuel <= n /\ (k ++ fuel) == n)
                (ensures fun _ -> True)
                (decreases fuel)
         = if fuel = 0 then []
           else
             let ck = coeff p k in
-            let kp1_nat : pos = Prims.op_Addition k 1 in
-            let kp1 : t = nat_scale #t #(cr.cr_r.r_add) kp1_nat (one #t) in
+            let kp1_nat : pos = (k ++ 1) in
+            let kp1 : t = nat_scale kp1_nat (one #t) in
             (* char_zero ensures nat_scale (k+1) one ≠ zero *)
             assert (is_nonzero kp1);
             let kp1_inv : t = (f.f_sf.sf_mig).inv kp1 in
             let new_coeff : t = ck * kp1_inv in
-            new_coeff :: build_coeffs (Prims.op_Addition k 1) (Prims.op_Subtraction fuel 1)
+            new_coeff :: build_coeffs (k ++ 1) (fuel - 1)
       in
       let coeffs = build_coeffs 0 n in
-      trim #t #cr ((zero <: t) :: coeffs)
+      trim (zero :: coeffs)
 
 (* ================================================================ *)
 (*  Single-factor Hermite: reduce A/D^n to rational + A_final/D     *)
@@ -98,10 +98,10 @@ let hermite_single_factor (#t:Type) {| f: field t |}
   (d: polynomial t)
   (n: nat{n >= 1})
   : Pure (list (polynomial t & polynomial t & nat) & polynomial t)
-         (requires Some? (poly_deg d) /\ square_free #t #f d /\
+         (requires deg d >= 0 /\ square_free d /\
                   char_zero f)
          (ensures fun _ -> True)
-  = let (raw_parts, final_num) = hermite_reduce_power #t #f a_num d n in
+  = let (raw_parts, final_num) = hermite_reduce_power a_num d n in
     (* Convert (g_num, power) pairs to (g_num, d, power) triples *)
     let triples = L.map (fun (g, k) -> (g, d, k)) raw_parts in
     (triples, final_num)
@@ -123,20 +123,20 @@ let integrate_rational_single_factor (#t:Type) {| f: field t |}
   (d: polynomial t)
   (n: nat{n >= 1})
   : Pure (rational_integral_result f)
-         (requires Some? (poly_deg d) /\ Some?.v (poly_deg d) >= 1 /\
-                  square_free #t #f d /\ char_zero f)
+         (requires deg d >= 1 /\
+                  square_free d /\ char_zero f)
          (ensures fun _ -> True)
-  = let cr : commutative_ring t = cr_of_id t #(id_of_f t) in
-    (* Step 1: Euclidean division by D^n to get proper fraction *)
+  = (* Step 1: Euclidean division by D^n to get proper fraction *)
     let d_power = poly_power d n in
-    let (quot, rem) = poly_divmod #t #f p d_power in
-    (* Step 2: Polynomial antiderivative of the quotient *)
-    let poly_int = poly_antideriv #t #f quot in
+    let (quot, rem) = poly_divmod p d_power in
+    (* Step 2: Polynomial antiderivative of the quotient (the PROVEN
+       top-level `antideriv`, whose D(∫p)=p soundness is `PA.antideriv_correct`). *)
+    let poly_int = PA.antideriv quot in
     (* Step 3: Hermite reduction on rem / D^n *)
     let (hermite_parts, residual_num) =
-      hermite_single_factor #t #f rem d n in
+      hermite_single_factor rem d n in
     (* Step 4: LRT on residual_num / D (square-free denominator) *)
-    let log = lrt #t #f residual_num d in
+    let log = lrt residual_num d in
     { poly_part = poly_int;
       hermite_rational = hermite_parts;
       log_part = log;

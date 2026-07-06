@@ -2,6 +2,7 @@ module Core.Polynomial.Unique
 
 module TC = FStar.Tactics.Typeclasses
 module L  = FStar.List.Tot
+module H  = Core.Algebra.Helpers
 
 open Core.Algebra
 open Core.Algebra.Notation
@@ -16,10 +17,13 @@ open Core.Tactics.CanonRing
 let degree_well_defined #t #cr p q
   = poly_eq_length p q
 
+let nonzero_iff_some_deg #t #cr p
+  = poly_zero_is_unique p
+
 let degree_none_poly_eq_zero #t #cr p
   = assert (L.length p = 0);
     assert (p == ([] <: polynomial t));
-    poly_eq_reflexivity #t #cr p
+    poly_eq_reflexivity p
 
 (* ================================================================ *)
 (*  Carrier-level helpers (single commutative_ring in scope)        *)
@@ -33,64 +37,60 @@ let degree_none_poly_eq_zero #t #cr p
 #push-options "--z3rlimit 40 --fuel 1 --ifuel 1"
 private let sub_zero_implies_eq_h
     (#t:Type) {| cr: commutative_ring t |} (a b: t)
-  : Lemma (requires eq (add a (neg b)) zero)
-          (ensures  eq a b)
-  = reflexivity b;
-    add_congruence b (add a (neg b)) b zero;
+  : Lemma (requires (a + ((- b))) = zero)
+          (ensures  a = b)
+  = H.elim_equatable_laws t ();
+    add_congruence b ((a + ((- b)))) b zero;
     add_zero b;
-    transitivity (add b (add a (neg b))) (add b zero) b;
-    assert (eq a (add b (add a (neg b)))) by canon_ring ();
-    transitivity a (add b (add a (neg b))) b
+    transitivity ((b + ((a + ((- b)))))) ((b + zero)) b;
+    assert (a = ((b + ((a + ((- b))))))) by canon_ring ();
+    transitivity a ((b + ((a + ((- b)))))) b
 #pop-options
 
 #push-options "--z3rlimit 60 --fuel 1 --ifuel 1"
 private let mul_sub_distrib_h
     (#t:Type) {| cr: commutative_ring t |} (q a b: t)
-  : Lemma (eq (mul q (add a (neg b)))
-              (add (mul q a) (neg (mul q b))))
-  = assert (eq (mul q (add a (neg b)))
-               (add (mul q a) (neg (mul q b))))
+  : Lemma ((q * ((a + ((- b)))))
+              = ((((q * a)) + ((- ((q * b)))))))
+  = assert ((q * ((a + ((- b)))))
+               = ((((q * a)) + ((- ((q * b)))))))
       by canon_ring ()
 #pop-options
 
 #push-options "--z3rlimit 60 --fuel 1 --ifuel 1"
 private let add_rearrange_h
     (#t:Type) {| cr: commutative_ring t |} (x y r1 r2: t)
-  : Lemma (requires eq (add x r1) (add y r2))
-          (ensures  eq (add x (neg y)) (add r2 (neg r1)))
-  = reflexivity (add (neg y) (neg r1));
-    add_congruence (add x r1) (add (neg y) (neg r1))
-                   (add y r2) (add (neg y) (neg r1));
-    assert (eq (add (add x r1) (add (neg y) (neg r1)))
-               (add x (neg y))) by canon_ring ();
-    assert (eq (add (add y r2) (add (neg y) (neg r1)))
-               (add r2 (neg r1))) by canon_ring ();
-    symmetry (add (add x r1) (add (neg y) (neg r1)))
-             (add x (neg y));
-    transitivity (add x (neg y))
-                 (add (add x r1) (add (neg y) (neg r1)))
-                 (add (add y r2) (add (neg y) (neg r1)));
-    transitivity (add x (neg y))
-                 (add (add y r2) (add (neg y) (neg r1)))
-                 (add r2 (neg r1))
+  : Lemma (requires (x + r1) = (y + r2))
+          (ensures  (x + ((- y))) = (r2 + ((- r1))))
+  = H.elim_equatable_laws t ();
+    add_congruence ((x + r1)) ((((- y)) + ((- r1))))
+                   ((y + r2)) ((((- y)) + ((- r1))));
+    assert ((((x + r1)) + ((((- y)) + ((- r1)))))
+               = ((x + ((- y))))) by canon_ring ();
+    assert ((((y + r2)) + ((((- y)) + ((- r1)))))
+               = ((r2 + ((- r1))))) by canon_ring ();
+    transitivity ((x + ((- y))))
+                 ((((x + r1)) + ((((- y)) + ((- r1))))))
+                 ((((y + r2)) + ((((- y)) + ((- r1))))));
+    transitivity ((x + ((- y))))
+                 ((((y + r2)) + ((((- y)) + ((- r1))))))
+                 ((r2 + ((- r1))))
 #pop-options
 
 #push-options "--z3rlimit 60 --fuel 1 --ifuel 1"
 private let extract_r_helper
     (#t:Type) {| cr: commutative_ring t |} (qa1 qa2 r1 r2: t)
-  : Lemma (requires eq (add qa1 r1) (add qa2 r2) /\ eq qa1 qa2)
-          (ensures  eq r1 r2)
-  = reflexivity r2;
+  : Lemma (requires (qa1 + r1) = (qa2 + r2) /\ qa1 = qa2)
+          (ensures  r1 = r2)
+  = H.elim_equatable_laws t ();
     add_congruence qa1 r2 qa2 r2;
-    symmetry (add qa1 r2) (add qa2 r2);
-    transitivity (add qa1 r1) (add qa2 r2) (add qa1 r2);
-    reflexivity (neg qa1);
-    add_congruence (add qa1 r1) (neg qa1) (add qa1 r2) (neg qa1);
-    assert (eq r1 (add (add qa1 r1) (neg qa1))) by canon_ring ();
-    assert (eq (add (add qa1 r2) (neg qa1)) r2) by canon_ring ();
-    transitivity r1 (add (add qa1 r1) (neg qa1))
-                    (add (add qa1 r2) (neg qa1));
-    transitivity r1 (add (add qa1 r2) (neg qa1)) r2
+    transitivity ((qa1 + r1)) ((qa2 + r2)) ((qa1 + r2));
+    add_congruence ((qa1 + r1)) ((- qa1)) ((qa1 + r2)) ((- qa1));
+    assert (r1 = ((((qa1 + r1)) + ((- qa1))))) by canon_ring ();
+    assert (((((qa1 + r2)) + ((- qa1)))) = r2) by canon_ring ();
+    transitivity r1 ((((qa1 + r1)) + ((- qa1))))
+                    ((((qa1 + r2)) + ((- qa1))));
+    transitivity r1 ((((qa1 + r2)) + ((- qa1)))) r2
 #pop-options
 
 (* ================================================================ *)
@@ -104,17 +104,16 @@ private let extract_r_helper
 
 #push-options "--z3rlimit 60 --fuel 1 --ifuel 1"
 let sub_zero_implies_eq #t #cr (a b: polynomial t)
-  = 
-    poly_sub_reveal a b;
-    sub_zero_implies_eq_h  a b
+  =
+    sub_zero_implies_eq_h a b
 #pop-options
 
 (* ================================================================ *)
-(*  degree_mul: direct dispatch to Class.poly_deg_mul               *)
+(*  degree_mul: direct dispatch to Core.Polynomial.deg_mul          *)
 (* ================================================================ *)
 
 let degree_mul #t #id (p q: polynomial t)
-  = poly_deg_mul #t #id p q
+  = deg_mul #t #id p q
 
 (* ================================================================ *)
 (*  only_mul_zero_decreases_poly_degree                             *)
@@ -122,11 +121,10 @@ let degree_mul #t #id (p q: polynomial t)
 
 #push-options "--z3rlimit 60 --fuel 1 --ifuel 1"
 let only_mul_zero_decreases_poly_degree #t #f (q d s: polynomial t)
-  = match poly_deg d with
-    | None   -> ()
-    | Some _ ->
-        degree_mul #t #(id_of_f t) q d;
-        degree_well_defined #t (poly_mul q d) s
+  = if deg d >= 0 then begin
+      degree_mul q d;
+      degree_well_defined (q * d) s
+    end
 #pop-options
 
 (* ================================================================ *)
@@ -135,18 +133,14 @@ let only_mul_zero_decreases_poly_degree #t #f (q d s: polynomial t)
 
 #push-options "--z3rlimit 60 --fuel 1 --ifuel 1"
 let poly_mul_sub_distrib #t #cr (q a b: polynomial t)
-  = 
-    poly_sub_reveal a b;
-    poly_sub_reveal (poly_mul q a) (poly_mul q b);
-    mul_sub_distrib_h  q a b
+  =
+    mul_sub_distrib_h q a b
 #pop-options
 
 #push-options "--z3rlimit 60 --fuel 1 --ifuel 1"
 let add_rearrange #t #cr (x y r1 r2: polynomial t)
-  = 
-    poly_sub_reveal x y;
-    poly_sub_reveal r2 r1;
-    add_rearrange_h  x y r1 r2
+  =
+    add_rearrange_h x y r1 r2
 #pop-options
 
 (* ================================================================ *)
@@ -156,21 +150,21 @@ let add_rearrange #t #cr (x y r1 r2: polynomial t)
 #push-options "--z3rlimit 80 --fuel 1 --ifuel 1"
 let poly_divmod_unique #t #f (q a1 a2 r1 r2: polynomial t)
   = 
-    let qa1 = poly_mul q a1 in
-    let qa2 = poly_mul q a2 in
+    let qa1 = (q * a1) in
+    let qa2 = (q * a2) in
     (* Part A: prove poly_eq a1 a2 *)
     add_rearrange qa1 qa2 r1 r2;
     (* : poly_eq (poly_sub qa1 qa2) (poly_sub r2 r1) *)
     poly_mul_sub_distrib q a1 a2;
     (* : poly_eq (poly_mul q (poly_sub a1 a2)) (poly_sub qa1 qa2) *)
-    let sa = poly_sub a1 a2 in
-    let sr = poly_sub r2 r1 in
-    poly_eq_transitivity (poly_mul q sa) (poly_sub qa1 qa2) sr;
+    let sa = a1 -- a2 in
+    let sr = r2 -- r1 in
+    poly_eq_transitivity (q * sa) (qa1 -- qa2) sr;
     (* : poly_eq (poly_mul q sa) sr *)
-    poly_sub_degree_bound r2 r1 (Some?.v (poly_deg q));
-    (* : None? (poly_deg sr) \/ Some?.v (poly_deg sr) < Some?.v (poly_deg q) *)
-    only_mul_zero_decreases_poly_degree #t #f q sa sr;
-    (* : None? (poly_deg sa) *)
+    poly_sub_degree_bound r2 r1 (deg q);
+    (* : deg sr < deg q *)
+    only_mul_zero_decreases_poly_degree q sa sr;
+    (* : deg sa < 0 *)
     degree_none_poly_eq_zero sa;
     (* : poly_eq sa poly_zero *)
     sub_zero_implies_eq a1 a2;
@@ -186,5 +180,5 @@ let poly_divmod_unique #t #f (q a1 a2 r1 r2: polynomial t)
        Identity: at carrier polynomial t,
          eq (add qa1 r1) (add qa2 r2) ∧ eq qa1 qa2 ⟹ eq r1 r2.
        Goes through (add r1 (neg r1)) = zero + cancellation. *)
-    extract_r_helper  qa1 qa2 r1 r2
+    extract_r_helper qa1 qa2 r1 r2
 #pop-options

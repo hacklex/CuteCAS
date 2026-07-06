@@ -43,10 +43,16 @@ private let rec trim_idempotence (#t:Type) {| cr: commutative_ring t |} (p: list
           [SMTPat (trim (trim p))]
   = if L.length p > 0 then trim_idempotence (L.tl p) 
  
-private let rec trim_poly_does_nothing (#t:Type) {| cr: commutative_ring t |} (p: list t)
+let rec trim_poly_does_nothing (#t:Type) {| cr: commutative_ring t |} (p: list t)
   : Lemma (requires is_trimmed p) (ensures trim p == p)
           (decreases L.length p)
   = if L.length p > 0 then trim_poly_does_nothing (L.tl p)
+
+(* trim never increases length. *)
+let rec trim_length_le (#t:Type) {| cr: commutative_ring t |} (p: list t)
+  : Lemma (ensures L.length (trim p) <= L.length p)
+          (decreases L.length p)
+  = if L.length p > 0 then trim_length_le (L.tl p)
 
 private let rec trimmed_tail_is_trimmed (#t:Type) {| cr: commutative_ring t |} (p: list t)
   : Lemma (requires is_trimmed p /\ L.length p > 0) (ensures is_trimmed (L.tl p))
@@ -67,8 +73,7 @@ unfold let (@) (#t:Type) {| cr: commutative_ring t |} (x:t) (y: polynomial t) : 
  
 private unfold let concat_coeff (#t:Type) {| cr: commutative_ring t |} (x:t) (p: polynomial t)
   : Lemma (const_coeff (x @ p) = x)
-  = symmetry x zero;
-    reflexivity x; 
+  = H.elim_equatable_laws t ();
     if L.length p = 0 && x = zero then assert_norm(const_coeff (x @ p) == zero)
     else if L.length p = 0 && x <> zero then assert_norm(const_coeff (x @ p) == x)
     
@@ -80,113 +85,6 @@ private unfold let concat_coeff (#t:Type) {| cr: commutative_ring t |} (x:t) (p:
 (*              poly_mul/poly_one/lc/deg.                           *)
 (* ---------------------------------------------------------------- *)
 
-class polynomial_commutative_ring (t: Type) {| cr: commutative_ring t |} = {
-  [@@@TC.no_method] pcr: commutative_ring (polynomial t);
-
-  (*  ----- Additive layer ----- *)
-
-  (*  Zero of the polynomial-ring is the empty list.               *)
-  [@@@TC.no_method] poly_zero_reveal:
-    squash (zero #(polynomial t) == []);
-
-  (*  ----- Multiplicative layer ----- *)
-
-  (*  Polynomial-ring one is the singleton list `[one]`.          *)
-  [@@@TC.no_method] poly_one_reveal:
-    squash ((one #t = zero #t && one #(polynomial t) == []) 
-         || (one #t <> zero #t) && one #(polynomial t) == [one #t]);
-
-  (*  Multiplying by zero on either side yields zero polynomial.        *)
-  [@@@TC.no_method] poly_mul_zero: (q: polynomial t) ->
-                 Lemma ((zero #(polynomial t)) * q == (zero #(polynomial t)) /\
-                        q * (zero #(polynomial t)) == (zero #(polynomial t)));
-
-  (*  ----- Degree + leading coefficient ----- *)
-
-  lc:  polynomial t -> t;
-  deg: polynomial t -> option nat;
-
-  [@@@TC.no_method] deg_zero_is_none: squash (deg zero == None);
-
-  [@@@TC.no_method] deg_reveal:
-    (a: t) -> (p: polynomial t) ->
-    Lemma (deg (a @ p) ==
-           (match deg p with
-            | Some k -> Some (succ k)
-            | None   -> if a = zero then None else Some 0));
-
-  [@@@TC.no_method] lc_reveal:
-    (p: polynomial t) ->
-    Lemma ((None? (deg p) /\ lc p == zero) \/ (Some? (deg p) /\ lc p == L.last p))
-}
-
-(*  Unfold-instance bridge: opening `polynomial_commutative_ring t`
-    delivers `commutative_ring (polynomial cr)` to TC search.       *)
-unfold instance cr_of_pcr (#t: Type) 
-    {| cr: commutative_ring t |}
-    {| pcrc: polynomial_commutative_ring t |}
-  : commutative_ring (polynomial t) = pcrc.pcr
-
-(* ---------------------------------------------------------------- *)
-(*  Layer 2: polynomial_integral_domain                             *)
-(*    Requires: integral_domain t                                   *)
-(*    Provides: integral_domain (polynomial id) +                   *)
-(*              polynomial_commutative_ring t #(cr_of_id t).        *)
-(* ---------------------------------------------------------------- *)
-
-class polynomial_integral_domain (t: Type) {| id: integral_domain t |}
-                                           {| pcrc: polynomial_commutative_ring t |}
-                                = {
-  [@@@TC.no_method] pid:  integral_domain (polynomial t);
-  [@@@TC.no_method] pid_pcrc_coherence: squash (cr_of_id (polynomial t) == pcrc.pcr);
- 
-  (*  Cons-mul: standard convolution shape.
-        (a :: p) * q == (a@zero) * q + (zero@(p * q))
-      Requires integral_domain coefficients to be a valid characterizing
-      equation (over general rings the recursive structure can collapse
-      via zero-divisor coincidences).                                  *)
-  [@@@TC.no_method] poly_mul_cons_reveal:
-    (a: t) -> (p: polynomial t) -> (q: polynomial t) ->
-    Lemma ((a @ p) * q = (a @ zero) * q + (zero @ (p * q)));
-}
-
-unfold instance id_of_pid
-    (#t: Type) {| id: integral_domain t |}
-    {| pcrc: polynomial_commutative_ring t |}
-    {| pidc: polynomial_integral_domain t |}
-  : integral_domain (polynomial t) = pidc.pid
-
-(* ---------------------------------------------------------------- *)
-(*  Layer 3: polynomial_euclidean_domain                            *)
-(*    Requires: field t                                             *)
-(*    Provides: Euclidean division on polynomial (cr_of_id t).      *)
-(* ---------------------------------------------------------------- *)
-
-class polynomial_euclidean_domain (t: Type) {| f: field t |}
-                                            {| pcrc: polynomial_commutative_ring t |}
-                                            {| pidc: polynomial_integral_domain t |}
-                                  = {
-  (*  Euclidean division: (q, r) = divmod p d.
-      Spec: p = d * q + r  /\  (r = 0  \/  deg r < deg d).           *)
-  divmod:
-    (p: polynomial t) ->
-    (d: polynomial t { not (d = zero) }) ->
-    polynomial t & polynomial t;
-
-  divmod_lemma:
-    (p: polynomial t) ->
-    (d: polynomial t { not (d = zero) }) ->
-    Lemma (let q, r = divmod p d in
-           p = d * q + r);
-
-  divmod_degree:
-    (p: polynomial t) ->
-    (d: polynomial t { not (d = zero) }) ->
-    Lemma (let _, r = divmod p d in
-           r = zero \/
-           (Some? (deg r) /\ Some? (deg d) /\
-            Some?.v (deg r) < Some?.v (deg d)));
-}
 
 (* ================================================================ *)
 (*  Implementation: ported from legacy Core.Polynomial              *)
@@ -217,14 +115,14 @@ let rec poly_eq (#t:Type) {| cr: commutative_ring t |} (p q: polynomial t) : boo
 
 let rec poly_eq_reflexivity (#t:Type) {| cr: commutative_ring t |} (p: polynomial t)
   : Lemma (poly_eq p p)
-  = if L.length p > 0 then (poly_eq_reflexivity #t #cr (L.tl p); reflexivity (L.hd p))  
+  = if L.length p > 0 then (poly_eq_reflexivity (L.tl p); reflexivity (L.hd p))  
 
 let rec poly_eq_symmetry (#t:Type) {| cr: commutative_ring t |} (p q: polynomial t)
   : Lemma (poly_eq p q <==> poly_eq q p)
   = match p, q with
     | [], _            -> ()
     | _ :: _, []       -> ()
-    | a :: p', b :: q' -> symmetry a b; poly_eq_symmetry #t #cr p' q'
+    | a :: p', b :: q' -> symmetry a b; poly_eq_symmetry p' q'
 
 let rec poly_eq_transitivity #t {| cr: commutative_ring t |} (p q r: polynomial t)
   : Lemma (requires poly_eq p q /\ poly_eq q r) (ensures poly_eq p r)
@@ -234,14 +132,14 @@ let rec poly_eq_transitivity #t {| cr: commutative_ring t |} (p q r: polynomial 
     | _ :: _, _ :: _, _ :: _ ->
         symmetry (L.hd p) (L.hd q);
         transitivity (L.hd p) (L.hd q) (L.hd r);
-        poly_eq_transitivity #t #cr (L.tl p) (L.tl q) (L.tl r)
+        poly_eq_transitivity (L.tl p) (L.tl q) (L.tl r)
 
 private let rec poly_eq_means_length_eq (#t:Type) {| cr: commutative_ring t |} (p q: polynomial t)
   : Lemma (requires poly_eq p q) (ensures L.length p = L.length q)
           (decreases L.length p)
   = match p, q with
     | [], [] -> ()
-    | a::p', b::q' -> poly_eq_means_length_eq #t #cr p' q'
+    | a::p', b::q' -> poly_eq_means_length_eq p' q'
     | _, _ -> ()
  
 private let const_coeff_is_coeff_at_zero (#t:Type) {| cr: commutative_ring t |} (p: polynomial t)
@@ -253,7 +151,7 @@ private let const_coeff_is_coeff_at_zero (#t:Type) {| cr: commutative_ring t |} 
 let rec poly_eq_means_equal_coeffs (#t:Type) {| cr: commutative_ring t |} (p q: polynomial t) (i: nat)
   : Lemma (requires poly_eq p q) (ensures coeff p i = coeff q i)
           (decreases i)
-  = poly_eq_means_length_eq #t #cr p q;
+  = poly_eq_means_length_eq p q;
     reflexivity (coeff p i);
     if i > 0  && i < L.length p 
     then poly_eq_means_equal_coeffs (L.tl p) (L.tl q) (i - 1) 
@@ -263,14 +161,14 @@ let rec coeff_at_tail #t {| cr: commutative_ring t |} (p: polynomial t {L.length
           (decreases L.length p) = 
     reflexivity (coeff p i);
     if (L.length p > 1 && i > 1) 
-    then coeff_at_tail #t #cr (L.tl p) (i - 1)
+    then coeff_at_tail (L.tl p) (i - 1)
   
 let rec last_eq_index #t (l: list t) (i: nat {i < L.length l}) 
   : Lemma (requires L.length l > 0 /\ i = (L.length l - 1))
           (ensures L.last l == L.index l ((L.length l) - 1)) =  
   assert (L.index l 0 == L.hd l);
   if i > 0 then begin
-    last_eq_index #t (L.tl l) (i - 1);
+    last_eq_index (L.tl l) (i - 1);
     assert (L.index l i == L.index (L.tl l) (i - 1))
   end
 
@@ -284,16 +182,16 @@ let rec equal_coeffs_means_poly_eq (#t:Type) {| cr: commutative_ring t |} (p q: 
     | a::p', b::q' ->
         reflexivity a;
         assert (coeff p 0 = coeff q 0);
-        let aux (i:nat) : Lemma (ensures ((coeff #t #cr p' i) = (coeff #t #cr q' i))) =            
-          assert (coeff p' i == coeff p (succ i));
-          assert (coeff q' i == coeff q (succ i));               
+        let aux (i:nat) : Lemma (ensures ((coeff #t #cr p' i) = (coeff #t #cr q' i))) =          
+          assert (coeff p' i == coeff p (i ++ 1));
+          assert (coeff q' i == coeff q (i ++ 1));            
           reflexivity (coeff p' i) in
         Classical.forall_intro aux;
-        equal_coeffs_means_poly_eq #t #cr p' q';        
+        equal_coeffs_means_poly_eq p' q';        
         ()
-    | nonzero_poly, [] -> last_eq_index #t nonzero_poly ((L.length nonzero_poly) - 1)
+    | nonzero_poly, [] -> last_eq_index nonzero_poly ((L.length nonzero_poly) - 1)
     | [], nonzero_poly ->
-      last_eq_index #t nonzero_poly ((L.length nonzero_poly) - 1);
+      last_eq_index nonzero_poly ((L.length nonzero_poly) - 1);
       symmetry (zero <: t) (coeff nonzero_poly ((L.length nonzero_poly) - 1))
         
 let rec poly_eq_length #t {| cr: commutative_ring t |} (p q: polynomial t)
@@ -305,12 +203,12 @@ let rec poly_eq_length #t {| cr: commutative_ring t |} (p q: polynomial t)
 
 private let poly_eq_nil_l_compute
   (#t:Type) {| cr: commutative_ring t |} (q: polynomial t)
-  : Lemma (poly_eq #t #cr [] q <==> (q == []))
+  : Lemma (poly_eq [] q <==> (q == []))
   = ()
 
 private let poly_eq_nil_r_compute
   (#t:Type) {| cr: commutative_ring t |} (p: polynomial t)
-  : Lemma (poly_eq #t #cr p [] <==> (p == []))
+  : Lemma (poly_eq p [] <==> (p == []))
   = match p with | [] -> () | _ :: _ -> ()
 
 (* The polynomial zero is uniquely characterized: anything poly_eq to it
@@ -410,14 +308,14 @@ private let rec raw_poly_eq_refl #t {| cr: commutative_ring t |} (p: list t)
   : Lemma (raw_poly_eq p p)
   = match p with
     | []      -> ()
-    | a :: p' -> reflexivity a; raw_poly_eq_refl #t #cr p'
+    | a :: p' -> reflexivity a; raw_poly_eq_refl p'
 
 private let rec raw_poly_eq_sym #t {| cr: commutative_ring t |} (p q: list t)
   : Lemma (raw_poly_eq p q <==> raw_poly_eq q p)
   = match p, q with
     | [], _            -> ()
     | _ :: _, []       -> ()
-    | a :: p', b :: q' -> symmetry a b; raw_poly_eq_sym #t #cr p' q'
+    | a :: p', b :: q' -> symmetry a b; raw_poly_eq_sym p' q'
 
 private let rec raw_poly_eq_trans_lhs_empty #t {| cr: commutative_ring t |}
                                             (q r: list t)
@@ -429,7 +327,7 @@ private let rec raw_poly_eq_trans_lhs_empty #t {| cr: commutative_ring t |}
     | b :: q', c :: r' ->
         symmetry b c;
         transitivity c b (zero <: t);
-        raw_poly_eq_trans_lhs_empty #t #cr q' r'
+        raw_poly_eq_trans_lhs_empty q' r'
 
 private let rec raw_poly_eq_trans_rhs_empty #t {| cr: commutative_ring t |}
                                             (p q: list t)
@@ -440,7 +338,7 @@ private let rec raw_poly_eq_trans_rhs_empty #t {| cr: commutative_ring t |}
     | [], _       -> ()
     | a :: p', b :: q' ->
         transitivity a b (zero <: t);
-        raw_poly_eq_trans_rhs_empty #t #cr p' q'
+        raw_poly_eq_trans_rhs_empty p' q'
 
 private let rec raw_poly_eq_trans_mid_empty #t {| cr: commutative_ring t |}
                                             (p r: list t)
@@ -452,7 +350,7 @@ private let rec raw_poly_eq_trans_mid_empty #t {| cr: commutative_ring t |}
     | a :: p', c :: r' ->
         symmetry c (zero <: t);
         transitivity a (zero <: t) c;
-        raw_poly_eq_trans_mid_empty #t #cr p' r'
+        raw_poly_eq_trans_mid_empty p' r'
 
 private let rec raw_poly_eq_trans #t {| cr: commutative_ring t |} (p q r: list t)
   : Lemma (requires raw_poly_eq p q /\ raw_poly_eq q r) (ensures raw_poly_eq p r)
@@ -468,7 +366,7 @@ private let rec raw_poly_eq_trans #t {| cr: commutative_ring t |} (p q r: list t
         raw_poly_eq_trans_mid_empty p r
     | a :: p', b :: q', c :: r' ->
         transitivity a b c;
-        raw_poly_eq_trans #t #cr p' q' r'
+        raw_poly_eq_trans p' q' r'
 
 (* ------------------ Raw coefficient + raw poly_add facts ------------ *)
 
@@ -547,11 +445,11 @@ private let rec raw_add_left_all_zero #t {| cr: commutative_ring t |}
   : Lemma (requires raw_all_zero p)
           (ensures raw_poly_eq (poly_add_untrimmed p q) q)
           (decreases %[L.length p; L.length q])
-  = match p, q with
+  = H.elim_equatable_laws t ();
+    match p, q with
     | [], _           -> raw_poly_eq_refl q
     | _ :: _, []      -> ()
     | a :: p', b :: q' ->
-        reflexivity b;
         add_congruence a b (zero <: t) b;
         coef_add_zero_l b;
         transitivity (a + b) ((zero <: t) + b) b;
@@ -562,11 +460,11 @@ private let rec raw_add_right_all_zero #t {| cr: commutative_ring t |}
   : Lemma (requires raw_all_zero q)
           (ensures raw_poly_eq (poly_add_untrimmed p q) p)
           (decreases %[L.length p; L.length q])
-  = match p, q with
+  = H.elim_equatable_laws t ();
+    match p, q with
     | [], _           -> raw_poly_eq_refl ([] <: list t); raw_poly_eq_sym q ([] <: list t)
     | _ :: _, []      -> raw_poly_eq_refl p
     | a :: p', b :: q' ->
-        reflexivity a;
         add_congruence a b a (zero <: t);
         coef_add_zero_r a;
         transitivity (a + b) (a + (zero <: t)) a;
@@ -577,7 +475,8 @@ private let rec raw_add_left_cong #t {| cr: commutative_ring t |}
   : Lemma (requires raw_poly_eq p1 p2)
           (ensures raw_poly_eq (poly_add_untrimmed p1 q) (poly_add_untrimmed p2 q))
           (decreases %[L.length p1; L.length p2; L.length q])
-  = match p1, p2, q with
+  = H.elim_equatable_laws t ();
+    match p1, p2, q with
     | [], _, _ ->
         raw_add_left_all_zero p2 q;
         raw_poly_eq_sym (poly_add_untrimmed p2 q) q
@@ -586,7 +485,6 @@ private let rec raw_add_left_cong #t {| cr: commutative_ring t |}
     | a :: p1', b :: p2', [] ->
         raw_poly_eq_refl (poly_add_untrimmed (a :: p1') ([] <: list t))
     | a :: p1', b :: p2', c :: q' ->
-        reflexivity c;
         add_congruence a c b c;
         raw_add_left_cong p1' p2' q'
 
@@ -595,7 +493,8 @@ private let rec raw_add_right_cong #t {| cr: commutative_ring t |}
   : Lemma (requires raw_poly_eq q1 q2)
           (ensures raw_poly_eq (poly_add_untrimmed p q1) (poly_add_untrimmed p q2))
           (decreases %[L.length p; L.length q1; L.length q2])
-  = match p, q1, q2 with
+  = H.elim_equatable_laws t ();
+    match p, q1, q2 with
     | [], _, _ -> ()
     | _ :: _, [], _ ->
         raw_add_right_all_zero p q2;
@@ -603,7 +502,6 @@ private let rec raw_add_right_cong #t {| cr: commutative_ring t |}
     | _ :: _, _ :: _, [] ->
         raw_add_right_all_zero p q1
     | a :: p', b :: q1', c :: q2' ->
-        reflexivity a;
         add_congruence a b a c;
         raw_add_right_cong p' q1' q2'
 
@@ -785,8 +683,8 @@ private let poly_add_nil_r_compute (#t:Type) {| cr: commutative_ring t |} (p: po
 
 private let neg_nonzero_is_nonzero (#t:Type) {| cr: commutative_ring t |} (a: t)
   : Lemma (requires a <> zero) (ensures -a <> zero)
-  = let contra x : Lemma (requires (x <> zero #t) /\ (-x = zero #t)) (ensures False) =       
-      reflexivity x;
+  = let contra x : Lemma (requires (x <> zero #t) /\ (-x = zero #t)) (ensures False) =
+      H.elim_equatable_laws t ();
       add_congruence x (-x) x zero;
       add_zero x;
       add_negation x;
@@ -893,10 +791,10 @@ private let rec poly_add_left_congruence (#t:Type) {| cr: commutative_ring t |}
   : Lemma (requires poly_eq p1 p2)
           (ensures  poly_eq (poly_add p1 q) (poly_add p2 q))
   = let aux (i: nat) : Lemma (coeff (poly_add p1 q) i = coeff (poly_add p2 q) i) =
+      H.elim_equatable_laws t ();
       poly_eq_means_equal_coeffs p1 p2 i;
       poly_add_coeff p1 q i;
       poly_add_coeff p2 q i;
-      reflexivity (coeff q i);
       add_congruence (coeff p1 i) (coeff q i) (coeff p2 i) (coeff q i);
       symmetry (coeff (poly_add p2 q) i) ((coeff p2 i) + (coeff q i));
       transitivity (coeff (poly_add p1 q) i) ((coeff p1 i) + (coeff q i)) ((coeff p2 i) + (coeff q i));
@@ -909,10 +807,10 @@ private let rec poly_add_right_congruence (#t:Type) {| cr: commutative_ring t |}
   : Lemma (requires poly_eq q1 q2)
           (ensures  poly_eq (poly_add p q1) (poly_add p q2))
   = let aux (i: nat) : Lemma (coeff (poly_add p q1) i = coeff (poly_add p q2) i) =
+      H.elim_equatable_laws t ();
       poly_eq_means_equal_coeffs q1 q2 i;
       poly_add_coeff p q1 i;
       poly_add_coeff p q2 i;
-      reflexivity (coeff p i);
       add_congruence (coeff p i) (coeff q1 i) (coeff p i) (coeff q2 i);
       symmetry (coeff (poly_add p q2) i) ((coeff p i) + (coeff q2 i));
       transitivity (coeff (poly_add p q1) i) ((coeff p i) + (coeff q1 i)) ((coeff p i) + (coeff q2 i));
@@ -947,12 +845,11 @@ let rec poly_add_associativity (#t:Type) {| cr: commutative_ring t |}
   = let lhs = poly_add (poly_add p q) r in
     let rhs = poly_add p (poly_add q r) in
     let aux (i: nat) : Lemma (coeff lhs i = coeff rhs i) =
+      H.elim_equatable_laws t ();
       poly_add_coeff (poly_add p q) r i;
       poly_add_coeff p q i;
       poly_add_coeff p (poly_add q r) i;
       poly_add_coeff q r i;
-      reflexivity (coeff r i);
-      reflexivity (coeff p i);
       add_congruence (coeff (poly_add p q) i) (coeff r i) ((coeff p i) + (coeff q i)) (coeff r i);
       add_congruence (coeff p i) (coeff (poly_add q r) i) (coeff p i) ((coeff q i) + (coeff r i));
       add_associativity (coeff p i) (coeff q i) (coeff r i);
@@ -979,6 +876,7 @@ let rec poly_neg_congruence (#t:Type) {| cr: commutative_ring t |}
                             (p q: polynomial t)
   : Lemma (requires poly_eq p q) (ensures poly_eq (poly_neg p) (poly_neg q))
   = let aux (i: nat) : Lemma (coeff (poly_neg p) i = coeff (poly_neg q) i) =
+      H.elim_equatable_laws t ();
       poly_eq_means_equal_coeffs p q i;
       poly_neg_coeff p i;
       poly_neg_coeff q i;
@@ -995,9 +893,9 @@ private let rec poly_add_negation_r (#t:Type) {| cr: commutative_ring t |}
           (decreases L.length p)
   = let lhs = poly_add p (poly_neg p) in
     let aux (i: nat) : Lemma (coeff lhs i = coeff (poly_zero #t) i) =
+      H.elim_equatable_laws t ();
       poly_add_coeff p (poly_neg p) i;
       poly_neg_coeff p i;
-      reflexivity (coeff p i);
       add_congruence (coeff p i) (coeff (poly_neg p) i) (coeff p i) (- (coeff p i));
       add_negation (coeff p i);
       transitivity (coeff lhs i) ((coeff p i) + (coeff (poly_neg p) i)) ((coeff p i) + (- (coeff p i)));
@@ -1068,8 +966,15 @@ let polynomial_acg_neg_reveal
 let poly_lc #t {| cr: commutative_ring t |} (p: polynomial t) 
   : t = if L.length p > 0 then L.last p else zero
 
-let poly_deg #t {| cr: commutative_ring t |} (p: polynomial t) : option nat =
-  if L.length p > 0 then Some (L.length p - 1) else None
+let deg #t {| cr: commutative_ring t |} (p: polynomial t) : int = L.length p - 1
+
+(* Zero polynomial has a UNIQUE representation (the empty list = poly_zero), so
+   `deg p = -1` characterizes it definitionally, not merely up to poly_eq. This
+   strengthens `deg p = -1 <== p ~ 0` into a public `<==>` with `==`, giving Z3 a
+   syntactic-equality fact it can rewrite with. *)
+let deg_neg_one_iff_zero #t {| cr: commutative_ring t |} (p: polynomial t)
+  : Lemma (deg p == -1 <==> p == poly_zero #t)
+  = ()
 
 (* ---------------- Multiplication: raw layer ---------------- *)
 
@@ -1092,10 +997,10 @@ private let rec raw_scalar_mul_kills_all_zero (#t:Type) {| cr: commutative_ring 
                                               (a: t) (q: list t)
   : Lemma (requires raw_all_zero q) (ensures raw_all_zero (raw_scalar_mul a q))
           (decreases L.length q)
-  = match q with
+  = H.elim_equatable_laws t ();
+    match q with
     | []      -> ()
     | b :: q' ->
-        reflexivity a;
         mul_congruence a b a (zero <: t);
         H.x_mul_zero a;
         transitivity (a * b) (a * (zero <: t)) (zero <: t);
@@ -1105,10 +1010,10 @@ private let rec raw_scalar_mul_zero_factor (#t:Type) {| cr: commutative_ring t |
                                            (a: t) (q: list t)
   : Lemma (requires a = (zero <: t)) (ensures raw_all_zero (raw_scalar_mul a q))
           (decreases L.length q)
-  = match q with
+  = H.elim_equatable_laws t ();
+    match q with
     | []      -> ()
     | b :: q' ->
-        reflexivity b;
         mul_congruence a b (zero <: t) b;
         H.zero_mul_x b;
         transitivity (a * b) ((zero <: t) * b) (zero <: t);
@@ -1119,11 +1024,11 @@ private let rec raw_scalar_mul_right_cong (#t:Type) {| cr: commutative_ring t |}
   : Lemma (requires raw_poly_eq q1 q2)
           (ensures  raw_poly_eq (raw_scalar_mul a q1) (raw_scalar_mul a q2))
           (decreases %[L.length q1; L.length q2])
-  = match q1, q2 with
+  = H.elim_equatable_laws t ();
+    match q1, q2 with
     | [], _  -> raw_scalar_mul_kills_all_zero a q2
     | _, []  -> raw_scalar_mul_kills_all_zero a q1
     | b1 :: q1', b2 :: q2' ->
-        reflexivity a;
         mul_congruence a b1 a b2;
         raw_scalar_mul_right_cong a q1' q2'
 
@@ -1132,10 +1037,10 @@ private let rec raw_scalar_mul_left_cong (#t:Type) {| cr: commutative_ring t |}
   : Lemma (requires a1 = a2)
           (ensures  raw_poly_eq (raw_scalar_mul a1 q) (raw_scalar_mul a2 q))
           (decreases L.length q)
-  = match q with
+  = H.elim_equatable_laws t ();
+    match q with
     | []      -> ()
     | b :: q' ->
-        reflexivity b;
         mul_congruence a1 b a2 b;
         raw_scalar_mul_left_cong a1 a2 q'
 
@@ -1165,12 +1070,12 @@ private let rec raw_mul_left_all_zero (#t:Type) {| cr: commutative_ring t |}
                                       (p q: list t)
   : Lemma (requires raw_all_zero p) (ensures raw_all_zero (raw_poly_mul p q))
           (decreases L.length p)
-  = match p with
+  = H.elim_equatable_laws t ();
+    match p with
     | []      -> ()
     | a :: p' ->
         raw_scalar_mul_zero_factor a q;
         raw_mul_left_all_zero p' q;
-        reflexivity (zero <: t);
         let s = raw_scalar_mul a q in
         let r = (zero <: t) :: raw_poly_mul p' q in
         raw_add_two_all_zero s r
@@ -1180,12 +1085,12 @@ private let rec raw_mul_right_cong (#t:Type) {| cr: commutative_ring t |}
   : Lemma (requires raw_poly_eq q1 q2)
           (ensures  raw_poly_eq (raw_poly_mul p q1) (raw_poly_mul p q2))
           (decreases L.length p)
-  = match p with
+  = H.elim_equatable_laws t ();
+    match p with
     | []      -> ()
     | a :: p' ->
         raw_scalar_mul_right_cong a q1 q2;
         raw_mul_right_cong p' q1 q2;
-        reflexivity (zero <: t);
         raw_add_cong
           (raw_scalar_mul a q1) ((zero <: t) :: raw_poly_mul p' q1)
           (raw_scalar_mul a q2) ((zero <: t) :: raw_poly_mul p' q2)
@@ -1195,7 +1100,8 @@ private let rec raw_mul_left_cong (#t:Type) {| cr: commutative_ring t |}
   : Lemma (requires raw_poly_eq p1 p2)
           (ensures  raw_poly_eq (raw_poly_mul p1 q) (raw_poly_mul p2 q))
           (decreases %[L.length p1; L.length p2])
-  = match p1, p2 with
+  = H.elim_equatable_laws t ();
+    match p1, p2 with
     | [], _ ->
         raw_mul_left_all_zero p2 q
     | _ :: _, [] ->
@@ -1203,7 +1109,6 @@ private let rec raw_mul_left_cong (#t:Type) {| cr: commutative_ring t |}
     | a :: p1', b :: p2' ->
         raw_scalar_mul_left_cong a b q;
         raw_mul_left_cong p1' p2' q;
-        reflexivity (zero <: t);
         raw_add_cong
           (raw_scalar_mul a q) ((zero <: t) :: raw_poly_mul p1' q)
           (raw_scalar_mul b q) ((zero <: t) :: raw_poly_mul p2' q)
@@ -1268,14 +1173,14 @@ private let rec raw_scalar_mul_distrib_right (#t:Type) {| cr: commutative_ring t
 #push-options "--z3rlimit 40"
 private let rec raw_scalar_mul_distrib_left (#t:Type) {| cr: commutative_ring t |}
                                             (a b: t) (q: list t)
-  : Lemma (ensures raw_poly_eq (raw_scalar_mul (add a b) q)
+  : Lemma (ensures raw_poly_eq (raw_scalar_mul ((a + b)) q)
                                (poly_add_untrimmed (raw_scalar_mul a q) (raw_scalar_mul b q)))
           (decreases L.length q)
   = match q with
     | [] -> ()
     | c :: q' ->
         right_distributivity c a b;
-        raw_scalar_mul_distrib_left #t #cr a b q'
+        raw_scalar_mul_distrib_left a b q'
 #pop-options
 
 private let raw_cons_zero_add (#t:Type) {| cr: commutative_ring t |}
@@ -1329,7 +1234,8 @@ private let rec raw_mul_right_distrib (#t:Type) {| cr: commutative_ring t |}
   : Lemma (ensures raw_poly_eq (raw_poly_mul p (poly_add_untrimmed q1 q2))
                                (poly_add_untrimmed (raw_poly_mul p q1) (raw_poly_mul p q2)))
           (decreases L.length p)
-  = match p with
+  = H.elim_equatable_laws t ();
+    match p with
     | []      ->
         raw_poly_eq_refl ([] <: list t)
     | a :: p' ->
@@ -1342,7 +1248,6 @@ private let rec raw_mul_right_distrib (#t:Type) {| cr: commutative_ring t |}
         let zr = (zero <: t) in
         raw_scalar_mul_distrib_right a q1 q2;
         raw_mul_right_distrib p' q1 q2;
-        reflexivity zr;
         raw_cons_zero_add m1 m2;
         let lhs0 = poly_add_untrimmed za (zr :: mc) in
         let mid1 = poly_add_untrimmed (poly_add_untrimmed z1 z2) (zr :: mc) in
@@ -1352,7 +1257,6 @@ private let rec raw_mul_right_distrib (#t:Type) {| cr: commutative_ring t |}
         raw_poly_eq_refl (zr :: mc);
         raw_add_cong za (zr :: mc) (poly_add_untrimmed z1 z2) (zr :: mc);
         raw_poly_eq_refl (poly_add_untrimmed z1 z2);
-        reflexivity zr;
         raw_add_cong (poly_add_untrimmed z1 z2) (zr :: mc) (poly_add_untrimmed z1 z2) (zr :: (poly_add_untrimmed m1 m2));
         raw_add_cong (poly_add_untrimmed z1 z2) (zr :: (poly_add_untrimmed m1 m2))
                      (poly_add_untrimmed z1 z2) (poly_add_untrimmed (zr :: m1) (zr :: m2));
@@ -1368,14 +1272,15 @@ private let rec raw_mul_left_distrib (#t:Type) {| cr: commutative_ring t |}
   : Lemma (ensures raw_poly_eq (raw_poly_mul (poly_add_untrimmed p1 p2) q)
                                (poly_add_untrimmed (raw_poly_mul p1 q) (raw_poly_mul p2 q)))
           (decreases %[L.length p1; L.length p2])
-  = match p1, p2 with
+  = H.elim_equatable_laws t ();
+    match p1, p2 with
     | [], _ ->
         raw_poly_eq_refl (raw_poly_mul p2 q)
     | _, [] ->
         raw_poly_eq_refl (raw_poly_mul p1 q)
     | a :: p1', b :: p2' ->
         let zr = (zero <: t) in
-        let ab = add a b in
+        let ab = (a + b) in
         let sab = raw_scalar_mul ab q in
         let sa  = raw_scalar_mul a q in
         let sb  = raw_scalar_mul b q in
@@ -1385,7 +1290,6 @@ private let rec raw_mul_left_distrib (#t:Type) {| cr: commutative_ring t |}
         raw_scalar_mul_distrib_left a b q;
         raw_mul_left_distrib p1' p2' q;
         raw_cons_zero_add m1 m2;
-        reflexivity zr;
         let lhs0 = poly_add_untrimmed sab (zr :: m12) in
         let mid1 = poly_add_untrimmed (poly_add_untrimmed sa sb) (zr :: m12) in
         let mid2 = poly_add_untrimmed (poly_add_untrimmed sa sb) (zr :: (poly_add_untrimmed m1 m2)) in
@@ -1413,14 +1317,14 @@ private let rec raw_scalar_mul_assoc (#t:Type) {| cr: commutative_ring t |}
     | []      -> raw_poly_eq_refl ([] <: list t)
     | c :: r' ->
         mul_associativity a b c;
-        symmetry (mul (mul a b) c) (mul a (mul b c));
+        symmetry ((((a * b)) * c)) ((a * ((b * c))));
         raw_scalar_mul_assoc a b r'
 
 private let raw_mul_singleton (#t:Type) {| cr: commutative_ring t |}
                               (a: t) (q: list t)
   : Lemma (raw_poly_eq (raw_poly_mul (a :: ([] <: list t)) q) (raw_scalar_mul a q))
   = let r : list t = [ (zero <: t) ] in
-    reflexivity (zero <: t);
+    H.elim_equatable_laws t ();
     assert (raw_all_zero r);
     raw_add_right_all_zero (raw_scalar_mul a q) r
 
@@ -1435,7 +1339,7 @@ private let raw_mul_cons_zero_left (#t:Type) {| cr: commutative_ring t |}
                                    (p q: list t)
   : Lemma (raw_poly_eq (raw_poly_mul ((zero <: t) :: p) q)
                        ((zero <: t) :: raw_poly_mul p q))
-  = reflexivity (zero <: t);
+  = H.elim_equatable_laws t ();
     raw_scalar_mul_zero_factor (zero <: t) q;
     raw_add_left_all_zero (raw_scalar_mul (zero <: t) q)
                           ((zero <: t) :: raw_poly_mul p q)
@@ -1446,7 +1350,8 @@ private let rec raw_scalar_mul_over_mul (#t:Type) {| cr: commutative_ring t |}
   : Lemma (ensures raw_poly_eq (raw_scalar_mul a (raw_poly_mul q r))
                                (raw_poly_mul (raw_scalar_mul a q) r))
           (decreases L.length q)
-  = match q with
+  = H.elim_equatable_laws t ();
+    match q with
     | []      -> raw_poly_eq_refl ([] <: list t)
     | b :: q' ->
         let zr = (zero <: t) in
@@ -1458,7 +1363,6 @@ private let rec raw_scalar_mul_over_mul (#t:Type) {| cr: commutative_ring t |}
         raw_scalar_mul_distrib_right a (raw_scalar_mul b r) (zr :: pmq'r);
         raw_scalar_mul_cons_zero a pmq'r;
         raw_scalar_mul_over_mul a q' r;
-        reflexivity zr;
         raw_scalar_mul_assoc a b r;
         let lhs0 = raw_scalar_mul a (raw_poly_mul (b :: q') r) in
         let mid1 = poly_add_untrimmed sa_b_r (raw_scalar_mul a (zr :: pmq'r)) in
@@ -1481,7 +1385,8 @@ private let rec raw_mul_assoc (#t:Type) {| cr: commutative_ring t |}
   : Lemma (ensures raw_poly_eq (raw_poly_mul (raw_poly_mul p q) r)
                                (raw_poly_mul p (raw_poly_mul q r)))
           (decreases L.length p)
-  = match p with
+  = H.elim_equatable_laws t ();
+    match p with
     | []      -> raw_poly_eq_refl ([] <: list t)
     | a :: p' ->
         let zr = (zero <: t) in
@@ -1495,7 +1400,6 @@ private let rec raw_mul_assoc (#t:Type) {| cr: commutative_ring t |}
         raw_poly_eq_sym (raw_scalar_mul a pmqr) (raw_poly_mul saq r);
         raw_mul_cons_zero_left pmp'q r;
         raw_mul_assoc p' q r;
-        reflexivity zr;
         let lhs0 = raw_poly_mul (raw_poly_mul (a :: p') q) r in
         let mid1 = poly_add_untrimmed (raw_poly_mul saq r)
                                       (raw_poly_mul (zr :: pmp'q) r) in
@@ -1552,7 +1456,8 @@ private let rec raw_mul_right_cons (#t:Type) {| cr: commutative_ring t |}
                                (poly_add_untrimmed (raw_scalar_mul a p)
                                                    ((zero <: t) :: raw_poly_mul p q')))
           (decreases L.length p)
-  = match p with
+  = H.elim_equatable_laws t ();
+    match p with
     | []      -> reflexivity (zero <: t)
     | b :: p' ->
         raw_mul_right_cons p' a q';
@@ -1570,7 +1475,6 @@ private let rec raw_mul_right_cons (#t:Type) {| cr: commutative_ring t |}
         raw_add_swap_middle smbq smap' zpmpq;
         raw_poly_eq_trans lhs_tail mid1 mid2;
         mul_commutativity b a;
-        reflexivity (zero <: t);
         add_congruence (b * a) (zero <: t) (a * b) (zero <: t);
         assert ((b * a) + (zero <: t) = (a * b) + (zero <: t))
 #pop-options
@@ -1580,7 +1484,8 @@ private let rec raw_mul_comm (#t:Type) {| cr: commutative_ring t |}
                              (p q: list t)
   : Lemma (ensures raw_poly_eq (raw_poly_mul p q) (raw_poly_mul q p))
           (decreases L.length p)
-  = match p with
+  = H.elim_equatable_laws t ();
+    match p with
     | [] -> raw_mul_right_nil q
     | a :: p' ->
         raw_mul_comm p' q;
@@ -1590,7 +1495,6 @@ private let rec raw_mul_comm (#t:Type) {| cr: commutative_ring t |}
         let pmqp' = raw_poly_mul q p' in
         let zpmpq : list t = zr :: pmp'q in
         let zpmqp : list t = zr :: pmqp' in
-        reflexivity zr;
         raw_poly_eq_refl smaq;
         assert (raw_poly_eq zpmpq zpmqp);
         raw_add_cong smaq zpmpq smaq zpmqp;
@@ -1726,16 +1630,15 @@ let poly_right_distributivity #t {| cr: commutative_ring t |} (x y z: polynomial
 (* Placeholder: _poly_mul_zero_both lives just before the instance,
    after raw_mul_right_nil_all_zero / raw_all_zero_trim_nil are in scope. *)
 
-let poly_deg_zero_is_none #t {| cr: commutative_ring t |} : squash (poly_deg (poly_zero #t) == None) = ()
+let deg_zero #t {| cr: commutative_ring t |} : squash (deg (poly_zero #t) == -1) = ()
 
-let poly_deg_reveal #t {| cr: commutative_ring t |} (a: t) (p: polynomial t)
-  : Lemma (poly_deg (a @ p) ==
-           (match poly_deg p with
-            | Some k -> Some (succ k)
-            | None   -> if a = zero then None else Some 0)) = ()
+let deg_reveal #t {| cr: commutative_ring t |} (a: t) (p: polynomial t)
+  : Lemma (deg (a @ p) ==
+           (if deg p >= 0 then deg p + 1
+            else (if a = zero then -1 else 0))) = ()
 
-let poly_lc_reveal #t {| cr: commutative_ring t |} (p: polynomial t) 
-  : Lemma ((None? (poly_deg p) /\ poly_lc p == zero) \/ (Some? (poly_deg p) /\ poly_lc p == L.last p)) = ()
+let poly_lc_reveal #t {| cr: commutative_ring t |} (p: polynomial t)
+  : Lemma ((deg p < 0 /\ poly_lc p == zero) \/ (deg p >= 0 /\ poly_lc p == L.last p)) = ()
 
 
 (* ================================================================ *)
@@ -1881,7 +1784,7 @@ private let poly_mul_nonzero_in_id #t {| id: integral_domain t |}
   : Lemma (requires Cons? p /\ Cons? q)
           (ensures  Cons? (poly_mul p q) /\
                     L.length (poly_mul p q) =
-                      Prims.op_Subtraction (Prims.op_Addition (L.length p) (L.length q)) 1)
+                      ((L.length p ++ L.length q) - 1))
   = raw_mul_last_index p q;
     let n = L.length p in
     let m = L.length q in
@@ -1946,17 +1849,15 @@ let poly_domain_law #t {| id: integral_domain t |}
    of the degrees. Used by Core.Polynomial.Unique.
    ---------------------------------------------------------------- *)
 #push-options "--z3rlimit 80 --fuel 2 --ifuel 2"
-let poly_deg_mul #t {| id: integral_domain t |}
+let deg_mul #t {| id: integral_domain t |}
                  (p q: polynomial t)
-  : Lemma (requires Some? (poly_deg p) /\ Some? (poly_deg q))
-          (ensures  Some? (poly_deg (poly_mul p q)) /\
-                    Some?.v (poly_deg (poly_mul p q)) ==
-                    Prims.op_Addition (Some?.v (poly_deg p)) (Some?.v (poly_deg q)))
+  : Lemma (requires deg p >= 0 /\ deg q >= 0)
+          (ensures  deg (poly_mul p q) == deg p + deg q)
   = assert (Cons? p);
     assert (Cons? q);
     raw_mul_length p q;
     poly_mul_nonzero_in_id p q;
-    assert (L.length (poly_mul p q) = Prims.op_Subtraction (Prims.op_Addition (L.length p) (L.length q)) 1)
+    assert (L.length (poly_mul p q) = ((L.length p ++ L.length q) - 1))
 #pop-options
 
 (* ================================================================ *)
@@ -1994,7 +1895,8 @@ private let rec raw_coeff_scalar_mul #t {| cr: commutative_ring t |}
 private let a_zero_coeff_pmcr #t {| cr: commutative_ring t |}
                               (a: t) (q: polynomial t) (i: nat)
   : Lemma (coeff (poly_mul (a @ poly_zero) q) i = raw_coeff (raw_scalar_mul a q) i)
-  = let s : polynomial t = poly_mul (a @ poly_zero) q in
+  = H.elim_equatable_laws t ();
+    let s : polynomial t = poly_mul (a @ poly_zero) q in
     let xi : t = raw_coeff (raw_scalar_mul a q) i in
     let azp : polynomial t = a @ poly_zero in
     let l_raw : list t = raw_poly_mul azp q in
@@ -2006,7 +1908,6 @@ private let a_zero_coeff_pmcr #t {| cr: commutative_ring t |}
       raw_scalar_mul_zero_factor a q;
       raw_all_zero_means_zero_coeffs (raw_scalar_mul a q) i;
       symmetry xi (zero <: t);
-      reflexivity (coeff s i);
       transitivity (coeff s i) (zero <: t) xi
     end else begin
       assert (azp == ([a] <: polynomial t));
@@ -2029,11 +1930,10 @@ private let a_zero_coeff_pmcr #t {| cr: commutative_ring t |}
 let poly_mul_singleton_coeff #t {| cr: commutative_ring t |}
                              (a: t) (q: polynomial t) (i: nat)
   : Lemma (coeff (poly_mul (a @ poly_zero) q) i = a * (coeff q i))
-  = a_zero_coeff_pmcr a q i;
+  = H.elim_equatable_laws t ();
+    a_zero_coeff_pmcr a q i;
     raw_coeff_scalar_mul a q i;
     coeff_in_raw_eq q i;
-    reflexivity a;
-    reflexivity (raw_coeff q i);
     mul_congruence a (raw_coeff q i) a (coeff q i);
     transitivity (raw_coeff (raw_scalar_mul a q) i)
                  (a * (raw_coeff q i))
@@ -2086,7 +1986,8 @@ private let lhs_coeff_pmcr #t {| cr: commutative_ring t |}
   : Lemma (coeff (poly_mul (a @ p) q) i =
            (raw_coeff (raw_scalar_mul a q) i) +
            (raw_coeff ((zero <: t) :: raw_poly_mul p q) i))
-  = let s : polynomial t = poly_mul (a @ p) q in
+  = H.elim_equatable_laws t ();
+    let s : polynomial t = poly_mul (a @ p) q in
     let xi : t = raw_coeff (raw_scalar_mul a q) i in
     let yi : t = raw_coeff ((zero <: t) :: raw_poly_mul p q) i in
     let ap : polynomial t = a @ p in
@@ -2106,7 +2007,6 @@ private let lhs_coeff_pmcr #t {| cr: commutative_ring t |}
           add_zero (zero <: t);
           transitivity (xi + yi) ((zero <: t) + (zero <: t)) (zero <: t);
           symmetry (xi + yi) (zero <: t);
-          reflexivity (coeff s i);
           transitivity (coeff s i) (zero <: t) (xi + yi)
         end else begin
           assert (ap == ([a] <: polynomial t));
@@ -2157,42 +2057,57 @@ private let _poly_mul_zero_both #t {| cr: commutative_ring t |} (q: polynomial t
   = raw_mul_right_nil_all_zero q;
     raw_all_zero_trim_nil (raw_poly_mul q [])
 
-instance polynomial_commutative_ring_instance #t {| cr: commutative_ring t |} : polynomial_commutative_ring t = {
-  pcr = {
-    cr_r = {
-      r_add = {
-        acg_eq = polynomial_equatable cr;
-        zero = poly_zero #t;
-        add = poly_add;
-        add_congruence = poly_add_congruence;
-        add_commutativity = poly_add_commutativity;
-        add_associativity = poly_add_associativity;
-        add_zero = poly_add_zero;
-        neg = poly_neg;
-        neg_congruence = poly_neg_congruence;
-        add_negation = poly_add_negation;
-      };
-      one = poly_one;
-      mul = poly_mul;
-      mul_congruence = poly_mul_congruence;
-      mul_associativity = poly_mul_associativity;
-      mul_one = poly_mul_one;
-      left_distributivity = poly_left_distributivity;
-      right_distributivity = poly_right_distributivity;
+(* DIRECT instance: the SOLE canonical commutative_ring (polynomial t).  Built
+   straight from poly_add/poly_mul/…; integral_domain/euclidean tiers are built
+   ON this record (coherence by construction). *)
+instance polynomial_cr #t {| cr: commutative_ring t |} : commutative_ring (polynomial t) = {
+  cr_r = {
+    r_add = {
+      acg_eq = polynomial_equatable cr;
+      zero = poly_zero #t;
+      add = poly_add;
+      add_congruence = poly_add_congruence;
+      add_commutativity = poly_add_commutativity;
+      add_associativity = poly_add_associativity;
+      add_zero = poly_add_zero;
+      neg = poly_neg;
+      neg_congruence = poly_neg_congruence;
+      add_negation = poly_add_negation;
     };
-    cr_mic = {
-        mul_commutativity = poly_mul_commutativity
-    }
+    one = poly_one;
+    mul = poly_mul;
+    mul_congruence = poly_mul_congruence;
+    mul_associativity = poly_mul_associativity;
+    mul_one = poly_mul_one;
+    left_distributivity = poly_left_distributivity;
+    right_distributivity = poly_right_distributivity;
   };
-  poly_zero_reveal = ();
-  poly_one_reveal = ();
-  poly_mul_zero = _poly_mul_zero_both;
-  lc = poly_lc;
-  deg = poly_deg;
-  deg_zero_is_none = poly_deg_zero_is_none;
-  deg_reveal = poly_deg_reveal;
-  lc_reveal = poly_lc_reveal;
+  cr_mic = { mul_commutativity = poly_mul_commutativity };
 }
+
+(* ================================================================ *)
+(*  poly_power: pⁿ over the polynomial ring (basic & general)        *)
+(* ================================================================ *)
+
+let rec poly_power (#t:Type) {| cr: commutative_ring t |}
+  (p: polynomial t) (n: nat)
+  : Tot (polynomial t) (decreases n)
+  = if n = 0 then poly_one #t
+    else (p * (poly_power p (n - 1)))
+
+(* a ≈ b ⟹ a^n ≈ b^n.  General poly_power congruence (kept beside the definition). *)
+let rec poly_power_congruence (#t:Type) {| cr: commutative_ring t |}
+  (a b: polynomial t) (n: nat)
+  : Lemma (requires a = b)
+          (ensures  poly_power a n = poly_power b n)
+          (decreases n)
+  = H.elim_equatable_laws (polynomial t) ();
+    H.trans_for_calc (polynomial t) ();
+    if n = 0 then ()
+    else begin
+      poly_power_congruence a b (n - 1);
+      poly_mul_congruence a (poly_power a (n - 1)) b (poly_power b (n - 1))
+    end
 
 (* ================================================================ *)
 (*  polynomial_integral_domain instance                              *)
@@ -2205,25 +2120,15 @@ let polynomial_one_ne_zero #t {| id: integral_domain t |}
     assert (poly_one #t == [one #t]);
     ()
 
-instance polynomial_integral_domain_instance
-    #t {| id: integral_domain t |}
-  : polynomial_integral_domain t #id
-       #(polynomial_commutative_ring_instance #t #(cr_of_id t)) =
-  let d_inst : domain (polynomial t) = {
-    d_r = (polynomial_commutative_ring_instance #t #(cr_of_id t)).pcr.cr_r;
-    domain_law = poly_domain_law;
-  } in
+(* DIRECT instance: integral_domain (polynomial t), built on polynomial_cr's ring
+   record — so `cr_of_id polynomial_id == polynomial_cr #(cr_of_id t)` is DEFEQ
+   (cr_of_id is unfold), no coherence axiom needed. *)
+instance polynomial_id #t {| id: integral_domain t |} : integral_domain (polynomial t) =
   polynomial_one_ne_zero #t #id;
-  let id_inst : integral_domain (polynomial t) = {
-    id_d = d_inst;
-    id_mic = (polynomial_commutative_ring_instance #t #(cr_of_id t)).pcr.cr_mic;
-    id_one_ne_zero = ();
-  } in
-  {
-    pid = id_inst;
-    pid_pcrc_coherence = ();
-    poly_mul_cons_reveal = poly_mul_reveal;
-  }
+  { id_d = { d_r = (polynomial_cr #t #(cr_of_id t)).cr_r;
+             domain_law = poly_domain_law };
+    id_mic = (polynomial_cr #t #(cr_of_id t)).cr_mic;
+    id_one_ne_zero = () }
 
 (* ================================================================ *)
 (*  Public coeff/trim bridge: the i-th coefficient of a trimmed raw  *)
@@ -2235,3 +2140,299 @@ let coeff_trim (#t:Type) {| cr: commutative_ring t |} (l: list t) (i: nat)
   = trim_preserves_coeff l i;          (* raw_coeff (trim l) i = raw_coeff l i *)
     coeff_in_raw_eq (trim l) i;         (* coeff (trim l) i == raw_coeff (trim l) i *)
     reflexivity (coeff (trim l) i)
+
+(* ===== basic monomial / coeff facts (relocated from Core.Polynomial.Div) ===== *)
+
+(* ================================================================ *)
+(*  Monomial: monomial c n = c*x^n = [0;...;0;c] with n leading zeros *)
+(* ================================================================ *)
+
+(* Inner recursive helper returning a raw list with explicit non-emptiness
+   and "last = c" invariants when c <> zero. *)
+let rec monomial_nonzero_aux #t {| cr: commutative_ring t |}
+                             (c: t{not (c = zero)}) (n: nat)
+  : Tot (l: list t {Cons? l /\ L.last l == c}) (decreases n)
+  = if n = 0 then [c]
+    else (zero <: t) :: monomial_nonzero_aux c ((n - 1))
+
+let monomial (#t:Type) {| cr: commutative_ring t |} (c: t) (n: nat) : polynomial t
+  = if c = zero then [] else monomial_nonzero_aux c n
+
+let monomial_zero_n_reveal (#t:Type) {| cr: commutative_ring t |} (c: t)
+  : Lemma (monomial c 0 == (if c = zero then [] else [c]))
+  = ()
+
+let monomial_succ_n_reveal (#t:Type) {| cr: commutative_ring t |} (c: t) (n: nat)
+  : Lemma (monomial c ((n ++ 1)) ==
+           (if c = zero then []
+            else (zero <: t) :: monomial c n))
+  = ()
+
+(* ================================================================ *)
+(*  Coefficient helpers                                             *)
+(* ================================================================ *)
+
+(* Any index strictly above the polynomial degree yields a zero coefficient. *)
+let coeff_above_degree (#t:Type) {| cr: commutative_ring t |} (p: polynomial t) (i: nat)
+  : Lemma (requires deg p < i)
+          (ensures  coeff p i = (zero <: t))
+  = reflexivity (zero <: t)
+
+(* ================================================================ *)
+(*  Monomial coefficient + degree                                   *)
+(* ================================================================ *)
+
+let rec monomial_deg (#t:Type) {| cr: commutative_ring t |} (c: t) (n: nat)
+  : Lemma (ensures (if c = (zero <: t)
+                    then deg (monomial c n) == -1
+                    else deg (monomial c n) == n))
+          (decreases n)
+  = if n = 0 then ()
+    else monomial_deg c ((n - 1))
+
+#push-options "--z3rlimit 80 --fuel 3 --ifuel 3"
+let rec monomial_coeff (#t:Type) {| cr: commutative_ring t |} (c: t) (n: nat) (i: nat)
+  : Lemma (ensures (if i = n then coeff (monomial c n) i = c
+                    else coeff (monomial c n) i = (zero <: t)))
+          (decreases n)
+  = if n = 0 then begin
+      if i = 0 then begin
+        if c = (zero <: t) then begin
+          (* monomial c 0 = []; coeff [] 0 = zero; want coeff = c.
+             From c = zero we have eq c zero; want eq (coeff = zero) c.
+             coeff p 0 = zero by refined return type; symmetry of eq. *)
+          symmetry c (zero <: t);
+          reflexivity (zero <: t);
+          transitivity (zero <: t) (zero <: t) c
+        end
+        else reflexivity c
+      end
+      else begin
+        (* i > 0, n = 0; whether c = zero or not, the monomial has length <= 1,
+           so coeff at i >= 1 is zero. *)
+        reflexivity (zero <: t)
+      end
+    end
+    else begin
+      let n' = (n - 1) in
+      if i = 0 then
+        (* monomial c n = zero :: monomial c n'; coeff at 0 is zero. *)
+        reflexivity (zero <: t)
+      else begin
+        let i' = (i - 1) in
+        monomial_coeff c n' i'
+      end
+    end
+#pop-options
+
+(* ================================================================ *)
+(*  Coefficient identity for poly_mul of a monomial                 *)
+(* ================================================================ *)
+
+(* coeff ((zero :: p)-like) (i+1) = coeff p i, including the smart-cons
+   collapse case (zero @ [] == []). *)
+let zero_shift_coeff (#t:Type) {| cr: commutative_ring t |} (p: polynomial t) (i: nat)
+  : Lemma (coeff ((zero <: t) @ p) ((i ++ 1)) = coeff p i)
+  = match p with
+    | []     -> reflexivity (zero <: t)
+    | _ :: _ -> reflexivity (coeff p i)
+
+#push-options "--z3rlimit 80 --fuel 2 --ifuel 2"
+let rec monomial_mul_coeff (#t:Type) {| cr: commutative_ring t |} (c: t) (k: nat) (q: polynomial t) (j: nat)
+  : Lemma (ensures coeff (poly_mul (monomial c k) q) ((k ++ j))
+                   = c * (coeff q j))
+          (decreases k)
+  = H.elim_equatable_laws t ();
+    if c = (zero <: t) then begin
+      (* monomial c k = []; poly_mul [] q = []; coeff = zero = c * coeff q j *)
+      mul_congruence c (coeff q j) (zero <: t) (coeff q j);
+      H.zero_mul_x (coeff q j);
+      transitivity (c * coeff q j) ((zero <: t) * coeff q j) (zero <: t);
+      symmetry (c * coeff q j) (zero <: t);
+      reflexivity (zero <: t)
+    end
+    else if k = 0 then begin
+      (* monomial c 0 = c @ poly_zero; use the singleton coeff lemma *)
+      poly_mul_singleton_coeff c q j
+    end
+    else begin
+      let k' = (k - 1) in
+      (* monomial c k = zero @ monomial c k'  (since monomial c k' nonempty) *)
+      let m  : polynomial t = monomial c k  in
+      let m' : polynomial t = monomial c k' in
+      assert (m == ((zero <: t) @ m'));
+      (* poly_mul_reveal applied to a=zero, p=m', q *)
+      let s1 : polynomial t = poly_mul ((zero <: t) @ poly_zero) q in
+      let s2 : polynomial t = (zero <: t) @ (poly_mul m' q)        in
+      let rhs : polynomial t = poly_add s1 s2 in
+      poly_mul_reveal (zero <: t) m' q;
+      poly_eq_means_equal_coeffs (poly_mul m q) rhs ((k ++ j));
+      poly_add_coeff s1 s2 ((k ++ j));
+      (* coeff s1 _ = zero * coeff q _ = zero *)
+      poly_mul_singleton_coeff (zero <: t) q ((k ++ j));
+      H.zero_mul_x (coeff q ((k ++ j)));
+      transitivity (coeff s1 ((k ++ j)))
+                   ((zero <: t) * coeff q ((k ++ j)))
+                   (zero <: t);
+      (* coeff s2 (k+j) = coeff (poly_mul m' q) (k'+j) by zero_shift_coeff *)
+      zero_shift_coeff (poly_mul m' q) ((k' ++ j));
+      monomial_mul_coeff c k' q j;
+      (* assemble: coeff (poly_mul m q) (k+j)
+         = coeff s1 (k+j) + coeff s2 (k+j)
+         = zero + coeff (poly_mul m' q) (k'+j)
+         = zero + c * coeff q j
+         = c * coeff q j *)
+      let r1 : t = coeff s1 ((k ++ j)) in
+      let r2 : t = coeff s2 ((k ++ j)) in
+      let r2' : t = coeff (poly_mul m' q) ((k' ++ j)) in
+      reflexivity r2;
+      add_congruence r1 r2 (zero <: t) r2';
+      H.zero_plus_x r2';
+      transitivity (r1 + r2) ((zero <: t) + r2') r2';
+      transitivity (coeff (poly_mul m q) ((k ++ j)))
+                   (coeff rhs ((k ++ j)))
+                   (r1 + r2);
+      transitivity (coeff (poly_mul m q) ((k ++ j)))
+                   (r1 + r2) r2';
+      transitivity (coeff (poly_mul m q) ((k ++ j)))
+                   r2' (c * coeff q j)
+    end
+#pop-options
+
+(* ================================================================ *)
+(*  poly_const c = the constant polynomial [c] = monomial c 0.       *)
+(*  The coefficient embedding  t -> t[X],  shown to be a ring hom.   *)
+(*  (Unifies the former Subst.const0 and Berlekamp.const_poly.)      *)
+(* ================================================================ *)
+
+let poly_const (#t:Type) {| cr: commutative_ring t |} (c: t) : polynomial t
+  = monomial c 0
+
+(* poly_eq from coefficient agreement on nat indices (negatives are zero). *)
+let poly_eq_by_coeff (#t:Type) {| cr: commutative_ring t |} (p q: polynomial t)
+  (h: (j:nat) -> Lemma (coeff p j = coeff q j))
+  : Lemma (poly_eq p q)
+  = H.elim_equatable_laws t ();
+    let aux (j:int) : Lemma (coeff p j = coeff q j) =
+      if j < 0 then reflexivity (zero <: t) else h j
+    in
+    Classical.forall_intro aux;
+    equal_coeffs_means_poly_eq p q
+
+let poly_const_coeff0 (#t:Type) {| cr: commutative_ring t |} (c: t)
+  : Lemma (coeff (poly_const c) 0 = c)
+  = H.elim_equatable_laws t ();
+    monomial_coeff c 0 0
+
+let poly_const_coeff_high (#t:Type) {| cr: commutative_ring t |} (c: t) (i:nat)
+  : Lemma (requires i >= 1) (ensures coeff (poly_const c) i = (zero <: t))
+  = H.elim_equatable_laws t ();
+    monomial_coeff c 0 i
+
+(* poly_const zero ~ poly_zero *)
+let poly_const_zero (#t:Type) {| cr: commutative_ring t |} ()
+  : Lemma (poly_eq (poly_const (zero <: t)) (poly_zero #t))
+  = H.elim_equatable_laws t ();
+    poly_eq_by_coeff (poly_const (zero <: t)) (poly_zero #t)
+      (fun (j:nat) -> if j = 0 then poly_const_coeff0 (zero <: t)
+                      else poly_const_coeff_high (zero <: t) j)
+
+(* poly_const respects = *)
+let poly_const_congr (#t:Type) {| cr: commutative_ring t |} (x y: t)
+  : Lemma (requires (x = y)) (ensures poly_eq (poly_const x) (poly_const y))
+  = H.elim_equatable_laws t ();
+    H.trans_for_calc t ();
+    poly_eq_by_coeff (poly_const x) (poly_const y)
+      (fun (j:nat) ->
+        if j = 0 then (poly_const_coeff0 x; poly_const_coeff0 y)
+        else (poly_const_coeff_high x j; poly_const_coeff_high y j))
+
+(* additivity:  poly_const (x + y) ~ poly_const x + poly_const y *)
+let poly_const_add (#t:Type) {| cr: commutative_ring t |} (x y: t)
+  : Lemma (poly_eq (poly_const (x + y)) (poly_add (poly_const x) (poly_const y)))
+  = H.elim_equatable_laws t ();
+    H.trans_for_calc t ();
+    poly_eq_by_coeff (poly_const (x + y)) (poly_add (poly_const x) (poly_const y))
+      (fun (j:nat) ->
+        if j = 0 then begin
+          poly_const_coeff0 (x + y); poly_const_coeff0 x; poly_const_coeff0 y;
+          (* coeff (poly_add ..) 0 = coeff (poly_const x) 0 + coeff (poly_const y) 0  [SMTPat poly_add_coeff] *)
+          add_congruence (coeff (poly_const x) 0) (coeff (poly_const y) 0) x y
+        end else begin
+          poly_const_coeff_high (x + y) j; poly_const_coeff_high x j; poly_const_coeff_high y j;
+          add_congruence (coeff (poly_const x) j) (coeff (poly_const y) j) (zero <: t) (zero <: t);
+          H.x_plus_zero (zero <: t)
+        end)
+
+(* negation:  poly_const (neg x) ~ poly_neg (poly_const x) *)
+let poly_const_neg (#t:Type) {| cr: commutative_ring t |} (x: t)
+  : Lemma (poly_eq (poly_const ((- x))) (poly_neg (poly_const x)))
+  = H.elim_equatable_laws t ();
+    H.trans_for_calc t ();
+    poly_eq_by_coeff (poly_const ((- x))) (poly_neg (poly_const x))
+      (fun (j:nat) ->
+        if j = 0 then begin
+          poly_const_coeff0 ((- x)); poly_const_coeff0 x;
+          poly_neg_coeff (poly_const x) 0;                   (* coeff(poly_neg)0 = neg(coeff(poly_const x)0) *)
+          neg_congruence (coeff (poly_const x) 0) x           (* neg(coeff(poly_const x)0) = neg x *)
+        end else begin
+          poly_const_coeff_high ((- x)) j; poly_const_coeff_high x j;
+          poly_neg_coeff (poly_const x) j;
+          neg_congruence (coeff (poly_const x) j) (zero <: t);
+          H.neg_zero #t ()                                (* neg zero = zero *)
+        end)
+
+(* multiplicativity:  poly_const (x * y) ~ poly_const x * poly_const y *)
+let poly_const_mul (#t:Type) {| cr: commutative_ring t |} (x y: t)
+  : Lemma (poly_eq (poly_const (x * y)) (poly_mul (poly_const x) (poly_const y)))
+  = H.elim_equatable_laws t ();
+    H.trans_for_calc t ();
+    poly_eq_by_coeff (poly_const (x * y)) (poly_mul (poly_const x) (poly_const y))
+      (fun (j:nat) ->
+        if j = 0 then begin
+          poly_const_coeff0 (x * y); poly_const_coeff0 y;
+          (* poly_const x = monomial x 0 ; monomial_mul_coeff x 0 (poly_const y) 0 :
+             coeff (monomial x 0 * poly_const y) (0+0) = x * coeff (poly_const y) 0 = x * y *)
+          monomial_mul_coeff x 0 (poly_const y) 0;
+          mul_congruence x (coeff (poly_const y) 0) x y        (* x * coeff(poly_const y)0 = x*y *)
+        end else begin
+          poly_const_coeff_high (x * y) j;
+          poly_const_coeff_high y j;
+          (* coeff(monomial x 0 * poly_const y)(0+j) = x * coeff(poly_const y) j = x*zero = zero *)
+          monomial_mul_coeff x 0 (poly_const y) j;
+          mul_congruence x (coeff (poly_const y) j) x (zero <: t);
+          H.x_mul_zero x                                   (* x * zero = zero *)
+        end)
+
+(* unit:  poly_const one ~ poly_one *)
+#push-options "--fuel 4 --ifuel 2"
+let poly_const_one (#t:Type) {| cr: commutative_ring t |} ()
+  : Lemma (poly_eq (poly_const (one <: t)) (poly_one #t))
+  = H.elim_equatable_laws t ();
+    H.trans_for_calc t ();
+    if (one <: t) = (zero <: t) then begin
+      (* poly_one == [] ; poly_const one ~ poly_const zero ~ poly_zero == poly_one *)
+      poly_const_congr (one <: t) (zero <: t);          (* poly_const one ~ poly_const zero *)
+      poly_const_zero #t #cr ();                          (* poly_const zero ~ poly_zero *)
+      H.elim_equatable_laws (polynomial t) #((polynomial_acg cr).acg_eq) ();
+      H.trans_for_calc (polynomial t) #((polynomial_acg cr).acg_eq) ();
+      transitivity #(polynomial t) #((polynomial_acg cr).acg_eq)
+        (poly_const (one <: t)) (poly_const (zero <: t)) (poly_zero #t)
+    end else
+      (* poly_one == [one] : coeff 0 = one, coeff (>=1) = zero *)
+      poly_eq_by_coeff (poly_const (one <: t)) (poly_one #t)
+        (fun (j:nat) ->
+          if j = 0 then poly_const_coeff0 (one <: t)
+          else poly_const_coeff_high (one <: t) j)
+#pop-options
+
+(* Reveal lemmas bridging the `monomial c 0` form to the explicit
+   `if c = zero then [] else [c]` list (the old `trim [c]` shape) and
+   to the degree. *)
+let poly_const_is_if (#t:Type) {| cr: commutative_ring t |} (c: t)
+  : Lemma (poly_const c == (if c = (zero <: t) then ([] <: polynomial t) else [c]))
+  = monomial_zero_n_reveal c
+
+let poly_const_deg (#t:Type) {| cr: commutative_ring t |} (c: t)
+  : Lemma (deg (poly_const c) == (if c = (zero <: t) then -1 else 0))
+  = monomial_deg c 0

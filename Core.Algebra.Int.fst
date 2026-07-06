@@ -19,12 +19,12 @@ open Core.Algebra
 instance int_acg : add_comm_group int = {
   acg_eq            = default_equatable int;
   zero              = 0;
-  add               = (fun x y -> Prims.op_Addition x y);
+  add               = Prims.op_Addition;
   add_congruence    = (fun _ _ _ _ -> ());
   add_commutativity = (fun _ _ -> ());
   add_associativity = (fun _ _ _ -> ());
   add_zero          = (fun _ -> ());
-  neg               = (fun x -> Prims.op_Minus x);
+  neg               = Prims.op_Minus;
   neg_congruence    = (fun _ _ -> ());
   add_negation      = (fun _ -> ());
 }
@@ -47,4 +47,26 @@ instance int_mic : mul_is_commutative int #int_ring = {
 instance int_cr : commutative_ring int = {
   cr_r   = int_ring;
   cr_mic = int_mic;
+}
+
+(* ---------------------------------------------------------------- *)
+(* domain / integral_domain instances for `int`.                    *)
+(*                                                                  *)
+(* Over `int` the class `eq` is `Prims.op_Equality`, `mul` is       *)
+(* `Prims.op_Star` and `zero`/`one` are `0`/`1`, so the            *)
+(* no-zero-divisors law `x*y = 0 <==> x = 0 \/ y = 0` and the      *)
+(* nontriviality `1 <> 0` are native integer facts, discharged by  *)
+(* `()`. We reuse `int_ring` (hence `int_mic` resolves) and do NOT *)
+(* rebuild any ring structure.                                     *)
+(* ---------------------------------------------------------------- *)
+
+instance int_domain : domain int = {
+  d_r        = int_ring;
+  domain_law = (fun _ _ -> ());
+}
+
+instance int_id : integral_domain int = {
+  id_d           = int_domain;
+  id_mic         = int_mic;
+  id_one_ne_zero = ();
 }

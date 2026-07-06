@@ -25,13 +25,10 @@ open Core.Algebra.Combinators
 open Core.Permutation
 open FStar.List.Tot.Base
 
-(* ----------------------------------------------------------------- *)
-(*  Plain nat arithmetic helpers.                                    *)
-(* ----------------------------------------------------------------- *)
-
-unfold let nat_succ (n: nat) : nat = Prims.op_Addition n 1
-unfold let nat_pred (n: nat{n > 0}) : nat = Prims.op_Subtraction n 1
-unfold let nat_minus (a: nat) (b: nat) : int = Prims.op_Subtraction a b
+(* Plain nat arithmetic uses the operators directly: `n ++ 1` (= Prims
+   integer addition, from Core.Algebra.Notation) and `n - 1` (Prims integer
+   subtraction; binary `-` is never overloaded). The former `nat_succ` /
+   `nat_pred` / `nat_minus` helpers have been retired in favour of `++` / `-`. *)
 
 (* ----------------------------------------------------------------- *)
 (*  Sum over an integer range  [lo, hi)                              *)
@@ -39,7 +36,7 @@ unfold let nat_minus (a: nat) (b: nat) : int = Prims.op_Subtraction a b
 
 val sum_range (#t:Type) {| m: add_comm_group t |}
                   (f: nat -> t) (lo hi: nat)
-  : Tot t (decreases (hi - lo))
+  : Tot t
 
 val sum_range_empty (#t:Type) {| m: add_comm_group t |}
                     (f: nat -> t) (lo hi: nat)
@@ -49,46 +46,41 @@ val sum_range_empty (#t:Type) {| m: add_comm_group t |}
 val sum_range_unfold_left (#t:Type) {| m: add_comm_group t |}
                           (f: nat -> t) (lo hi: nat)
   : Lemma (requires lo < hi)
-          (ensures sum_range f lo hi == f lo + sum_range f (nat_succ lo) hi)
+          (ensures sum_range f lo hi == f lo + sum_range f (lo ++ 1) hi)
 
 val sum_range_singleton (#t:Type) {| m: add_comm_group t |}
                         (f: nat -> t) (k: nat)
-  : Lemma (sum_range f k (nat_succ k) = f k)
+  : Lemma (sum_range f k (k ++ 1) = f k)
 
 val sum_range_unfold_right
   (#t:Type) {| m: add_comm_group t |}
   (f: nat -> t) (lo hi: nat)
   : Lemma (requires lo < hi)
-          (ensures sum_range f lo hi = sum_range f lo (nat_pred hi) + f (nat_pred hi))
-          (decreases nat_minus hi lo)
+          (ensures sum_range f lo hi = sum_range f lo (hi - 1) + f (hi - 1))
 
 val sum_range_split
   (#t:Type) {| m: add_comm_group t |}
   (f: nat -> t) (lo mid hi: nat)
   : Lemma (requires lo <= mid /\ mid <= hi)
           (ensures sum_range f lo hi = sum_range f lo mid + sum_range f mid hi)
-          (decreases (mid - lo))
 
 val sum_range_shift
   (#t:Type) {| m: add_comm_group t |}
   (f: nat -> t) (offset lo hi: nat)
-  : Lemma (ensures sum_range (fun (j:nat) -> f (Prims.op_Addition j offset)) lo hi
-                 = sum_range f (Prims.op_Addition lo offset) (Prims.op_Addition hi offset))
-          (decreases (hi - lo))
+  : Lemma (ensures sum_range (fun (j:nat) -> f (j ++ offset)) lo hi
+                 = sum_range f (lo ++ offset) (hi ++ offset))
 
 val sum_range_reverse
   (#t:Type) {| m: add_comm_group t |}
   (f: int -> t) (n: nat)
   : Lemma (ensures sum_range (fun (j:nat) -> f (n - 1 - j)) 0 n
-                 = sum_range (fun (j:nat) -> f j) 0 n)
-          (decreases n)
+                 = sum_range f 0 n)
 
 val sum_range_all_zero
   (#t:Type) {| m: add_comm_group t |}
   (f: nat -> t) (lo hi: nat)
-  (h: (k: nat{lo <= k /\ k < hi}) -> Lemma (f k = (zero <: t)))
-  : Lemma (ensures sum_range f lo hi = (zero <: t))
-          (decreases (hi - lo))
+  (h: (k: nat{lo <= k /\ k < hi}) -> Lemma (f k = zero))
+  : Lemma (ensures sum_range f lo hi = zero)
 
 (* ----------------------------------------------------------------- *)
 (*  Product over an integer range  [lo, hi)                          *)
@@ -96,7 +88,7 @@ val sum_range_all_zero
 
 val prod_range (#t:Type) {| m: ring t |}
                    (f: nat -> t) (lo hi: nat)
-  : Tot t (decreases (hi - lo))
+  : Tot t
 
 val prod_range_empty (#t:Type) {| m: ring t |}
                      (f: nat -> t) (lo hi: nat)
@@ -106,18 +98,17 @@ val prod_range_empty (#t:Type) {| m: ring t |}
 val prod_range_unfold_left (#t:Type) {| m: ring t |}
                            (f: nat -> t) (lo hi: nat)
   : Lemma (requires lo < hi)
-          (ensures prod_range f lo hi == f lo * prod_range f (nat_succ lo) hi)
+          (ensures prod_range f lo hi == f lo * prod_range f (lo ++ 1) hi)
 
 val prod_range_singleton (#t:Type) {| m: ring t |}
                          (f: nat -> t) (k: nat)
-  : Lemma (prod_range f k (nat_succ k) = f k)
+  : Lemma (prod_range f k (k ++ 1) = f k)
 
 val prod_range_unfold_right
   (#t:Type) {| m: ring t |}
   (f: nat -> t) (lo hi: nat)
   : Lemma (requires lo < hi)
-          (ensures prod_range f lo hi = prod_range f lo (nat_pred hi) * f (nat_pred hi))
-          (decreases nat_minus hi lo)
+          (ensures prod_range f lo hi = prod_range f lo (hi - 1) * f (hi - 1))
 
 val prod_range_split
   (#t:Type) {| m: ring t |}
@@ -125,12 +116,11 @@ val prod_range_split
   : Lemma (requires lo <= mid /\ mid <= hi)
           (ensures prod_range f lo hi =
                    prod_range f lo mid * prod_range f mid hi)
-          (decreases (mid - lo))
 
 val prod_range_two_step
   (#t:Type) {| m: ring t |}
   (f: nat -> t) (i: nat)
-  : Lemma (prod_range f i (nat_succ (nat_succ i)) = f i * f (nat_succ i))
+  : Lemma (prod_range f i ((i ++ 1) ++ 1) = f i * f (i ++ 1))
 
 (* ----------------------------------------------------------------- *)
 (*  Sum over a list                                                  *)
@@ -139,7 +129,7 @@ val prod_range_two_step
 val sum_list (#t:Type) {| m: add_comm_group t |} (xs: list t) : Tot t
 
 val sum_list_nil (#t:Type) {| m: add_comm_group t |}
-  : Lemma (sum_list #t #m [] == zero)
+  : Lemma (sum_list [] == zero #t)
 
 val sum_list_cons (#t:Type) {| m: add_comm_group t |} (x: t) (rest: list t)
   : Lemma (sum_list (x :: rest) == x + sum_list rest)
@@ -150,13 +140,13 @@ val sum_list_cons (#t:Type) {| m: add_comm_group t |} (x: t) (rest: list t)
 
 unfold let fin_sum (#t:Type) {| m: add_comm_group t |}
             (#n: nat) (f: fin n -> t) : t
-  = sum_range (fun (k: nat) -> if k < n then f (k <: fin n) else zero) 0 n
+  = sum_range (fun (k: nat) -> if k < n then f k else zero) 0 n
 
 (* Product over `fin n`, mirroring fin_sum. The internal nat-coercion
    lives here once; callers never see it. *)
 unfold let fin_prod (#t:Type) {| r: ring t |}
             (#n: nat) (f: fin n -> t) : t
-  = prod_range (fun (k: nat) -> if k < n then f (k <: fin n) else one) 0 n
+  = prod_range (fun (k: nat) -> if k < n then f k else one) 0 n
 
 (* ================================================================= *)
 (*  H3 hygiene (early): callback-form congruences used by the        *)
@@ -168,14 +158,12 @@ val sum_list_map_congruence
   (f g: a -> t) (xs: list a)
   (h: (x:a) -> Lemma (requires memP x xs) (ensures f x = g x))
   : Lemma (ensures sum_list (map f xs) = sum_list (map g xs))
-          (decreases xs)
 
 val sum_range_congruence
   (#t:Type) {| m: add_comm_group t |}
   (f g: nat -> t) (lo hi: nat)
   (h: (k: nat{lo <= k /\ k < hi}) -> Lemma (f k = g k))
   : Lemma (ensures sum_range f lo hi = sum_range g lo hi)
-          (decreases (hi - lo))
 
 val fin_sum_congruence
   (#t:Type) {| m: add_comm_group t |}
@@ -198,7 +186,6 @@ val sum_range_eq_pointwise
   (f g: nat -> t) (from: nat) (to: nat{from < to})
   : Lemma (requires (forall (k: nat{k >= from /\ k < to}). f k == g k))
           (ensures sum_range f from to == sum_range g from to)
-          (decreases (to - from))
 
 val fin_sum_eq_pointwise
   (#t: Type) {| acg: add_comm_group t |}
@@ -324,27 +311,26 @@ val prod_range_congruence
   (f g: nat -> t) (lo hi: nat)
   (h: (k: nat{lo <= k /\ k < hi}) -> Lemma (f k = g k))
   : Lemma (ensures prod_range f lo hi = prod_range g lo hi)
-          (decreases (hi - lo))
 
 val prod_range_swap_adjacent
   (#t:Type) {| m: commutative_ring t |}
   (f g: nat -> t) (lo hi: nat) (i: nat)
-  (h: (k: nat{lo <= k /\ k < hi /\ k <> i /\ k <> nat_succ i}) -> Lemma (g k = f k))
-  : Lemma (requires lo <= i /\ nat_succ i < hi /\
-                    g i = f (nat_succ i) /\ g (nat_succ i) = f i)
+  (h: (k: nat{lo <= k /\ k < hi /\ k <> i /\ k <> i ++ 1}) -> Lemma (g k = f k))
+  : Lemma (requires lo <= i /\ i ++ 1 < hi /\
+                    g i = f (i ++ 1) /\ g (i ++ 1) = f i)
           (ensures prod_range f lo hi = prod_range g lo hi)
 
 val prod_range_perm_invariance_fn
   (#t:Type) {| m: commutative_ring t |}
   (#n: nat) (f body_p body_id: nat -> t) (p: permutation n)
-  (h_p: (k: nat{0 <= k /\ k < n}) -> Lemma (body_p k = f (p.fwd (k <: fin n))))
+  (h_p: (k: nat{0 <= k /\ k < n}) -> Lemma (body_p k = f (p.fwd k)))
   (h_id: (k: nat{0 <= k /\ k < n}) -> Lemma (body_id k = f k))
   : Lemma (ensures prod_range body_p 0 n = prod_range body_id 0 n)
 
 val fin_sum_zero_ext
   (#t:Type) {| m: add_comm_group t |} (#n: nat) (f: fin n -> t)
-  (h: (k: fin n) -> Lemma (f k = zero #t))
-  : Lemma (ensures fin_sum f = zero #t)
+  (h: (k: fin n) -> Lemma (f k = zero))
+  : Lemma (ensures fin_sum f = zero)
 
 val fin_sum_add_ext
   (#t:Type) {| m: add_comm_group t |} (#n: nat) (f g h: fin n -> t)
@@ -361,21 +347,20 @@ val sum_range_kronecker_out_of_range
   (#t:Type) {| r: ring t |}
   (i0: nat) (g: nat -> t) (lo hi: nat)
   : Lemma (requires i0 < lo \/ i0 >= hi)
-          (ensures sum_range (pointwise_mul (kronecker_delta i0) g) lo hi = zero #t)
+          (ensures sum_range (pointwise_mul (kronecker_delta i0) g) lo hi = zero)
 
 (* Negation distributes over sum_range. *)
 val sum_range_neg
   (#t:Type) {| g: add_comm_group t |}
   (f: nat -> t) (lo hi: nat)
-  : Lemma (ensures sum_range (fun (k:nat) -> neg (f k)) lo hi
+  : Lemma (ensures sum_range (pointwise_neg f) lo hi
                  = neg (sum_range f lo hi))
-          (decreases (hi - lo))
 
 (* Bridge fin_sum to sum_range when g agrees with f on [0,n). *)
 val fin_sum_eq_sum_range
   (#t:Type) {| acg: add_comm_group t |} (#n: pos)
   (f: fin n -> t) (g: nat -> t)
-  : Lemma (requires (forall (k: nat{k < n}). g k = f (k <: fin n)))
+  : Lemma (requires (forall k. g k = f k))
           (ensures fin_sum f = sum_range g 0 n)
 
 (* Reversal bridge for named functions:
@@ -383,6 +368,24 @@ val fin_sum_eq_sum_range
 val sum_range_reverse_named
   (#t:Type) {| acg: add_comm_group t |}
   (f g: nat -> t) (n: nat)
-  (h: (j: nat{j < n}) -> Lemma (f j = g (Prims.op_Subtraction (Prims.op_Subtraction n 1) j)))
+  (h: (j: nat{j < n}) -> Lemma (f j = g (n - 1 - j)))
   : Lemma (ensures sum_range f 0 n = sum_range g 0 n)
-          (decreases n)
+
+(* ===== merged from Core.FinSum.Convolution - Cauchy product ===== *)
+(* conv_term/conv_sum are transparent (referenced in consumer lemma statements);
+   the padding/collapse helpers stay private in the .fst. *)
+val conv_term (#t:Type) {| cr: commutative_ring t |} (f g: nat -> t) (k i: nat) : t
+
+val conv_sum (#t:Type) {| cr: commutative_ring t |} (f g: nat -> t) (k: nat) : t
+
+val conv_term_reveal (#t:Type) {| cr: commutative_ring t |} (f g: nat -> t) (k i: nat)
+  : Lemma (conv_term f g k i == (if i <= k then f i * g (k - i) else zero))
+
+val conv_sum_reveal (#t:Type) {| cr: commutative_ring t |} (f g: nat -> t) (k: nat)
+  : Lemma (conv_sum f g k == sum_range (conv_term f g k) 0 (k ++ 1))
+
+val sum_range_convolution (#t:Type) {| cr: commutative_ring t |} (f g: nat -> t) (m n: nat)
+  (hf: (i:nat{i >= m}) -> Lemma (f i = zero))
+  (hg: (j:nat{j >= n}) -> Lemma (g j = zero))
+  : Lemma (sum_range f 0 m * sum_range g 0 n
+         = sum_range (conv_sum f g) 0 (m ++ n))

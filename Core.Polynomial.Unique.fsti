@@ -29,56 +29,52 @@ open Core.Polynomial.Div
 
 val degree_well_defined (#t:Type) {| cr: commutative_ring t |}
                         (p q: polynomial t)
-  : Lemma (requires poly_eq p q)
-          (ensures  poly_deg p == poly_deg q)
+  : Lemma (requires p = q)
+          (ensures  deg p == deg q)
+
+(* is_nonzero p  <==>  deg p >= 0  (deg characterises the zero polynomial). *)
+val nonzero_iff_some_deg (#t:Type) {| cr: commutative_ring t |}
+                         (p: polynomial t)
+  : Lemma (is_nonzero p <==> deg p >= 0)
 
 val degree_none_poly_eq_zero (#t:Type) {| cr: commutative_ring t |}
                              (p: polynomial t)
-  : Lemma (requires None? (poly_deg p))
-          (ensures  poly_eq p (poly_zero #t))
+  : Lemma (requires deg p < 0)
+          (ensures  p = (poly_zero #t))
 
 val sub_zero_implies_eq (#t:Type) {| cr: commutative_ring t |}
                         (a b: polynomial t)
-  : Lemma (requires poly_eq (poly_sub a b) (poly_zero #t))
-          (ensures  poly_eq a b)
+  : Lemma (requires (a -- b) = (poly_zero #t))
+          (ensures  a = b)
 
 val degree_mul (#t:Type) {| id: integral_domain t |}
                (p q: polynomial t)
-  : Lemma (requires Some? (poly_deg p) /\ Some? (poly_deg q))
-          (ensures  Some? (poly_deg (poly_mul p q)) /\
-                    Some?.v (poly_deg (poly_mul p q)) ==
-                    Prims.op_Addition (Some?.v (poly_deg p))
-                                      (Some?.v (poly_deg q)))
+  : Lemma (requires deg p >= 0 /\ deg q >= 0)
+          (ensures  deg (p * q) == deg p + deg q)
 
 val only_mul_zero_decreases_poly_degree
     (#t:Type) {| f: field t |} (q d s: polynomial t)
-  : Lemma (requires Some? (poly_deg q) /\
-                    poly_eq (poly_mul q d) s /\
-                    (None? (poly_deg s) \/
-                     (Some? (poly_deg s) /\
-                      Some?.v (poly_deg s) < Some?.v (poly_deg q))))
-          (ensures  None? (poly_deg d))
+  : Lemma (requires deg q >= 0 /\
+                    (q * d) = s /\
+                    deg s < deg q)
+          (ensures  deg d < 0)
 
 val poly_mul_sub_distrib (#t:Type) {| cr: commutative_ring t |}
                          (q a b: polynomial t)
-  : Lemma (poly_eq (poly_mul q (poly_sub a b))
-                   (poly_sub (poly_mul q a) (poly_mul q b)))
+  : Lemma ((q * (a -- b))
+                   = ((q * a) -- (q * b)))
 
 val add_rearrange (#t:Type) {| cr: commutative_ring t |}
                   (x y r1 r2: polynomial t)
-  : Lemma (requires poly_eq (poly_add x r1) (poly_add y r2))
-          (ensures  poly_eq (poly_sub x y) (poly_sub r2 r1))
+  : Lemma (requires (x + r1) = (y + r2))
+          (ensures  (x -- y) = (r2 -- r1))
 
 val poly_divmod_unique (#t:Type) {| f: field t |}
                        (q a1 a2 r1 r2: polynomial t)
   : Lemma (requires
-            Some? (poly_deg q) /\
-            poly_eq (poly_add (poly_mul q a1) r1)
-                    (poly_add (poly_mul q a2) r2) /\
-            (None? (poly_deg r1) \/
-             (Some? (poly_deg r1) /\
-              Some?.v (poly_deg r1) < Some?.v (poly_deg q))) /\
-            (None? (poly_deg r2) \/
-             (Some? (poly_deg r2) /\
-              Some?.v (poly_deg r2) < Some?.v (poly_deg q))))
-          (ensures  poly_eq a1 a2 /\ poly_eq r1 r2)
+            deg q >= 0 /\
+            ((q * a1) + r1)
+                    = ((q * a2) + r2) /\
+            deg r1 < deg q /\
+            deg r2 < deg q)
+          (ensures  a1 = a2 /\ r1 = r2)

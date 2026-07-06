@@ -1,5 +1,7 @@
 module Core.Matrix.Sylvester
 
+(* INTERNAL — do not import directly; helper bridged into Core.Matrix.Resultant (Sylvester matrix construction). No .fsti by design. *)
+
 (*
    Sylvester matrix construction.
 
@@ -12,9 +14,9 @@ module Core.Matrix.Sylvester
    This module establishes the construction and lookup lemmas only.
    Its determinant — the resultant — is studied in a downstream module.
 
-   All nat-arithmetic uses `Prims.op_Addition` / `Prims.op_Subtraction`
-   explicitly to avoid clashing with the typeclass `+` brought in by
-   `Core.Algebra.Notation`.
+   All nat/int index arithmetic uses `( ++ )` (= `Prims.op_Addition`,
+   from `Core.Algebra.Notation`) for addition and plain `( - )` for
+   subtraction, to avoid clashing with the typeclass `+` overload.
 
    The polynomial convention here is "coefficient at index i is the
    coefficient of x^i", which matches `Core.Polynomial.coeff`.
@@ -24,14 +26,18 @@ module TC = FStar.Tactics.Typeclasses
 module L = FStar.List.Tot
 
 open Core.Algebra
+open Core.Algebra.Notation
 open Core.Permutation
 open Core.Matrix
 open Core.Polynomial
 
-unfold let nat_add (a b: nat) : nat = Prims.op_Addition a b
-unfold let nat_sub (a: nat) (b: nat{b <= a}) : nat = Prims.op_Subtraction a b
-unfold let int_add (a b: int) : int = Prims.op_Addition a b
-unfold let int_sub (a b: int) : int = Prims.op_Subtraction a b
+(* These nat/int wrappers are re-exported (via `open`) into the downstream
+   `Core.Matrix.Resultant`, which uses them in its own signatures; they are
+   kept here for that consumer. Inside this module we write `( ++ )` / `( - )`. *)
+unfold let nat_add (a b: nat) : nat = a ++ b
+unfold let nat_sub (a: nat) (b: nat{b <= a}) : nat = a - b
+unfold let int_add (a b: int) : int = a ++ b
+unfold let int_sub (a b: int) : int = a - b
 
 (* ------------------------------------------------------------------ *)
 (*  Sylvester matrix                                                  *)
@@ -53,15 +59,15 @@ unfold let int_sub (a b: int) : int = Prims.op_Subtraction a b
 
 let sylvester_matrix
   (#t: Type) {| cr: commutative_ring t |}
-  (m_deg n_deg: nat{nat_add m_deg n_deg > 0}) (p q: polynomial t)
-  : square_matrix t (nat_add m_deg n_deg)
-  = fun (i: fin (nat_add m_deg n_deg)) (j: fin (nat_add m_deg n_deg)) ->
+  (m_deg n_deg: nat{(m_deg ++ n_deg) > 0}) (p q: polynomial t)
+  : square_matrix t (m_deg ++ n_deg)
+  = fun (i: fin (m_deg ++ n_deg)) (j: fin (m_deg ++ n_deg)) ->
       let i_nat : nat = i in
       let j_nat : nat = j in
       if i_nat < n_deg then
-        coeff p (int_sub (int_add m_deg i_nat) j_nat)
+        coeff p ((m_deg ++ i_nat) - j_nat)
       else
-        coeff q (int_sub i_nat j_nat)
+        coeff q (i_nat - j_nat)
 
 (* ------------------------------------------------------------------ *)
 (*  Lookup lemmas                                                     *)
@@ -69,53 +75,53 @@ let sylvester_matrix
 
 let sylvester_p_block_lookup
   (#t: Type) {| cr: commutative_ring t |}
-  (m_deg n_deg: nat{nat_add m_deg n_deg > 0}) (p q: polynomial t)
-  (i j: fin (nat_add m_deg n_deg))
-  : Lemma (requires (i <: nat) < n_deg)
+  (m_deg n_deg: nat{(m_deg ++ n_deg) > 0}) (p q: polynomial t)
+  (i j: fin (m_deg ++ n_deg))
+  : Lemma (requires i < n_deg)
           (ensures sylvester_matrix m_deg n_deg p q i j
-                == coeff p (int_sub (int_add m_deg i) j))
+                == coeff p ((m_deg ++ i) - j))
   = ()
 
 let sylvester_q_block_lookup
   (#t: Type) {| cr: commutative_ring t |}
-  (m_deg n_deg: nat{nat_add m_deg n_deg > 0}) (p q: polynomial t)
-  (i j: fin (nat_add m_deg n_deg))
-  : Lemma (requires (i <: nat) >= n_deg)
+  (m_deg n_deg: nat{(m_deg ++ n_deg) > 0}) (p q: polynomial t)
+  (i j: fin (m_deg ++ n_deg))
+  : Lemma (requires i >= n_deg)
           (ensures sylvester_matrix m_deg n_deg p q i j
-                == coeff q (int_sub i j))
+                == coeff q (i - j))
   = ()
 
 let sylvester_p_block_in_range
   (#t: Type) {| cr: commutative_ring t |}
-  (m_deg n_deg: nat{nat_add m_deg n_deg > 0}) (p q: polynomial t)
-  (i j: fin (nat_add m_deg n_deg))
-  : Lemma (requires (i <: nat) < n_deg /\
-                    (j <: nat) <= (i <: nat) + m_deg /\
-                    (j <: nat) >= i)
+  (m_deg n_deg: nat{(m_deg ++ n_deg) > 0}) (p q: polynomial t)
+  (i j: fin (m_deg ++ n_deg))
+  : Lemma (requires i < n_deg /\
+                    j <= (i ++ m_deg) /\
+                    j >= i)
           (ensures sylvester_matrix m_deg n_deg p q i j
-                == coeff p (nat_sub (nat_add m_deg i) j))
+                == coeff p ((m_deg ++ i) - j))
   = ()
 
 let sylvester_p_block_right_zero
   (#t: Type) {| cr: commutative_ring t |}
-  (m_deg n_deg: nat{nat_add m_deg n_deg > 0}) (p q: polynomial t)
-  (i j: fin (nat_add m_deg n_deg))
-  : Lemma (requires (i <: nat) < n_deg /\
-                    (j <: nat) > (i <: nat) + m_deg)
+  (m_deg n_deg: nat{(m_deg ++ n_deg) > 0}) (p q: polynomial t)
+  (i j: fin (m_deg ++ n_deg))
+  : Lemma (requires i < n_deg /\
+                    j > (i ++ m_deg))
           (ensures sylvester_matrix m_deg n_deg p q i j == (zero <: t))
   = ()
 
 let sylvester_p_block_left_zero
   (#t: Type) {| cr: commutative_ring t |}
-  (m_deg n_deg: nat{nat_add m_deg n_deg > 0}) (p q: polynomial t)
-  (i j: fin (nat_add m_deg n_deg))
-  : Lemma (requires (i <: nat) < n_deg /\
-                    (j <: nat) < i /\
-                    L.length p <= nat_add m_deg 1)
+  (m_deg n_deg: nat{(m_deg ++ n_deg) > 0}) (p q: polynomial t)
+  (i j: fin (m_deg ++ n_deg))
+  : Lemma (requires i < n_deg /\
+                    j < i /\
+                    L.length p <= (m_deg ++ 1))
           (ensures sylvester_matrix m_deg n_deg p q i j == (zero <: t))
   = let i_nat : nat = i in
     let j_nat : nat = j in
-    let idx_int : int = int_sub (int_add m_deg i_nat) j_nat in
+    let idx_int : int = (m_deg ++ i_nat) - j_nat in
     assert (idx_int > m_deg);
     let idx : nat = idx_int in
     assert (idx >= L.length p);
@@ -123,30 +129,30 @@ let sylvester_p_block_left_zero
 
 let sylvester_q_block_in_range
   (#t: Type) {| cr: commutative_ring t |}
-  (m_deg n_deg: nat{nat_add m_deg n_deg > 0}) (p q: polynomial t)
-  (i j: fin (nat_add m_deg n_deg))
-  : Lemma (requires (i <: nat) >= n_deg /\
-                    (j <: nat) <= (i <: nat) - n_deg + n_deg /\
-                    (j <: nat) <= (i <: nat))
+  (m_deg n_deg: nat{(m_deg ++ n_deg) > 0}) (p q: polynomial t)
+  (i j: fin (m_deg ++ n_deg))
+  : Lemma (requires i >= n_deg /\
+                    j <= ((i - n_deg) ++ n_deg) /\
+                    j <= i)
           (ensures sylvester_matrix m_deg n_deg p q i j
-                == coeff q (nat_sub i j))
+                == coeff q (i - j))
   = ()
 
 let sylvester_q_block_right_zero
   (#t: Type) {| cr: commutative_ring t |}
-  (m_deg n_deg: nat{nat_add m_deg n_deg > 0}) (p q: polynomial t)
-  (i j: fin (nat_add m_deg n_deg))
-  : Lemma (requires (i <: nat) >= n_deg /\
-                    (j <: nat) > (i <: nat))
+  (m_deg n_deg: nat{(m_deg ++ n_deg) > 0}) (p q: polynomial t)
+  (i j: fin (m_deg ++ n_deg))
+  : Lemma (requires i >= n_deg /\
+                    j > i)
           (ensures sylvester_matrix m_deg n_deg p q i j == (zero <: t))
   = ()
 
 let sylvester_q_block_left_zero
   (#t: Type) {| cr: commutative_ring t |}
-  (m_deg n_deg: nat{nat_add m_deg n_deg > 0}) (p q: polynomial t)
-  (i j: fin (nat_add m_deg n_deg))
-  : Lemma (requires (i <: nat) >= n_deg /\
-                    (j <: nat) + n_deg < (i <: nat) /\
-                    L.length q <= nat_add n_deg 1)
+  (m_deg n_deg: nat{(m_deg ++ n_deg) > 0}) (p q: polynomial t)
+  (i j: fin (m_deg ++ n_deg))
+  : Lemma (requires i >= n_deg /\
+                    (j ++ n_deg) < i /\
+                    L.length q <= (n_deg ++ 1))
           (ensures sylvester_matrix m_deg n_deg p q i j == (zero <: t))
   = ()

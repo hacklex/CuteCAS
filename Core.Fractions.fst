@@ -39,7 +39,7 @@ open Core.Tactics.CanonRing
 
 private let neg_unique (#t:Type) {| d: commutative_ring t |} (p q: t)
   : Lemma (requires p + q = zero)
-          (ensures  p = neg q) =
+          (ensures  p = (- q)) =
     assert (eq p (p + q + -q)) by canon_ring();
     reflexivity (-q);
     add_congruence (p + q) (-q) zero (-q);
@@ -49,13 +49,13 @@ private let neg_unique (#t:Type) {| d: commutative_ring t |} (p q: t)
 
 #push-options "--z3rlimit 30 --fuel 1 --ifuel 1"
 private let neg_mul_right (#t:Type) {| d: integral_domain t |} (x y: t)
-  : Lemma (x * neg y = neg (x * y) /\ neg (x*y) = x * neg y)
-  = assert (x * neg y = neg (x * y)) by canon_ring();
-    assert (neg (x*y) = x * neg y) by canon_ring()
+  : Lemma (x * (- y) = (- (x * y)) /\ (- (x*y)) = x * (- y))
+  = assert (x * (- y) = (- (x * y))) by canon_ring();
+    assert ((- (x*y)) = x * (- y)) by canon_ring()
 
 private let neg_mul_left (#t:Type) {| d: integral_domain t |} (x y: t)
-  : Lemma (neg x * y = neg (x * y))
-  = assert (neg x * y = neg (x * y)) by canon_ring()
+  : Lemma ((- x) * y = (- (x * y)))
+  = assert ((- x) * y = (- (x * y))) by canon_ring()
 #pop-options
 
 (* Workhorse: in an integral domain, a*b = 0 ==> a=0 \/ b=0. The
@@ -64,48 +64,30 @@ private let domain_zero_div (#t:Type) {| d: integral_domain t |} (a b: t)
   : Lemma (requires a * b = zero) (ensures a = zero \/ b = zero)
   = domain_law a b
 
-
-let test left_cancel (#t:Type) {| d: integral_domain t |} (c a b: t)
-  : Lemma (requires c * a = c * b /\ not (c = zero))
-          (ensures  a = b) = 
-  trans_for_calc t _;
-  elim_equatable_laws t _;
-  neg_mul_right c b;
-  left_distributivity c a (-b);
-  add_congruence (c*a) (c*(-b)) (c*b) (-(c*b));
-  x_plus_neg_x (c*b);
-  domain_law c (a + -b);    
-  add_congruence (a -- b) b zero b;
-  add_associativity a (-b) b;
-  zero_plus_x b;
-  neg_x_plus_x b;
-  add_congruence a (-b + b) a zero;
-  x_plus_zero a 
-
 (* Left-cancellation over an integral domain: if c is nonzero, c*a = c*b
    forces a = b. *)
 #push-options "--z3rlimit 40 --fuel 1 --ifuel 1"
 private let left_cancel (#t:Type) {| d: integral_domain t |} (c a b: t)
   : Lemma (requires c * a = c * b /\ not (c = zero))
           (ensures  a = b)
-  = left_distributivity c a (neg b);
+  = left_distributivity c a ((- b));
     neg_mul_right c b;
     reflexivity (c * a);
-    add_congruence (c * a) (c * neg b) (c * a) (neg (c * b));
-    transitivity (c * (a + neg b)) (c * a + c * neg b) (c * a + neg (c * b));
-    reflexivity (neg (c * b));
+    add_congruence (c * a) (c * (- b)) (c * a) ((- (c * b)));
+    transitivity (c * (a + (- b))) (c * a + c * (- b)) (c * a + (- (c * b)));
+    reflexivity ((- (c * b)));
     symmetry (c * a) (c * b);
-    add_congruence (c * a) (neg (c * b)) (c * b) (neg (c * b));
-    transitivity (c * (a + neg b)) (c * a + neg (c * b)) (c * b + neg (c * b));
+    add_congruence (c * a) ((- (c * b))) (c * b) ((- (c * b)));
+    transitivity (c * (a + (- b))) (c * a + (- (c * b))) (c * b + (- (c * b)));
     x_plus_neg_x (c * b);
-    transitivity (c * (a + neg b)) (c * b + neg (c * b)) zero;
-    domain_zero_div c (a + neg b);
-    assert (a + neg b = zero);
-    neg_unique a (neg b);
+    transitivity (c * (a + (- b))) (c * b + (- (c * b))) zero;
+    domain_zero_div c (a + (- b));
+    assert (a + (- b) = zero);
+    neg_unique a ((- b));
     x_plus_neg_x b;
-    neg_unique b (neg b);
-    symmetry b (neg (neg b));
-    transitivity a (neg (neg b)) b
+    neg_unique b ((- b));
+    symmetry b ((- ((- b))));
+    transitivity a ((- ((- b)))) b
 #pop-options
 
 (* AC-juggling helper: (a*b)*(c*d) = (a*c)*(b*d). Used repeatedly in
@@ -227,10 +209,10 @@ private let fraction_eq_trans
 
 let fraction_equatable (t:Type) (d: integral_domain t)
   : equatable (fraction d) = {
-    eq           = (fun x y -> fraction_eq #t #d x y);
-    reflexivity  = (fun x -> fraction_eq_refl #t #d x);
-    symmetry     = (fun x y -> fraction_eq_symm #t #d x y);
-    transitivity = (fun x y z -> fraction_eq_trans #t #d x y z);
+    eq           = fraction_eq;
+    reflexivity  = fraction_eq_refl;
+    symmetry     = fraction_eq_symm;
+    transitivity = fraction_eq_trans;
   }
 
 (* ================================================================ *)
@@ -349,17 +331,17 @@ private let fraction_add_left_identity
   (#t:Type) {| d: integral_domain t |} (x: fraction d)
   : Lemma (fraction_eq (fraction_add (fraction_zero t) x) x)
   = let a, b : t & t = x.num, x.den in
-    prod_den_nonzero (fraction_zero t #d) x;
+    prod_den_nonzero (fraction_zero t) x;
     assert ((zero * b + one * a) * b = (one * b) * a) by canon_ring()
 
 private let fraction_add_right_identity
   (#t:Type) {| d: integral_domain t |} (x: fraction d)
   : Lemma (fraction_eq (fraction_add x (fraction_zero t)) x)
-  = fraction_add_is_commutative x (fraction_zero t #d);
+  = fraction_add_is_commutative x (fraction_zero t);
     fraction_add_left_identity x;
     fraction_eq_trans
-      (fraction_add x (fraction_zero t #d))
-      (fraction_add (fraction_zero t #d) x)
+      (fraction_add x (fraction_zero t))
+      (fraction_add (fraction_zero t) x)
       x
 #pop-options
 
@@ -369,7 +351,7 @@ private let fraction_add_right_identity
 
 let fraction_neg (#t:Type) {| d: integral_domain t |} (x: fraction d)
   : fraction d
-  = Fraction (neg x.num) x.den
+  = Fraction ((- x.num)) x.den
 
 #push-options "--z3rlimit 60 --fuel 1 --ifuel 1"
 private let fraction_neg_congruence
@@ -382,7 +364,7 @@ private let fraction_neg_congruence
     neg_mul_left a e;
     neg_congruence (a * e) (b * c);
     neg_mul_right b c;
-    transitivity (neg a * e) (neg (b * c)) (b * neg c)
+    transitivity ((- a) * e) ((- (b * c))) (b * (- c))
 #pop-options
 
 #push-options "--z3rlimit 40 --fuel 1 --ifuel 1"
@@ -391,7 +373,7 @@ private let fraction_negation_r
   : Lemma (fraction_eq (fraction_add x (fraction_neg x)) (fraction_zero t))
   = let a, b : t & t = x.num, x.den in
     prod_den_nonzero x (fraction_neg x);
-    assert ((a * b + b * neg a) * one = (b * b) * zero) by canon_ring()
+    assert ((a * b + b * (- a)) * one = (b * b) * zero) by canon_ring()
 
 private let fraction_negation_l
   (#t:Type) {| d: integral_domain t |} (x: fraction d)
@@ -401,7 +383,7 @@ private let fraction_negation_l
     fraction_eq_trans
       (fraction_add (fraction_neg x) x)
       (fraction_add x (fraction_neg x))
-      (fraction_zero t #d)
+      (fraction_zero t)
 #pop-options
 
 (* ================================================================ *)
@@ -460,11 +442,11 @@ private let fraction_mul_left_identity
 private let fraction_mul_right_identity
   (#t:Type) {| d: integral_domain t |} (x: fraction d)
   : Lemma (fraction_eq (fraction_mul x (fraction_one t)) x)
-  = fraction_mul_is_commutative x (fraction_one t #d);
+  = fraction_mul_is_commutative x (fraction_one t);
     fraction_mul_left_identity x;
     fraction_eq_trans
-      (fraction_mul x (fraction_one t #d))
-      (fraction_mul (fraction_one t #d) x)
+      (fraction_mul x (fraction_one t))
+      (fraction_mul (fraction_one t) x)
       x
 
 private let fraction_mul_left_absorption
@@ -476,12 +458,12 @@ private let fraction_mul_left_absorption
 private let fraction_mul_right_absorption
   (#t:Type) {| d: integral_domain t |} (x: fraction d)
   : Lemma (fraction_eq (fraction_mul x (fraction_zero t)) (fraction_zero t))
-  = fraction_mul_is_commutative x (fraction_zero t #d);
+  = fraction_mul_is_commutative x (fraction_zero t);
     fraction_mul_left_absorption x;
     fraction_eq_trans
-      (fraction_mul x (fraction_zero t #d))
-      (fraction_mul (fraction_zero t #d) x)
-      (fraction_zero t #d)
+      (fraction_mul x (fraction_zero t))
+      (fraction_mul (fraction_zero t) x)
+      (fraction_zero t)
 #pop-options
 
 #push-options "--z3rlimit 80 --fuel 1 --ifuel 1"
@@ -535,7 +517,7 @@ private let fraction_zero_ne_one_lemma
     zero_mul_x (one #t);
     one_mul_x  (one #t);
     let aux () : Lemma
-        (requires fraction_eq (fraction_zero t #dom) (fraction_one t #dom))
+        (requires fraction_eq (fraction_zero t) (fraction_one t))
         (ensures False)
       = symmetry (zero * one) (zero <: t);
         let _: squash (not ((one <: t) = (zero <: t))) = dom.id_one_ne_zero in
@@ -558,13 +540,13 @@ private let fraction_domain_law_fwd
     assert ((b * e) * zero = zero) by canon_ring();
     domain_zero_div a c;
     let if_a () : Lemma (requires a = zero)
-                        (ensures fraction_eq x (fraction_zero t #dom))
+                        (ensures fraction_eq x (fraction_zero t))
       = assert (a * one = a) by canon_ring();
         assert (b * zero = zero) by canon_ring();
         transitivity (a * one) zero (b * zero)
     in
     let if_c () : Lemma (requires c = zero)
-                        (ensures fraction_eq y (fraction_zero t #dom))
+                        (ensures fraction_eq y (fraction_zero t))
       = assert (c * one = c) by canon_ring();
         assert (e * zero = zero) by canon_ring();
         transitivity (c * one) zero (e * zero)
@@ -600,11 +582,11 @@ let fraction_eq_zero_iff_num_zero
     let a, b : t & t = x.num, x.den in
     assert (a * one = a) by canon_ring();
     assert (b * zero = zero) by canon_ring();
-    let fwd () : Lemma (requires fraction_eq x (fraction_zero t #d))
+    let fwd () : Lemma (requires fraction_eq x (fraction_zero t))
                        (ensures  a = zero) = ()
     in
     let bwd () : Lemma (requires a = zero)
-                       (ensures  fraction_eq x (fraction_zero t #d)) = ()
+                       (ensures  fraction_eq x (fraction_zero t)) = ()
     in
     Classical.move_requires fwd ();
     Classical.move_requires bwd ()
@@ -645,7 +627,7 @@ private let fraction_inv_right
     fraction_eq_trans
       (fraction_mul x (fraction_inv x))
       (fraction_mul (fraction_inv x) x)
-      (fraction_one t #d)
+      (fraction_one t)
 
 private let fraction_inv_congruence
   (#t:Type) {| d: integral_domain t |} (x y: fraction d)
@@ -676,16 +658,16 @@ private let fraction_inv_congruence
 private let fr_acg (t:Type) (d: integral_domain t)
   : add_comm_group (fraction d) = {
     acg_eq            = fraction_equatable t d;
-    zero              = fraction_zero t #d;
-    add               = (fun x y -> fraction_add x y);
-    add_congruence    = (fun a b x y -> fraction_add_congruence a b x y);
-    add_commutativity = (fun a b -> fraction_add_is_commutative a b);
-    add_associativity = (fun a b c -> fraction_add_is_associative a b c);
+    zero              = fraction_zero t;
+    add               = fraction_add;
+    add_congruence    = fraction_add_congruence;
+    add_commutativity = fraction_add_is_commutative;
+    add_associativity = fraction_add_is_associative;
     add_zero          = (fun x ->
                           fraction_add_left_identity x;
                           fraction_add_right_identity x);
-    neg               = (fun x -> fraction_neg x);
-    neg_congruence    = (fun a b -> fraction_neg_congruence a b);
+    neg               = fraction_neg;
+    neg_congruence    = fraction_neg_congruence;
     add_negation      = (fun x ->
                           fraction_negation_l x;
                           fraction_negation_r x);
@@ -694,14 +676,14 @@ private let fr_acg (t:Type) (d: integral_domain t)
 private let fr_ring (t:Type) (d: integral_domain t)
   : ring (fraction d) = {
     r_add                = fr_acg t d;
-    one                  = fraction_one t #d;
-    mul                  = (fun x y -> fraction_mul x y);
-    mul_congruence       = (fun a b x y -> fraction_mul_congruence a b x y);
-    mul_associativity    = (fun a b c -> fraction_mul_is_associative a b c);
+    one                  = fraction_one t;
+    mul                  = fraction_mul;
+    mul_congruence       = fraction_mul_congruence;
+    mul_associativity    = fraction_mul_is_associative;
     mul_one              = (fun x ->
                               fraction_mul_left_identity x;
                               fraction_mul_right_identity x);
-    left_distributivity  = (fun x y z -> fraction_left_distributivity  x y z);
+    left_distributivity  = fraction_left_distributivity;
     right_distributivity = (fun x y z -> fraction_right_distributivity y z x);
   }
 
@@ -709,26 +691,26 @@ private let fr_domain (t:Type) (d: integral_domain t)
   : domain (fraction d) = {
     d_r        = fr_ring t d;
     domain_law = (fun x y ->
-                    Classical.move_requires_2 (fraction_domain_law_fwd #t #d) x y;
-                    Classical.move_requires_2 (fraction_domain_law_bwd_left #t #d) x y;
+                    Classical.move_requires_2 fraction_domain_law_fwd x y;
+                    Classical.move_requires_2 fraction_domain_law_bwd_left x y;
                     (* symmetric backward via commutativity *)
                     let bwd_right () : Lemma
-                        (requires fraction_eq y (fraction_zero t #d))
-                        (ensures  fraction_eq (fraction_mul x y) (fraction_zero t #d))
+                        (requires fraction_eq y (fraction_zero t))
+                        (ensures  fraction_eq (fraction_mul x y) (fraction_zero t))
                       = fraction_mul_is_commutative x y;
                         fraction_domain_law_bwd_left y x;
                         fraction_eq_trans
                           (fraction_mul x y)
                           (fraction_mul y x)
-                          (fraction_zero t #d)
+                          (fraction_zero t)
                     in
                     Classical.move_requires bwd_right ());
   }
 
 private let fr_mig (t:Type) (d: integral_domain t)
   : mul_is_group (fraction d) #(fr_ring t d) = {
-    inv             = (fun x -> fraction_inv x);
-    inv_congr       = (fun a b -> fraction_inv_congruence a b);
+    inv             = fraction_inv;
+    inv_congr       = fraction_inv_congruence;
     inversion_lemma = (fun x ->
                          fraction_inv_left x;
                          fraction_inv_right x);
@@ -736,7 +718,7 @@ private let fr_mig (t:Type) (d: integral_domain t)
 
 private let fr_mic (t:Type) (d: integral_domain t)
   : mul_is_commutative (fraction d) #(fr_ring t d) = {
-    mul_commutativity = (fun a b -> fraction_mul_is_commutative a b);
+    mul_commutativity = fraction_mul_is_commutative;
   }
 
 private let fr_skewfield (t:Type) (d: integral_domain t)
@@ -749,9 +731,9 @@ private let fraction_one_ne_zero_lemma
   (#t:Type) {| dom: integral_domain t |}
   : Lemma (not (fraction_eq (fraction_one t) (fraction_zero t)))
   = let aux () : Lemma
-        (requires fraction_eq (fraction_one t #dom) (fraction_zero t #dom))
+        (requires fraction_eq (fraction_one t) (fraction_zero t))
         (ensures False)
-      = fraction_eq_symm (fraction_one t #dom) (fraction_zero t #dom);
+      = fraction_eq_symm (fraction_one t) (fraction_zero t);
         fraction_zero_ne_one_lemma #t #dom
     in
     Classical.move_requires aux ()
@@ -778,6 +760,15 @@ let fraction_add_reveal (#t:Type) {| d: integral_domain t |} (x y: fraction d)
              == (Fraction?.den x * Fraction?.den y))
   = prod_den_nonzero x y
 
+(* Reveal lemma: num/den of a product. Transparent here; matches the
+   body of `fraction_mul` (num = num*num, den = den*den). *)
+let fraction_mul_reveal (#t:Type) {| d: integral_domain t |} (x y: fraction d)
+  : Lemma (Fraction?.num (fraction_mul x y)
+             == (Fraction?.num x * Fraction?.num y) /\
+           Fraction?.den (fraction_mul x y)
+             == (Fraction?.den x * Fraction?.den y))
+  = prod_den_nonzero x y
+
 (* Reveal lemma: the published `=` on `fraction d` (resolved through
    `fraction_field`) is cross-multiplication in `t`. The `=` operator is
    `unfold`, and the whole projection chain
@@ -786,14 +777,26 @@ let fraction_add_reveal (#t:Type) {| d: integral_domain t |} (x y: fraction d)
    `fun x y -> fraction_eq x y`; so `(x = y)` reduces to `fraction_eq x y`,
    which is definitionally `(x.num * y.den) = (x.den * y.num)`. *)
 let fraction_zero_reveal (t:Type) {| d: integral_domain t |}
-  : Lemma (Fraction?.num (fraction_zero t #d) == (zero <: t) /\
-           Fraction?.den (fraction_zero t #d) == (one  <: t))
+  : Lemma (Fraction?.num (fraction_zero t) == (zero <: t) /\
+           Fraction?.den (fraction_zero t) == (one  <: t))
   = ()
 
 let fraction_eq_reveal (#t:Type) {| d: integral_domain t |} (x y: fraction d)
   : Lemma ((x = y) <==> ((Fraction?.num x * Fraction?.den y)
                        = (Fraction?.den x * Fraction?.num y)))
   = assert ((x = y) == fraction_eq x y)
+
+(* Reveal lemmas: the published ring `+`/`*` on `fraction d` (resolved
+   through `fraction_field`'s unfold projection chain) ARE `fraction_add`/
+   `fraction_mul`. Lets external modules discharge `derivation`/ring-shaped
+   obligations stated with the typeclass ops using the `fraction_*` lemmas. *)
+let fraction_ring_add_reveal (#t:Type) {| d: integral_domain t |} (x y: fraction d)
+  : Lemma ((x + y) == fraction_add x y)
+  = ()
+
+let fraction_ring_mul_reveal (#t:Type) {| d: integral_domain t |} (x y: fraction d)
+  : Lemma ((x * y) == fraction_mul x y)
+  = ()
 
 (* ================================================================ *)
 (*  §10. Published convenience: ( / )                               *)

@@ -13,6 +13,7 @@ open Core.Permutation
 open Core.Permutation.Enum
 open Core.Permutation.Sum
 open Core.Matrix
+open Core.Vector
 
 (* Bridge: ring → add_comm_group *)
 unfold let acg_of_ring_local (t: Type) (r: ring t) : add_comm_group t = r.r_add
@@ -91,19 +92,87 @@ val det_permute_rows (#t: Type) {| cr: commutative_ring t |} (#n: pos)
 (* Laplace expansion infrastructure — concrete for downstream unfolding *)
 let minus_one_pow (#t: Type) {| cr: commutative_ring t |} (k: nat) : t
   = if Prims.op_Modulus k 2 = 0 then one else (- (one))
-let skip (#n: pos) (i: fin n) (a: fin (Prims.op_Subtraction n 1)) : fin n
-  = if (a <: nat) < (i <: nat) then (a <: nat) else Prims.op_Addition a 1
-val skip_avoids (#n: pos) (i: fin n) (a: fin (Prims.op_Subtraction n 1))
+let skip (#n: pos) (i: fin n) (a: fin ((n - 1))) : fin n
+  = if (a <: nat) < (i <: nat) then (a <: nat) else (a ++ 1)
+val skip_avoids (#n: pos) (i: fin n) (a: fin ((n - 1)))
   : Lemma (~((skip i a <: nat) == (i <: nat)))
 let minor (#t: Type) (#n: pos{ n > 1 }) (m: square_matrix t n) (i j: fin n)
-  : square_matrix t (Prims.op_Subtraction n 1)
-  = fun (a: fin (Prims.op_Subtraction n 1)) (b: fin (Prims.op_Subtraction n 1))
+  : square_matrix t ((n - 1))
+  = fun (a: fin ((n - 1))) (b: fin ((n - 1)))
       -> m (skip i a) (skip j b)
 let cofactor_term (#t: Type) {| cr: commutative_ring t |} (#n: pos{ n > 1 })
   (m: square_matrix t n) (i j: fin n) : t
-  = minus_one_pow #t #cr (Prims.op_Addition (i <: nat) (j <: nat))
+  = minus_one_pow #t #cr (((i <: nat) ++ (j <: nat)))
     * m i j
-    * det #t #cr #(Prims.op_Subtraction n 1) (minor m i j)
+    * det #t #cr #((n - 1)) (minor m i j)
 val det_laplace_row (#t: Type) {| cr: commutative_ring t |}
   (#n: pos{ n > 1 }) (m: square_matrix t n) (i: fin n)
   : Lemma (det m = fin_sum (cofactor_term #t #cr m i))
+
+(* ================================================================== *)
+(*  Cauchy-Binet (merged from Core.Matrix.Determinant.Mul):           *)
+(*    det(AB) = det(A) * det(B)                                        *)
+(* ================================================================== *)
+val det_mul
+  (#t: Type) {| cr: commutative_ring t |} (#n: pos)
+  (a b: square_matrix t n)
+  : Lemma (det (matrix_mul a b) = det a * det b)
+
+(* ================================================================== *)
+(*  Triangular determinants (merged from Core.Matrix.Triangular).     *)
+(*  Value-defs are exposed concretely so downstream proofs can unfold  *)
+(*  them (diagonal_product_from is recursively peeled at call sites).   *)
+(* ================================================================== *)
+let rec diagonal_product_from (#t:Type) {| cr: commutative_ring t |} (#n: pos)
+  (m: square_matrix t n) (k: nat{k <= n}) : Tot t (decreases (n - k))
+  = if k >= n then one #t
+    else m (k <: fin n) (k <: fin n) * diagonal_product_from m ((k ++ 1))
+
+let diagonal_product (#t:Type) {| cr: commutative_ring t |} (#n: pos) (m: square_matrix t n) : t
+  = diagonal_product_from m 0
+
+let is_lower_triangular (#t:Type) {| cr: commutative_ring t |} (#n: pos) (m: square_matrix t n) : prop
+  = forall (i j: fin n). (j <: nat) > (i <: nat) ==> m i j = zero
+
+let is_upper_triangular (#t:Type) {| cr: commutative_ring t |} (#n: pos) (m: square_matrix t n) : prop
+  = forall (i j: fin n). (i <: nat) > (j <: nat) ==> m i j = zero
+
+val determinant_size_one (#t:Type) {| cr: commutative_ring t |} (m: square_matrix t 1)
+  : Lemma (det m = m (0 <: fin 1) (0 <: fin 1))
+
+val det_lower_triangular (#t:Type) {| cr: commutative_ring t |}
+  (#n: pos) (m: square_matrix t n)
+  : Lemma (requires is_lower_triangular m)
+          (ensures  det m = diagonal_product m)
+
+val diagonal_product_pointwise (#t:Type) {| cr: commutative_ring t |}
+  (#n: pos) (m1 m2: square_matrix t n)
+  : Lemma (requires forall (i: fin n). m1 i i = m2 i i)
+          (ensures  diagonal_product m1 = diagonal_product m2)
+
+val det_upper_triangular (#t:Type) {| cr: commutative_ring t |}
+  (#n: pos) (m: square_matrix t n)
+  : Lemma (requires is_upper_triangular m)
+          (ensures  det m = diagonal_product m)
+
+(* ================================================================== *)
+(*  Kernel ⇔ singular determinant (merged from KernelDet / NullVec).  *)
+(* ================================================================== *)
+val det_zero_implies_null_vec (#t: Type) {| f: field t |} (#n: pos)
+  (m: square_matrix t n)
+  : Lemma (requires det m = zero)
+          (ensures  exists (v: fin n -> t) (k: fin n).
+                      is_nonzero (v k) /\
+                      (forall (i: fin n). vector_dot (row m i) v = zero))
+
+(* The null-vector hypothesis: dot product of row i with v is zero.
+   Exposed concretely so consumers can state Lemma (null_vec_hyp ...). *)
+let null_vec_hyp (#t:Type) {| f: field t |} (#n: pos)
+  (m: square_matrix t n) (v: fin n -> t) (i: fin n) : prop
+  = vector_dot (row m i) v = zero
+
+val null_vec_implies_det_zero (#t:Type) {| f: field t |} (#n: nat{n > 0})
+  (m: square_matrix t n) (v: fin n -> t) (k: fin n)
+  : Lemma (requires is_nonzero (v k) /\
+                    (forall (i: fin n). null_vec_hyp m v i))
+          (ensures det m = zero)

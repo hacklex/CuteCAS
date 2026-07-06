@@ -62,7 +62,7 @@ val vector_dot_reveal (#t: Type) {| r: ring t |} #n (a b: vector t n)
 (*  Pointwise additive structure                                     *)
 (* ----------------------------------------------------------------- *)
 
-let vector_zero (#t: Type) {| add_comm_group t |} #n (i: fin n) = zero #t  
+let vector_zero (#t: Type) {| add_comm_group t |} #n (i: fin n) : t = zero
 
 let vector_add (#t: Type) {| add_comm_group t |} #n (a b: vector t n) : vector t n = pointwise_add a b
 

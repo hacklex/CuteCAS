@@ -45,11 +45,11 @@ let const_unfold (#a #t: Type) (v: t) (x: a)
 
 let pointwise_neg
   (#a #t: Type) {| acg: add_comm_group t |} (f: a -> t) (x: a) : t
-  = neg (f x)
+  = (- (f x))
 
 let pointwise_neg_unfold
   (#a #t: Type) {| acg: add_comm_group t |} (f: a -> t) (x: a)
-  : Lemma (pointwise_neg f x == neg (f x))
+  : Lemma (pointwise_neg f x == (- (f x)))
   = ()
 
 let pointwise_add

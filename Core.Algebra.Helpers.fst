@@ -13,6 +13,9 @@ open Core.Algebra
 open Core.Algebra.Notation
 module TC = FStar.Tactics.Typeclasses
 
+(* Obvious witness is more beautiful than (fun _ -> ()) *)
+let obvious _ = ()
+
 (* ---------------------------------------------------------------- *)
 (* equatable                                                        *)
 (* ---------------------------------------------------------------- *)
@@ -67,10 +70,10 @@ let x_plus_zero (#t:Type) {| add_comm_group t |} (x:t)
   : Lemma (x + zero = x) = add_zero x
 
 let neg_x_plus_x (#t:Type) {| add_comm_group t |} (x:t)
-  : Lemma (neg x + x = zero) = add_negation x
+  : Lemma ((- x) + x = zero) = add_negation x
 
 let x_plus_neg_x (#t:Type) {| add_comm_group t |} (x:t)
-  : Lemma (x + neg x = zero) = add_negation x
+  : Lemma (x + (- x) = zero) = add_negation x
 
 (* ---------------------------------------------------------------- *)
 (* ring: single-fact projections                                    *)
@@ -99,25 +102,64 @@ let group_cancel_left (#t:Type) {| add_comm_group t |} (a b c: t)
   = elim_equatable_laws t ();
     trans_for_calc t ();
     neg_x_plus_x a;
-    add_associativity (neg a) a b;
-    add_associativity (neg a) a c;
+    add_associativity ((- a)) a b;
+    add_associativity ((- a)) a c;
     zero_plus_x b;
     zero_plus_x c;
-    add_congruence (neg a) (a + b) (neg a) (a + c);
-    add_congruence (neg a + a) b zero b;
-    add_congruence (neg a + a) c zero c
+    add_congruence ((- a)) (a + b) ((- a)) (a + c);
+    add_congruence ((- a) + a) b zero b;
+    add_congruence ((- a) + a) c zero c
 #pop-options
+
+(* a = b  ==>  a -- b = zero. *)
+let sub_self_zero (#t:Type) {| add_comm_group t |} (a b: t)
+  : Lemma (requires a = b) (ensures (a -- b) = zero)
+  = elim_equatable_laws t ();
+    trans_for_calc t ();
+    add_congruence a ((- b)) b ((- b));  (* a + (-b) = b + (-b) *)
+    x_plus_neg_x b                       (* b + (-b) = zero *)
+
+(* a -- b = c  ==>  a = b + c. *)
+#push-options "--z3rlimit 30"
+let sub_to_add (#t:Type) {| add_comm_group t |} (a b c: t)
+  : Lemma (requires (a -- b) = c) (ensures a = (b + c))
+  = elim_equatable_laws t ();
+    trans_for_calc t ();
+    (* b + (a -- b) = a *)
+    add_commutativity a ((- b));               (* (a + (-b)) = ((-b) + a) *)
+    add_congruence b (a -- b) b (((- b)) + a); (* b + (a--b) = b + ((-b)+a) *)
+    add_associativity b ((- b)) a;             (* b + ((-b)+a) = (b+(-b)) + a *)
+    x_plus_neg_x b;                            (* b + (-b) = zero *)
+    add_congruence (b + ((- b))) a zero a;     (* (b+(-b))+a = zero+a *)
+    zero_plus_x a;                             (* zero + a = a *)
+    (* b + (a--b) = b + c *)
+    add_congruence b (a -- b) b c              (* b + (a--b) = b + c *)
+#pop-options
+
+(* x <> y  ==>  x -- y <> zero. *)
+let sub_nonzero (#t:Type) {| add_comm_group t |} (x y: t)
+  : Lemma (requires not (x = y)) (ensures not ((x -- y) = zero))
+  = elim_equatable_laws t ();
+    let aux () : Lemma (requires (x -- y) = zero) (ensures x = y)
+      = elim_equatable_laws t ();
+        trans_for_calc t ();
+        x_plus_neg_x y;                  (* y + (-y) = zero *)
+        add_commutativity x ((- y));     (* x + (-y) = (-y) + x *)
+        add_commutativity y ((- y));     (* y + (-y) = (-y) + y *)
+        group_cancel_left ((- y)) x y    (* (-y)+x = (-y)+y ==> x = y *)
+    in
+    Classical.move_requires aux ()
 
 (* neg_zero: zero = neg zero.
    Proof: neg zero = neg zero + zero    (x_plus_zero on neg zero)
                    = zero               (neg_x_plus_x with x=zero)  *)
 let neg_zero (#t:Type) {| add_comm_group t |} (_: unit)
-  : Lemma ((zero #t) = neg zero)
+  : Lemma ((zero #t) = (- zero))
   = elim_equatable_laws t ();
     trans_for_calc t ();
-    x_plus_zero (neg (zero #t));         (* neg 0 + 0 = neg 0 *)
+    x_plus_zero ((- (zero #t)));         (* neg 0 + 0 = neg 0 *)
     neg_x_plus_x (zero #t);              (* neg 0 + 0 = 0 *)
-    symmetry (neg (zero #t)) zero
+    symmetry ((- (zero #t))) zero
 
 (* neg_neg: neg (neg x) = x.
    Proof: (neg (neg x) + neg x) + x = neg (neg x) + (neg x + x)
@@ -126,11 +168,11 @@ let neg_zero (#t:Type) {| add_comm_group t |} (_: unit)
           (neg (neg x) + neg x) + x = zero + x = x.
           So neg (neg x) = x. *)
 let neg_neg (#t:Type) {| add_comm_group t |} (x: t)
-  : Lemma (neg (neg x) = x)
+  : Lemma ((- ((- x))) = x)
   = elim_equatable_laws t ();
     trans_for_calc t ();
-    let nx = neg x in
-    let nnx = neg nx in
+    let nx = (- x) in
+    let nnx = (- nx) in
     add_associativity nnx nx x;          (* (nnx + nx) + x = nnx + (nx + x) *)
     neg_x_plus_x x;                      (* nx + x = 0 *)
     add_congruence nnx (nx + x) nnx (zero #t);
@@ -142,21 +184,21 @@ let neg_neg (#t:Type) {| add_comm_group t |} (x: t)
 
 (* If x = zero then neg x = zero. *)
 let neg_of_zero (#t:Type) {| add_comm_group t |} (x: t)
-  : Lemma (requires x = zero) (ensures neg x = zero)
+  : Lemma (requires x = zero) (ensures (- x) = zero)
   = elim_equatable_laws t ();
     trans_for_calc t ();
     neg_congruence x (zero #t);          (* neg x = neg zero *)
     neg_zero #t ();                      (* zero = neg zero *)
-    transitivity (neg x) (neg zero) zero
+    transitivity ((- x)) ((- zero)) zero
 
 (* If neg x = zero then x = zero. *)
 let zero_of_neg (#t:Type) {| add_comm_group t |} (x: t)
-  : Lemma (requires neg x = zero) (ensures x = zero)
+  : Lemma (requires (- x) = zero) (ensures x = zero)
   = elim_equatable_laws t ();
     trans_for_calc t ();
-    neg_of_zero (neg x);                 (* neg (neg x) = zero *)
+    neg_of_zero ((- x));                 (* neg (neg x) = zero *)
     neg_neg x;                           (* neg (neg x) = x *)
-    transitivity x (neg (neg x)) zero
+    transitivity x ((- ((- x)))) zero
 
 (* neg_of_sum: neg (x+y) = neg y + neg x.
    Proof skeleton:
@@ -172,13 +214,13 @@ let zero_of_neg (#t:Type) {| add_comm_group t |} (x: t)
      = neg(x+y). *)
 #push-options "--z3rlimit 80 --fuel 2 --ifuel 2"
 let neg_of_sum (#t:Type) {| g: add_comm_group t |} (x y: t)
-  : Lemma (neg (x + y) = neg y + neg x)
+  : Lemma ((- (x + y)) = (- y) + (- x))
   = elim_equatable_laws t ();
     trans_for_calc t ();
     let s : t = x + y in
-    let ny : t = neg y in
-    let nx : t = neg x in
-    let ns : t = neg s in
+    let ny : t = (- y) in
+    let nx : t = (- x) in
+    let ns : t = (- s) in
     (* Strategy: build the RHS expression step-by-step into ns using
        reflexivity-witnessed AC rewrites. Each step is one lemma. *)
     (* e0: ny + nx  *)
@@ -255,12 +297,12 @@ let x_mul_zero (#t:Type) {| ring t |} (x:t)
    Proof: 0 = 0*y = (x + (-x))*y = x*y + (-x)*y, so (-x)*y = -(x*y). *)
 #push-options "--z3rlimit 40"
 let neg_mul_l (#t:Type) {| ring t |} (x y: t)
-  : Lemma (neg x * y = neg (x * y))
+  : Lemma ((- x) * y = (- (x * y)))
   = elim_equatable_laws t ();
     trans_for_calc t ();
     add_negation x;                                  (* x + neg x = 0 *)
-    right_distributivity y x (neg x);                (* (x + neg x) * y = x*y + neg x*y *)
-    mul_congruence (x + neg x) y (zero #t) y;        (* (x + neg x)*y = 0*y *)
+    right_distributivity y x ((- x));                (* (x + neg x) * y = x*y + neg x*y *)
+    mul_congruence (x + (- x)) y (zero #t) y;        (* (x + neg x)*y = 0*y *)
     zero_mul_x y;                                    (* 0*y = 0 *)
     (* so x*y + (neg x)*y = 0; conclude (neg x)*y = neg (x*y) *)
     (* Use add_negation on x*y: x*y + neg (x*y) = 0 *)
@@ -269,20 +311,20 @@ let neg_mul_l (#t:Type) {| ring t |} (x y: t)
        x*y + (neg x*y) = 0 = x*y + neg (x*y) ⇒ neg x*y = neg (x*y) *)
     (* So x*y + (neg x)*y = 0. *)
     (* Likewise x*y + neg (x*y) = 0. So x*y + neg x*y = x*y + neg (x*y). *)
-    group_cancel_left (x * y) (neg x * y) (neg (x * y))
+    group_cancel_left (x * y) ((- x) * y) ((- (x * y)))
 #pop-options
 
 (* neg_mul_r: x*(-y) = -(x*y).
    Proof: x*y + x*(-y) = x*(y + (-y)) = x*0 = 0, so x*(-y) = -(x*y). *)
 #push-options "--z3rlimit 40"
 let neg_mul_r (#t:Type) {| ring t |} (x y: t)
-  : Lemma (x * neg y = neg (x * y))
+  : Lemma (x * (- y) = (- (x * y)))
   = elim_equatable_laws t ();
     trans_for_calc t ();
     add_negation y;                                  (* y + neg y = 0 *)
-    left_distributivity x y (neg y);                 (* x * (y + neg y) = x*y + x*neg y *)
-    mul_congruence x (y + neg y) x (zero <: t);
+    left_distributivity x y ((- y));                 (* x * (y + neg y) = x*y + x*neg y *)
+    mul_congruence x (y + (- y)) x (zero <: t);
     x_mul_zero x;                                    (* x*0 = 0 *)
     x_plus_neg_x (x * y);                            (* x*y + neg (x*y) = 0 *)
-    group_cancel_left (x * y) (x * neg y) (neg (x * y))
+    group_cancel_left (x * y) (x * (- y)) ((- (x * y)))
 #pop-options

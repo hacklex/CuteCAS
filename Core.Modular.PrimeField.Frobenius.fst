@@ -26,7 +26,7 @@ open Core.Modular.PrimeField
 open Core.Modular.PrimeField.Poly  (* fp_poly_cr : commutative_ring (polynomial (fp p)) *)
 open Core.Polynomial
 open Core.Polynomial.Derivative   (* nat_scale + laws *)
-open FStar.Math.Euclid
+open Core.NumberTheory
 open FStar.Math.Lemmas
 
 #set-options "--fuel 1 --ifuel 1 --z3rlimit 30"
@@ -147,6 +147,7 @@ let rec fp_rpow_is_pow (p:int{is_prime p}) (c: fp p) (n:nat)
 (* Fermat:  c^p = c  in fp p. *)
 let fermat_fp (p:int{is_prime p}) (c: fp p)
   : Lemma (PW.rpow #(fp p) c p == c)
-  = fp_rpow_is_pow p c p;        (* rpow c p = pow c p % p *)
+  = is_prime_to_eu p;            (* NT.is_prime p ==> FStar.Math.Euclid.is_prime p (for FM.fermat) *)
+    fp_rpow_is_pow p c p;        (* rpow c p = pow c p % p *)
     FM.fermat p c;               (* pow c p % p = c % p *)
     small_mod c p                (* c % p = c *)

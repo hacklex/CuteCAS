@@ -189,6 +189,74 @@ let to_base_corr_intro (p:int{p > 1}) (k:pos)
 (*  reductions ⟹ hensel_unique ⟹ G = C.                              *)
 (* ================================================================ *)
 
+(* ---------------------------------------------------------------- *)
+(*  Crystallized glue for D2d, split so each Z3 query is small.       *)
+(*    - eq_via_common / cofactor_eq / bezout_transport : generic      *)
+(*      equatable / commutative_ring identities (invoked once at the  *)
+(*      concrete type).                                               *)
+(*    - bGH_eq_prod / base_prod_eq : the two homomorphism-transport   *)
+(*      steps, parametrised by the modulus.                           *)
+(* ---------------------------------------------------------------- *)
+
+private let eq_via_common (#t:Type) {| equatable t |} (a b m: t)
+  : Lemma (requires a = m /\ b = m) (ensures a = b)
+  = H.elim_equatable_laws t ();
+    symmetry b m;
+    transitivity a m b
+
+private let cofactor_eq (#t:Type) {| commutative_ring t |}
+  (tbG tbH tbC tbD: polynomial t)
+  : Lemma (requires tbG = tbC /\ (tbG * tbH) = (tbC * tbD) /\ monic tbC)
+          (ensures  tbH = tbD)
+  = H.elim_equatable_laws (polynomial t) ();
+    mul_congruence tbG tbH tbC tbH;                (* tbG*tbH = tbC*tbH *)
+    symmetry (tbG * tbH) (tbC * tbH);
+    transitivity (tbC * tbH) (tbG * tbH) (tbC * tbD);  (* tbC*tbH = tbC*tbD *)
+    monic_mul_cancel tbC tbH tbD
+
+private let bezout_transport (#t:Type) {| commutative_ring t |}
+  (s t' tbG tbH m1 m2: polynomial t)
+  : Lemma (requires tbG = m1 /\ tbH = m2 /\
+                    ((s * m1) + (t' * m2)) = (poly_one #t))
+          (ensures  ((s * tbG) + (t' * tbH)) = (poly_one #t))
+  = H.elim_equatable_laws (polynomial t) ();
+    symmetry tbG m1;
+    symmetry tbH m2;
+    mul_congruence s m1 s tbG;                     (* s*m1 = s*tbG *)
+    mul_congruence t' m2 t' tbH;                   (* t'*m2 = t'*tbH *)
+    add_congruence (s * m1) (t' * m2) (s * tbG) (t' * tbH);
+    symmetry ((s * m1) + (t' * m2)) ((s * tbG) + (t' * tbH));
+    transitivity ((s * tbG) + (t' * tbH)) ((s * m1) + (t' * m2)) (poly_one #t)
+
+private let bGH_eq_prod (pk:int{pk > 1}) (bigF g k0: polynomial int)
+  (gs: list (polynomial (zmod pk)))
+  : Lemma (requires bigF = (g * k0) /\ (poly_to_fp pk bigF) = (poly_prod gs))
+          (ensures  ((poly_to_fp pk g) * (poly_to_fp pk k0)) = (poly_prod gs))
+  = H.elim_equatable_laws (polynomial (zmod pk)) ();
+    poly_to_fp_mul pk g k0;                        (* to_fp(g*k0) = bG*bH *)
+    poly_to_fp_congr pk bigF (g * k0);             (* to_fp bigF = to_fp(g*k0) *)
+    symmetry (poly_to_fp pk (g * k0))
+             ((poly_to_fp pk g) * (poly_to_fp pk k0));
+    symmetry (poly_to_fp pk bigF) (poly_to_fp pk (g * k0));
+    H.trans3 ((poly_to_fp pk g) * (poly_to_fp pk k0))
+             (poly_to_fp pk (g * k0)) (poly_to_fp pk bigF) (poly_prod gs)
+
+private let base_prod_eq (p:int{p > 1}) (k:pos)
+  (bG bH cC dD: polynomial (zmod (ppow p k)))
+  : Lemma (requires (bG * bH) = (cC * dD))
+          (ensures  ((poly_to_base p k bG) * (poly_to_base p k bH))
+                  = ((poly_to_base p k cC) * (poly_to_base p k dD)))
+  = H.elim_equatable_laws (polynomial (zmod p)) ();
+    poly_to_base_mul p k bG bH;                    (* tb(bG*bH) = tbG*tbH *)
+    poly_to_base_mul p k cC dD;                    (* tb(cC*dD) = tbC*tbD *)
+    poly_to_base_congr p k (bG * bH) (cC * dD);    (* tb(bG*bH) = tb(cC*dD) *)
+    symmetry (poly_to_base p k (bG * bH))
+             ((poly_to_base p k bG) * (poly_to_base p k bH));
+    H.trans3 ((poly_to_base p k bG) * (poly_to_base p k bH))
+             (poly_to_base p k (bG * bH))
+             (poly_to_base p k (cC * dD))
+             ((poly_to_base p k cC) * (poly_to_base p k dD))
+
 #push-options "--z3rlimit 100 --fuel 2 --ifuel 1"
 let true_factor_is_masked_lift
   (p:int{p > 1}) (n:nat)
@@ -214,9 +282,7 @@ let true_factor_is_masked_lift
   = ppow_gt_one p (n ++ 1);
     let pk1 = ppow p (n ++ 1) in
     H.elim_equatable_laws (polynomial (zmod pk1)) ();
-    H.trans_for_calc (polynomial (zmod pk1)) ();
     H.elim_equatable_laws (polynomial (zmod p)) ();
-    H.trans_for_calc (polynomial (zmod p)) ();
     let bG = poly_to_fp pk1 g in
     let bH = poly_to_fp pk1 k0 in
     let cC = masked_prod gs mask in
@@ -225,24 +291,12 @@ let true_factor_is_masked_lift
     let tbH = poly_to_base p (n ++ 1) bH in
     let tbC = poly_to_base p (n ++ 1) cC in
     let tbD = poly_to_base p (n ++ 1) dD in
-    (* ---- (1) bG · bH = poly_prod gs ---- *)
-    poly_to_fp_mul pk1 g k0;                       (* to_fp (g*k0) = bG * bH *)
-    poly_to_fp_congr pk1 bigF (g * k0);            (* to_fp bigF = to_fp (g*k0) *)
-    poly_eq_symmetry (poly_to_fp pk1 (g * k0)) (bG * bH);
-    poly_eq_transitivity (bG * bH) (poly_to_fp pk1 (g * k0)) (poly_to_fp pk1 bigF);
-    poly_eq_transitivity (bG * bH) (poly_to_fp pk1 bigF) (poly_prod gs);
-    (* ---- (2) poly_prod gs = cC · dD  ⟹  bG·bH = cC·dD ---- *)
-    masked_prod_split gs mask;
-    poly_eq_transitivity (bG * bH) (poly_prod gs) (cC * dD);
+    (* ---- (1-2) bG·bH = poly_prod gs = cC·dD ---- *)
+    bGH_eq_prod pk1 bigF g k0 gs;                    (* bG*bH = poly_prod gs *)
+    masked_prod_split gs mask;                       (* poly_prod gs = cC*dD *)
+    poly_eq_transitivity (bG * bH) (poly_prod gs) (cC * dD);   (* bG*bH = cC*dD *)
     (* ---- (3) reduce the product identity to the base field ---- *)
-    poly_to_base_mul p (n ++ 1) bG bH;             (* tb(bG*bH) = tbG * tbH *)
-    poly_to_base_mul p (n ++ 1) cC dD;             (* tb(cC*dD) = tbC * tbD *)
-    poly_to_base_congr p (n ++ 1) (bG * bH) (cC * dD);
-    poly_eq_symmetry (poly_to_base p (n ++ 1) (bG * bH)) (tbG * tbH);
-    poly_eq_transitivity (tbG * tbH)
-      (poly_to_base p (n ++ 1) (bG * bH)) (poly_to_base p (n ++ 1) (cC * dD));
-    poly_eq_transitivity (tbG * tbH)
-      (poly_to_base p (n ++ 1) (cC * dD)) (tbC * tbD);  (* tbG*tbH = tbC*tbD *)
+    base_prod_eq p (n ++ 1) bG bH cC dD;             (* tbG*tbH = tbC*tbD *)
     (* ---- (4) tbC = masked gbars mask,  tbD = masked gbars ¬mask ---- *)
     to_base_corr_elim p (n ++ 1) gs gbars;
     let pf (i:nat{i < L.length gs /\ i < L.length gbars})
@@ -250,34 +304,17 @@ let true_factor_is_masked_lift
     to_base_masked_prod p (n ++ 1) gs gbars mask pf;               (* tbC = masked gbars mask *)
     to_base_masked_prod p (n ++ 1) gs gbars (negate_mask mask) pf; (* tbD = masked gbars ¬mask *)
     (* ---- (5) tbG = tbC  (both equal masked gbars mask) ---- *)
-    poly_eq_symmetry tbC (masked_prod gbars mask);   (* masked gbars mask = tbC *)
-    poly_eq_transitivity tbG (masked_prod gbars mask) tbC;   (* tbG = tbC *)
+    eq_via_common tbG tbC (masked_prod gbars mask);  (* tbG = tbC *)
     (* ---- (6) monicity (deg equality now derived inside hensel_unique) ---- *)
     poly_to_fp_monic pk1 g;                          (* monic bG *)
     masked_prod_monic () gs mask;                    (* monic cC *)
     to_base_monic p (n ++ 1) cC;                     (* monic tbC — needed by monic_mul_cancel *)
     (* ---- (7) cofactor reductions agree:  tbH = tbD ---- *)
-    mul_congruence tbG tbH tbC tbH;                  (* tbG*tbH = tbC*tbH *)
-    poly_eq_symmetry (tbG * tbH) (tbC * tbH);
-    poly_eq_transitivity (tbC * tbH) (tbG * tbH) (tbC * tbD);  (* tbC*tbH = tbC*tbD *)
-    monic_mul_cancel tbC tbH tbD;                    (* tbH = tbD *)
+    cofactor_eq tbG tbH tbC tbD;                     (* tbH = tbD *)
     (* ---- (8) transport the Bézout identity to (tbG, tbH) ---- *)
     poly_eq_transitivity tbH tbD (masked_prod gbars (negate_mask mask));  (* tbH = masked gbars ¬mask *)
-    poly_eq_symmetry tbH (masked_prod gbars (negate_mask mask));          (* masked ¬mask = tbH *)
-    poly_eq_symmetry tbG (masked_prod gbars mask);                        (* masked mask = tbG *)
-    mul_congruence s (masked_prod gbars mask) s tbG;                      (* s*masked = s*tbG *)
-    mul_congruence t (masked_prod gbars (negate_mask mask)) t tbH;         (* t*masked¬ = t*tbH *)
-    add_congruence
-      ((s * (masked_prod gbars mask)))
-      ((t * (masked_prod gbars (negate_mask mask))))
-      ((s * tbG)) ((t * tbH));
-    poly_eq_symmetry
-      ((s * (masked_prod gbars mask)) + (t * (masked_prod gbars (negate_mask mask))))
-      ((s * tbG) + (t * tbH));
-    poly_eq_transitivity
-      ((s * tbG) + (t * tbH))
-      ((s * (masked_prod gbars mask)) + (t * (masked_prod gbars (negate_mask mask))))
-      (poly_one #(zmod p));                          (* (s*tbG)+(t*tbH) = poly_one *)
+    bezout_transport s t tbG tbH
+      (masked_prod gbars mask) (masked_prod gbars (negate_mask mask));  (* (s*tbG)+(t*tbH) = poly_one *)
     (* ---- (9) Hensel uniqueness closes G = C ---- *)
     hensel_unique p n bG bH cC dD s t
 #pop-options

@@ -1,6 +1,6 @@
 module Core.Matrix.DetEval
 
-(* INTERNAL — do not import directly; helper bridged into Core.Matrix.Resultant (eval commutes with det/resultant). No .fsti by design. *)
+(* INTERNAL — do not import directly; helper bridged into Core.Polynomial.Resultant (eval commutes with det/resultant). No .fsti by design. *)
 
 (* ================================================================ *)
 (*  DETERMINANT SPECIALIZATION (plan §5.1.b):                        *)
@@ -27,8 +27,8 @@ module H  = Core.Algebra.Helpers
 module ES = Core.Polynomial.Eval
 module PS = Core.Permutation.Sum
 module DET = Core.Matrix.Determinant
-module RES = Core.Matrix.Resultant
-module SYL = Core.Matrix.Sylvester
+module RES = Core.Polynomial.Resultant
+module SYL = Core.Polynomial.Sylvester
 module T  = FStar.Tactics
 
 open Core.Algebra

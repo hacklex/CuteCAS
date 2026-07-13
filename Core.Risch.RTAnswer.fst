@@ -118,7 +118,7 @@ private let vc_is_nonzero (#t:Type) {| f: field t |}
   : Lemma (requires deg q >= 0)
           (ensures is_nonzero (poly_gcd pp q))
   = let vc = poly_gcd pp q in
-    Core.Matrix.Resultant.gcd_pos pp q;           (* deg vc >= 0 *)
+    Core.Polynomial.Resultant.gcd_pos pp q;           (* deg vc >= 0 *)
     Classical.move_requires
       (fun () -> Core.Polynomial.Unique.degree_well_defined vc (poly_zero #t)
                  <: Lemma (requires (vc = (poly_zero #t))) (ensures False))

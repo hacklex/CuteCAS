@@ -32,9 +32,9 @@ module TC = FStar.Tactics.Typeclasses
 module H  = Core.Algebra.Helpers
 module RT  = Core.Polynomial.Roots
 module SP  = Core.Polynomial.Roots
-module SYL = Core.Matrix.Sylvester
+module SYL = Core.Polynomial.Sylvester
 module DET = Core.Matrix.Determinant
-module RES = Core.Matrix.Resultant
+module RES = Core.Polynomial.Resultant
 module DE  = Core.Matrix.DetEval
 
 open Core.Algebra
@@ -45,7 +45,7 @@ open Core.Polynomial.Div
 open Core.Polynomial.GCD
 open Core.Polynomial.Derivative
 open Core.Polynomial.SquareFree
-open Core.Matrix.Resultant
+open Core.Polynomial.Resultant
 open Core.Polynomial.Eval
 open Core.FinSum
 
@@ -190,14 +190,15 @@ let lrt (#t:Type) {| f: field t |}
                   square_free q)
          (ensures fun _ -> True)
   = let q' = poly_deriv q in
-    (* In a full implementation, we would compute:
-       let r = lrt_resultant_computed p q in ...
-       For now we return the symbolic representation.
-       The actual resultant computation requires bridging the
-       Sylvester matrix infrastructure (fin-indexed) with our
-       polynomial representation (list-based). This bridge is
-       mechanical but verbose — see Core.Matrix.Resultant for the
-       pattern. *)
+    (* `lrt_resultant_raw` COMPUTES R(z) = res_x(p - z*q', q) executably, as
+       the Sylvester determinant over the coefficient ring k[z] (= polynomial t)
+       — see `resultant` in Core.Polynomial.Resultant.  The root_sum records this
+       computed R together with p, q, q'; its roots are the RT residues, and its
+       ℚ-irreducible factors drive the vc-explicit rendering (LogPartFactored /
+       LogPartSound).  Soundness of the *rendering* is Core.Risch.LogPartSound;
+       soundness of the *producer* (that this determinant equals the true
+       resultant, so its roots are exactly the residues) is resultant_specializes
+       (Core.Polynomial.Resultant, §A.5). *)
     let r = lrt_resultant_raw p q in
     { rs_resultant = r;          (* R(z) = res_x(p - z*q', q) *)
       rs_p = p;

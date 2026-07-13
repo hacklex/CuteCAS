@@ -19,7 +19,7 @@ module Core.Algebra.BinomialCoefficients
 (* ================================================================ *)
 
 open FStar.Math.Lemmas
-open FStar.Math.Euclid
+open Core.NumberTheory
 
 #set-options "--fuel 1 --ifuel 1 --z3rlimit 20"
 

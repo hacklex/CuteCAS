@@ -18,14 +18,29 @@ module Core.Modular.PrimeField
 module L  = FStar.List.Tot
 
 open Core.Algebra
-open FStar.Math.Euclid
+open Core.NumberTheory
 open FStar.Math.Lemmas
 
 (* ---------------------------------------------------------------- *)
 (*  Representation and element operations                            *)
 (* ---------------------------------------------------------------- *)
 
-let fp (p:int{p > 1}) = n:nat{n < p}
+(* SPEED-CRITICAL: `fp` takes an UNREFINED `p:int` on purpose.  The type
+   `n:nat{n<p}` is well-formed for ANY int (it is empty when p<=0), so
+   writing `fp p` in a signature carries NO `p>1` proof obligation.
+
+   With a `p>1` / `is_prime p` refinement on `fp`, F* re-discharges the
+   `p>1` obligation — dragging the is_prime/prime_witness prop into the
+   VC — at EVERY `fp p` occurrence.  That cost dominates ring/field
+   algebra over `polynomial (fp p)`: a purely-additive rearrangement
+   lemma measured 5378 ms with `fp (p:int{p>1})` and 67 ms with
+   `fp (p:int)` (~80x), the Z3 solve being trivial in both cases.
+
+   This widening is fully backward compatible: every existing caller
+   passes p with p>1 / is_prime p, which still typechecks.  The element
+   constructors / operations below keep their `p>1` refinement (0 and 1
+   genuinely must be < p). *)
+let fp (p:int) = n:nat{n < p}
 
 let fp_zero (p:int{p > 1}) : fp p = 0
 let fp_one  (p:int{p > 1}) : fp p = 1

@@ -27,7 +27,7 @@ open Core.Algebra.Combinators
 open Core.Polynomial.Derivative
 open Core.FinSum
 open Core.Algebra.Power
-open FStar.Math.Euclid
+open Core.NumberTheory
 
 #set-options "--fuel 1 --ifuel 1 --z3rlimit 30"
 

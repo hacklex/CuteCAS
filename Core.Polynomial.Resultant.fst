@@ -1,4 +1,4 @@
-module Core.Matrix.Resultant
+module Core.Polynomial.Resultant
 
 (*
    Resultant of two univariate polynomials.
@@ -27,7 +27,7 @@ module L = FStar.List.Tot
 (* aliases for the folded-in ResultantConverse body *)
 module KD  = Core.Matrix.Determinant
 module DET = Core.Matrix.Determinant
-module SYL = Core.Matrix.Sylvester
+module SYL = Core.Polynomial.Sylvester
 module GC  = Core.Polynomial.GCD
 module IR  = Core.Polynomial.Irreducible
 module SF  = Core.Polynomial.SquareFree
@@ -46,7 +46,7 @@ open Core.Polynomial.GCD
 open Core.Polynomial.SquareFree
 open Core.Permutation
 open Core.Matrix
-open Core.Matrix.Sylvester
+open Core.Polynomial.Sylvester
 open Core.Matrix.Determinant
 open Core.Vector
 open Core.FinSum
@@ -517,7 +517,7 @@ let resultant_zero_of_common_divisor (#t:Type) {| f: field t |}
 #pop-options
 
 (* ================================================================================ *)
-(*  FOLDED-IN: Core.Matrix.ResultantLinear *)
+(*  FOLDED-IN: Core.Polynomial.ResultantLinear *)
 (* ================================================================================ *)
 
 (* ================================================================ *)
@@ -1303,7 +1303,7 @@ let resultant_const (#t:Type) {| f: field t |} (c: t{not (c = (zero <: t))}) (b:
     H.leibniz_then_eq (resultant 0 n ([c] <: polynomial t) b) (det s) (cpow c n)
 
 (* ================================================================================ *)
-(*  FOLDED-IN: Core.Matrix.ResultantMul *)
+(*  FOLDED-IN: Core.Polynomial.ResultantMul *)
 (* ================================================================================ *)
 
 (* ----------------------------------------------------------------- *)
@@ -1322,7 +1322,7 @@ let combo_vec (#t:Type) {| cr: commutative_ring t |}
       else coeff v ((((m_deg - 1)) - (((j <: nat) - n_deg))))
 
 (* vector_dot via a named pointwise function: mirrors
-   Core.Matrix.Resultant.vdot_zero_via_name but for an arbitrary value. *)
+   Core.Polynomial.Resultant.vdot_zero_via_name but for an arbitrary value. *)
 #push-options "--z3rlimit 100 --fuel 1 --ifuel 1"
 let vdot_via_name (#t:Type) {| cr: commutative_ring t |} (#n: pos)
   (a b: vector t n) (f: fin n -> t) (value: t)
@@ -1339,7 +1339,7 @@ let vdot_via_name (#t:Type) {| cr: commutative_ring t |} (#n: pos)
 (*  row i of S^T (= column i of S) dotted with combo_vec u v gives   *)
 (*  the (N-1-i)-th coefficient of  u*P + v*Q.                        *)
 (*                                                                   *)
-(*  Proof mirrors Core.Matrix.Resultant.syl_null_vec_is_null, but    *)
+(*  Proof mirrors Core.Polynomial.Resultant.syl_null_vec_is_null, but    *)
 (*  with the v-part entering with `+` (no negation), so the two      *)
 (*  halves assemble to coeff(u*P) + coeff(v*Q) = coeff(u*P + v*Q).   *)
 (* ----------------------------------------------------------------- *)
@@ -1514,7 +1514,7 @@ let sylvester_action (#t:Type) {| cr: commutative_ring t |}
 #pop-options
 
 (* ================================================================================ *)
-(*  FOLDED-IN: Core.Matrix.ResultantPeel *)
+(*  FOLDED-IN: Core.Polynomial.ResultantPeel *)
 (* ================================================================================ *)
 
 (* small ring rearrangement:  x*v + w = w + x*v  *)
@@ -3122,7 +3122,7 @@ let peel (#t:Type) {| f: field t |} (a: t) (bigA b: polynomial t) (m n: nat{n >=
 #pop-options
 
 (* ================================================================================ *)
-(*  FOLDED-IN: Core.Matrix.ResultantPoisson *)
+(*  FOLDED-IN: Core.Polynomial.ResultantPoisson *)
 (* ================================================================================ *)
 
 (* ================================================================ *)
@@ -3231,7 +3231,7 @@ let rec poisson (#t:Type) {| f: field t |} (lc: t{not (lc = (zero <: t))}) (root
 #pop-options
 
 (* ================================================================================ *)
-(*  FOLDED-IN: Core.Matrix.ResultantConverse *)
+(*  FOLDED-IN: Core.Polynomial.ResultantConverse *)
 (* ================================================================================ *)
 
 #set-options "--fuel 1 --ifuel 1 --z3rlimit 60"

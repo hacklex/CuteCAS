@@ -31,8 +31,55 @@ open Core.Polynomial.Coeff
 open Core.Polynomial.Monic
 open Core.FinSum
 open FStar.Math.Lemmas
+open Core.Tactics.CanonRing
 
 #set-options "--fuel 1 --ifuel 1 --z3rlimit 60"
+
+(* ================================================================ *)
+(*  Crystallized generic commutative-ring assembly lemmas.          *)
+(*  These lift the ring-agnostic sub-chains of the Hensel capstones  *)
+(*  out of the concrete polynomial (zmod _) type: each abstract      *)
+(*  lemma resolves the poly-over-zmod instance ONCE at the call site *)
+(*  instead of re-resolving it per explicit poly_eq step.            *)
+(* ================================================================ *)
+
+(* R = rf + rmn, rmn = -rm, rm = rlg*rlh, rlg = g, rlh = h, rf = g*h  ⇒  R = 0. *)
+private let error_collapse (#t:Type) {| cr: commutative_ring t |}
+  (bigr rf rmn rm rlg rlh g h : t)
+  : Lemma (requires bigr = (rf + rmn) /\ rmn = (- rm) /\ rm = (rlg * rlh)
+                    /\ rlg = g /\ rlh = h /\ rf = (g * h))
+          (ensures  bigr = zero)
+  = H.elim_equatable_laws t ();
+    H.trans_for_calc t ();
+    mul_congruence rlg rlh g h;
+    neg_congruence rm rf;
+    add_congruence rf rmn rf (- rf);
+    assert ((rf + (- rf)) = zero) by canon_ring ()
+
+(* product-side collapse of the Hensel step:
+   pt·ps = 0, lg·ps = bb, lh·pt = cc, bb+cc = pp, ff + (-(lg·lh)) = pp
+   ⇒ ff = (lg+pt)·(lh+ps). *)
+private let lift_assemble (#t:Type) {| cr: commutative_ring t |}
+  (lg lh pt ps ff bb cc q pp : t)
+  : Lemma (requires
+             (pt * ps) = zero /\
+             (lg * ps) = bb /\
+             (lh * pt) = cc /\
+             q = (bb + cc) /\
+             q = pp /\
+             (ff + (- (lg * lh))) = pp)
+          (ensures  ff = ((lg + pt) * (lh + ps)))
+  = H.elim_equatable_laws t ();
+    H.trans_for_calc t ();
+    (* FOIL identity (canon; spell out lg*lh, canon is blind to let-aliases) *)
+    assert (((lg + pt) * (lh + ps))
+            = ((lg * lh) + ((lg * ps) + ((lh * pt) + (pt * ps))))) by canon_ring ();
+    add_congruence (lh * pt) (pt * ps) cc zero;
+    assert ((cc + zero) = cc) by canon_ring ();
+    add_congruence (lg * ps) ((lh * pt) + (pt * ps)) bb cc;
+    add_congruence (lg * lh) ((lg * ps) + ((lh * pt) + (pt * ps))) (lg * lh) pp;
+    add_congruence (lg * lh) pp (lg * lh) (ff + (- (lg * lh)));
+    assert (((lg * lh) + (ff + (- (lg * lh)))) = ff) by canon_ring ()
 
 (* ================================================================ *)
 (*  §1 — HenselBase: the base reduction ring-hom ℤ/pᵏ → 𝔽_p = fp p.  *)
@@ -548,57 +595,23 @@ let hensel_error_reduces (p:int{p > 1}) (k:pos)
           (ensures (poly_reduce p k
                       (f + (- ((poly_lift p k g) * (poly_lift p k h)))))
                    = (poly_zero #(zmod (ppow p k))))
-  = let m1 = ppow p (k ++ 1) in
-    let m  = ppow p k in
+  = let m  = ppow p k in
     let lg = poly_lift p k g in
     let lh = poly_lift p k h in
-    let mlift = (lg * lh) in
-    (* abbreviations (all polynomials over (zmod m)[X]) *)
-    let rf  = poly_reduce p k f in                                  (* reduce f *)
-    let rmn = poly_reduce p k (- mlift) in     (* reduce (-mlift) *)
-    let rm  = poly_reduce p k mlift in                             (* reduce mlift *)
-    let rlg = poly_reduce p k lg in                               (* reduce (lift g) = g *)
-    let rlh = poly_reduce p k lh in                               (* reduce (lift h) = h *)
-    let gh  : polynomial (zmod m) = g * h in                          (* g * h *)
-
-    (* (1) reduce (f + (-mlift)) ~ (reduce f) + reduce(-mlift) *)
-    poly_reduce_add p k f (- mlift);
-
-    (* (2) reduce(-mlift) ~ -(reduce mlift) *)
-    poly_reduce_neg p k mlift;
-    (* (3) reduce mlift ~ (reduce lg) * (reduce lh) *)
-    poly_reduce_mul p k lg lh;
-    (* (4) reduce lg ~ g , reduce lh ~ h ; so (reduce lg)*(reduce lh) ~ g*h *)
-    poly_reduce_lift_id p k g;
-    poly_reduce_lift_id p k h;
-    poly_mul_congruence rlg rlh g h;                   (* rlg*rlh ~ g*h *)
-    (* reduce mlift ~ g*h  (transitivity of (3) and (4)) *)
-    poly_eq_transitivity rm (rlg * rlh) gh;
-    (* -(reduce mlift) ~ -(g*h)  (neg congruence) *)
-    poly_neg_congruence rm gh;
-    (* reduce(-mlift) ~ -(g*h)  (transitivity of (2) and the above) *)
-    poly_eq_transitivity rmn
-      (- rm) (- gh);
-
-    (* (5) (reduce f) + reduce(-mlift) ~ (g*h) + (-(g*h))
-           using hypothesis reduce f ~ g*h and reduce(-mlift) ~ -(g*h) *)
-    poly_add_congruence rf rmn gh (- gh);
-
-    (* (6) (g*h) + (-(g*h)) ~ poly_zero *)
-    poly_add_negation gh;
-    (* poly_add_negation gives poly_eq (g*h + -(g*h)) poly_zero (the .r form). *)
-
-    (* now stitch:
-       reduce(f + (-mlift))
-         ~ (reduce f) + reduce(-mlift)                [step 1]
-         ~ (g*h) + (-(g*h))                            [step 5]
-         ~ poly_zero                                   [step 6] *)
-    let s1 : polynomial (zmod m) = rf + rmn in
-    let s2 : polynomial (zmod m) = gh + (- gh) in
-    poly_eq_transitivity s1 s2 (poly_zero #(zmod m) );
-    poly_eq_transitivity
-      (poly_reduce p k (f + (- mlift)))
-      s1 (poly_zero #(zmod m) )
+    let mlift = lg * lh in
+    let rf  = poly_reduce p k f in                       (* reduce f          *)
+    let rmn = poly_reduce p k (- mlift) in               (* reduce (-mlift)   *)
+    let rm  = poly_reduce p k mlift in                   (* reduce mlift      *)
+    let rlg = poly_reduce p k lg in                      (* reduce (lift g)=g *)
+    let rlh = poly_reduce p k lh in                      (* reduce (lift h)=h *)
+    let bigr = poly_reduce p k (f + (- mlift)) in
+    poly_reduce_add p k f (- mlift);                     (* bigr = rf + rmn   *)
+    poly_reduce_neg p k mlift;                           (* rmn = -rm         *)
+    poly_reduce_mul p k lg lh;                           (* rm = rlg*rlh      *)
+    poly_reduce_lift_id p k g;                           (* rlg = g           *)
+    poly_reduce_lift_id p k h;                           (* rlh = h           *)
+    (* ring-agnostic collapse (resolves the poly instance once) *)
+    error_collapse bigr rf rmn rm rlg rlh g h
 
 (* ================================================================ *)
 (*  §5 — HenselVanish: the p²ᵏ-vanishing crux.                      *)
@@ -1181,79 +1194,52 @@ private let reduce_correction (p:int{p > 1}) (k:pos)
       (g + (poly_zero #(zmod m) ))
       g
 
-(* abstract regroup:  (A+B)+(C+D) ~ A+P  given  B+C ~ P  and  D ~ 0. *)
-private let regroup_four (m1:int{m1 > 1})
-  (aa bb cc dd pp: polynomial (zmod m1))
-  : Lemma (requires (bb + cc) = pp /\
-                    dd = (poly_zero #(zmod m1)))
-          (ensures ((aa + bb) + (cc + dd))
-                   = (aa + pp))
-  = (* (A+B)+(C+D) ~ A+(B+(C+D)) *)
-    poly_add_associativity aa bb (cc + dd);
-    (* B+(C+D) ~ (B+C)+D *)
-    poly_add_associativity bb cc dd;
-    poly_eq_symmetry ((bb + cc) + dd) (bb + (cc + dd));
-    (* (B+C)+D ~ P+0   [congr]  ~ P   [add_zero] *)
-    poly_add_congruence (bb + cc) dd pp (poly_zero #(zmod m1));
-    poly_add_zero pp;
-    poly_eq_transitivity ((bb + cc) + dd) (pp + (poly_zero #(zmod m1))) pp;
-    (* B+(C+D) ~ P *)
-    poly_eq_transitivity (bb + (cc + dd)) ((bb + cc) + dd) pp;
-    (* A+(B+(C+D)) ~ A+P   [congr, refl A] *)
-    poly_eq_reflexivity aa;
-    poly_add_congruence aa (bb + (cc + dd)) aa pp;
-    (* chain *)
-    poly_eq_transitivity
-      ((aa + bb) + (cc + dd))
-      (aa + (bb + (cc + dd)))
-      (aa + pp)
-
-(* abstract FOIL:  (y+z)·(w+x) ~ ((y·w)+(y·x)) + ((z·w)+(z·x)). *)
-private let expand_product (m1:int{m1 > 1})
-  (y z w x: polynomial (zmod m1))
-  : Lemma (((y + z) * (w + x))
-           = (((y * w) + (y * x)) + ((z * w) + (z * x))))
-  = (* (y+z)·(w+x) ~ y·(w+x) + z·(w+x)   [right_distrib] *)
-    poly_right_distributivity (w + x) y z;
-    (* y·(w+x) ~ y·w + y·x   ;  z·(w+x) ~ z·w + z·x   [left_distrib] *)
-    poly_left_distributivity y w x;
-    poly_left_distributivity z w x;
-    poly_add_congruence
-      (y * (w + x)) (z * (w + x))
-      ((y * w) + (y * x)) ((z * w) + (z * x));
-    poly_eq_transitivity
-      ((y + z) * (w + x))
-      ((y * (w + x)) + (z * (w + x)))
-      (((y * w) + (y * x)) + ((z * w) + (z * x)))
-
-(* abstract:  A + (f + (-A)) ~ f. *)
-private let cancel_around (m1:int{m1 > 1})
-  (aa ff: polynomial (zmod m1))
-  : Lemma ((aa + (ff + (- aa)))
-           = ff)
-  = (* f + (-A) ~ (-A) + f *)
-    poly_add_commutativity ff (- aa);
-    poly_eq_reflexivity aa;
-    poly_add_congruence aa (ff + (- aa)) aa ((- aa) + ff);
-    (* A + ((-A)+f) ~ (A+(-A))+f   [assoc backwards] *)
-    poly_add_associativity aa (- aa) ff;
-    poly_eq_symmetry ((aa + (- aa)) + ff) (aa + ((- aa) + ff));
-    (* (A+(-A))+f ~ 0+f   [congr]  ~ f   [add_zero] *)
-    poly_add_negation aa;
-    poly_eq_reflexivity ff;
-    poly_add_congruence (aa + (- aa)) ff (poly_zero #(zmod m1)) ff;
-    poly_add_zero ff;
-    poly_eq_transitivity ((poly_zero #(zmod m1)) + ff) ff ff;  (* trivial refl-ish, keeps shapes *)
-    poly_eq_transitivity ((aa + (- aa)) + ff) ((poly_zero #(zmod m1)) + ff) ff;
-    (* chain *)
-    poly_eq_transitivity
-      (aa + (ff + (- aa)))
-      (aa + ((- aa) + ff))
-      ((aa + (- aa)) + ff);
-    poly_eq_transitivity
-      (aa + (ff + (- aa)))
-      ((aa + (- aa)) + ff)
-      ff
+(* Focused product helper: proves ONLY the product equality  f ~ g'·h'
+   for the computed witnesses g' = lg + poly_mulpk(t·δ), h' = lh + poly_mulpk(s·δ).
+   Establishes the poly-specific cross/vanish facts, then hands the pure
+   ring-algebra off to `lift_assemble` (one instance resolution). *)
+private let lift_product (p:int{p > 1}) (k:pos)
+  (f: polynomial (zmod (ppow p (k ++ 1))))
+  (g h: polynomial (zmod (ppow p k)))
+  (s t: polynomial (zmod p))
+  : Lemma
+      (requires
+        (poly_reduce p k f)
+        = (g * h) /\
+        ((s * (poly_to_base p k g)) + (t * (poly_to_base p k h)))
+        = (poly_one #(zmod p)))
+      (ensures
+        poly_eq f
+          ((poly_lift p k g + poly_mulpk p k (t * (poly_quotient p k
+             (f + (- ((poly_lift p k g) * (poly_lift p k h)))))))
+           * (poly_lift p k h + poly_mulpk p k (s * (poly_quotient p k
+             (f + (- ((poly_lift p k g) * (poly_lift p k h)))))))))
+  = let m1 = ppow p (k ++ 1) in
+    let lg = poly_lift p k g in
+    let lh = poly_lift p k h in
+    let prod0 : polynomial (zmod m1) = lg * lh in
+    let e  : polynomial (zmod m1) = f + (- prod0) in
+    let dd = poly_quotient p k e in
+    let td : polynomial (zmod p) = t * dd in
+    let sd : polynomial (zmod p) = s * dd in
+    let pt = poly_mulpk p k td in
+    let ps = poly_mulpk p k sd in
+    let gbar = poly_to_base p k g in
+    let hbar = poly_to_base p k h in
+    let bpm = poly_mulpk p k (sd * gbar) in
+    let cpm = poly_mulpk p k (td * hbar) in
+    let pmd = poly_mulpk p k dd in
+    hensel_error_reduces p k f g h;             (* reduce e ~ 0 (error_reconstruction pre) *)
+    error_reconstruction p k e;                 (* e = pmd, i.e. (f + (-(lg*lh))) = pmd    *)
+    poly_mulpk_mul_zero p k td sd;              (* pt·ps = 0                               *)
+    cross_absorb p k g sd;                      (* lg·ps = bpm                             *)
+    cross_absorb p k h td;                      (* lh·pt = cpm                             *)
+    poly_mulpk_add p k (sd * gbar) (td * hbar); (* q = bpm + cpm  (q = poly_mulpk(sum))    *)
+    bezout_core p dd gbar hbar s t;             (* (sd·gbar)+(td·hbar) = dd                *)
+    poly_mulpk_congr p k ((sd * gbar) + (td * hbar)) dd;          (* q = pmd                *)
+    (* ring-agnostic collapse; the q-relations fold the two poly_eq glue steps inside *)
+    lift_assemble lg lh pt ps f bpm cpm
+      (poly_mulpk p k ((sd * gbar) + (td * hbar))) pmd
 
 (* Existence postcondition of the Hensel lift step, as an OPAQUE proposition so
    the `exists` never lands in a consumer's SMT context.  Consumers recover the
@@ -1291,90 +1277,19 @@ let hensel_lift_step (p:int{p > 1}) (k:pos)
         ((s * (poly_to_base p k g)) + (t * (poly_to_base p k h)))
         = (poly_one #(zmod p)))
       (ensures hensel_lift_step_post p k f g h)
-  = let m  = ppow p k in
-    let m1 = ppow p (k ++ 1) in
-    (* --- the witnesses & abbreviations --- *)
+  = let m1 = ppow p (k ++ 1) in
     let lg = poly_lift p k g in
     let lh = poly_lift p k h in
-    let prod0 : polynomial (zmod m1) = lg * lh in
-    let e  : polynomial (zmod m1) = f + (- prod0) in
-    let dd = poly_quotient p k e in                    (* δ *)
+    let dd = poly_quotient p k (f + (- (lg * lh))) in   (* δ *)
     let td : polynomial (zmod p) = t * dd in
     let sd : polynomial (zmod p) = s * dd in
-    let pt = poly_mulpk p k td in                      (* Pt *)
-    let ps = poly_mulpk p k sd in                      (* Ps *)
-    let g' : polynomial (zmod m1) = lg + pt in
-    let h' : polynomial (zmod m1) = lh + ps in
-    let gbar = poly_to_base p k g in
-    let hbar = poly_to_base p k h in
-    (* --- step 1:  poly_reduce e ~ 0 --- *)
-    hensel_error_reduces p k f g h;                    (* uses hypothesis (1) *)
-    (* --- step 2:  e ~ poly_mulpk δ --- *)
-    error_reconstruction p k e;                        (* uses step 1 *)
-    (* --- step 3:  reduce g' ~ g , reduce h' ~ h --- *)
+    let g' : polynomial (zmod m1) = lg + poly_mulpk p k td in
+    let h' : polynomial (zmod m1) = lh + poly_mulpk p k sd in
+    (* reduce g' ~ g , reduce h' ~ h *)
     reduce_correction p k g td;
     reduce_correction p k h sd;
-    (* --- step 4: product expansion --- *)
-    expand_product m1 lg pt lh ps;
-    (* g'·h' ~ ((lg·lh)+(lg·ps)) + ((pt·lh)+(pt·ps)) *)
-    let bb : polynomial (zmod m1) = lg * ps in
-    let cc : polynomial (zmod m1) = pt * lh in
-    let dd4 : polynomial (zmod m1) = pt * ps in
-    (* D = pt·ps ~ 0 *)
-    poly_mulpk_mul_zero p k td sd;
-    (* B = lg·ps ~ poly_mulpk (sd·gbar) *)
-    cross_absorb p k g sd;
-    (* C = pt·lh ~ lh·pt ~ poly_mulpk (td·hbar) *)
-    poly_mul_commutativity pt lh;
-    cross_absorb p k h td;
-    poly_eq_transitivity
-      cc (lh * pt) (poly_mulpk p k (td * hbar));
-    (* B+C ~ poly_mulpk (sd·gbar) + poly_mulpk (td·hbar) *)
-    poly_add_congruence
-      bb cc
-      (poly_mulpk p k (sd * gbar)) (poly_mulpk p k (td * hbar));
-    (* poly_mulpk(sd·gbar) + poly_mulpk(td·hbar) ~ poly_mulpk((sd·gbar)+(td·hbar)) *)
-    poly_mulpk_add p k (sd * gbar) (td * hbar);
-    poly_eq_symmetry
-      (poly_mulpk p k ((sd * gbar) + (td * hbar)))
-      ((poly_mulpk p k (sd * gbar)) + (poly_mulpk p k (td * hbar)));
-    poly_eq_transitivity
-      (bb + cc)
-      ((poly_mulpk p k (sd * gbar)) + (poly_mulpk p k (td * hbar)))
-      (poly_mulpk p k ((sd * gbar) + (td * hbar)));
-    (* (sd·gbar)+(td·hbar) ~ δ   [bezout_core, uses hypothesis (2)] *)
-    bezout_core p dd gbar hbar s t;
-    poly_mulpk_congr p k ((sd * gbar) + (td * hbar)) dd;
-    (* B+C ~ poly_mulpk δ *)
-    poly_eq_transitivity
-      (bb + cc)
-      (poly_mulpk p k ((sd * gbar) + (td * hbar)))
-      (poly_mulpk p k dd);
-    (* regroup:  (A+B)+(C+D) ~ A + poly_mulpk δ *)
-    regroup_four m1 prod0 bb cc dd4 (poly_mulpk p k dd);
-    (* g'·h' ~ prod0 + poly_mulpk δ *)
-    poly_eq_transitivity
-      (g' * h')
-      ((prod0 + bb) + (cc + dd4))
-      (prod0 + (poly_mulpk p k dd));
-    (* --- step 5:  prod0 + poly_mulpk δ ~ f --- *)
-    (* poly_mulpk δ ~ e   [step 2 symmetric] *)
-    poly_eq_symmetry e (poly_mulpk p k dd);
-    poly_eq_reflexivity prod0;
-    poly_add_congruence prod0 (poly_mulpk p k dd) prod0 e;
-    (* prod0 + e = prod0 + (f + (-prod0)) ~ f   [cancel_around] *)
-    cancel_around m1 prod0 f;
-    poly_eq_transitivity
-      (prod0 + (poly_mulpk p k dd))
-      (prod0 + e)
-      f;
-    (* g'·h' ~ f *)
-    poly_eq_transitivity
-      (g' * h')
-      (prod0 + (poly_mulpk p k dd))
-      f;
-    (* f ~ g'·h' *)
-    poly_eq_symmetry (g' * h') f;
+    (* f ~ g'·h'  (crystallized product assembly) *)
+    lift_product p k f g h s t;
     (* --- discharge the existential --- *)
     introduce exists (gg' hh': polynomial (zmod m1) ).
         poly_eq (poly_reduce p k gg') g /\
@@ -1384,3 +1299,59 @@ let hensel_lift_step (p:int{p > 1}) (k:pos)
     and ();
     (* re-package the bare existential as the opaque postcondition *)
     reveal_opaque (`%hensel_lift_step_post) (hensel_lift_step_post p k f g h)
+
+(* ================================================================ *)
+(*  §S6 — EXECUTABLE (Tot) Hensel step + concrete soundness.        *)
+(*                                                                   *)
+(*  hensel_lift_step (above) proves EXISTENCE of a lifted pair; the  *)
+(*  witnesses g' = lg + Pt, h' = lh + Ps are COMPUTATIONS.  Here we  *)
+(*  expose them as a Tot function and prove the CONCRETE soundness   *)
+(*  of that specific pair (same proof body as the step, minus the    *)
+(*  existential packaging).                                          *)
+(* ================================================================ *)
+
+(* The lifted pair (g',h') as an executable computation. *)
+let hensel_lift_step_compute (p:int{p > 1}) (k:pos)
+  (f: polynomial (zmod (ppow p (k ++ 1))))
+  (g h: polynomial (zmod (ppow p k)))
+  (s t: polynomial (zmod p))
+  : tuple2 (polynomial (zmod (ppow p (k ++ 1))))
+           (polynomial (zmod (ppow p (k ++ 1))))
+  = let lg = poly_lift p k g in
+    let lh = poly_lift p k h in
+    let prod0 : polynomial (zmod (ppow p (k ++ 1))) = lg * lh in
+    let e  : polynomial (zmod (ppow p (k ++ 1))) = f + (- prod0) in
+    let dd = poly_quotient p k e in
+    let td : polynomial (zmod p) = t * dd in
+    let sd : polynomial (zmod p) = s * dd in
+    let pt = poly_mulpk p k td in
+    let ps = poly_mulpk p k sd in
+    (lg + pt, lh + ps)
+
+(* Concrete soundness of the computed pair.  Under `hensel_lift_step`'s
+   hypotheses, the SPECIFIC pair returned by `hensel_lift_step_compute`
+   reduces to (g,h) and multiplies back to f.  Proof body = the step's,
+   without the final existential introduction. *)
+let hensel_lift_step_compute_correct (p:int{p > 1}) (k:pos)
+  (f: polynomial (zmod (ppow p (k ++ 1))))
+  (g h: polynomial (zmod (ppow p k)))
+  (s t: polynomial (zmod p))
+  : Lemma
+      (requires
+        (poly_reduce p k f)
+        = (g * h) /\
+        ((s * (poly_to_base p k g)) + (t * (poly_to_base p k h)))
+        = (poly_one #(zmod p)))
+      (ensures
+        (let gh' = hensel_lift_step_compute p k f g h s t in
+         poly_eq (poly_reduce p k (fst gh')) g /\
+         poly_eq (poly_reduce p k (snd gh')) h /\
+         poly_eq f ((fst gh') * (snd gh'))))
+  = let lg = poly_lift p k g in
+    let lh = poly_lift p k h in
+    let dd = poly_quotient p k (f + (- (lg * lh))) in
+    (* reduce (fst gh') ~ g , reduce (snd gh') ~ h *)
+    reduce_correction p k g (t * dd);
+    reduce_correction p k h (s * dd);
+    (* f ~ (fst gh')·(snd gh')  (crystallized product assembly) *)
+    lift_product p k f g h s t

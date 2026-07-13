@@ -20,8 +20,8 @@ module H  = Core.Algebra.Helpers
 module LRT = Core.Risch.LRT
 module LR  = Core.Risch.LRT
 module SP  = Core.Polynomial.Roots
-module RES = Core.Matrix.Resultant
-module RC  = Core.Matrix.Resultant
+module RES = Core.Polynomial.Resultant
+module RC  = Core.Polynomial.Resultant
 module GC  = Core.Polynomial.GCD
 module SD  = Core.Polynomial.SplitDivisor
 
@@ -1887,7 +1887,7 @@ let residue_implies_gcd_nonconstant (#t:Type) {| f: field t |} (p: polynomial t)
     (* q = prod roots is nonzero (Cons? roots from memP), so deg q defined; *)
     (* hence deg g defined (gcd_pos). *)
     poly_prod_linears_deg roots;                   (* deg q == length roots *)
-    Core.Matrix.Resultant.gcd_pos d q;     (* deg g >= 0 *)
+    Core.Polynomial.Resultant.gcd_pos d q;     (* deg g >= 0 *)
     (* deg lin = 1. *)
     poly_linear_deg beta;                          (* deg lin == 1 *)
     (* divisor-degree: deg lin <= deg g, i.e. 1 <= deg g. *)
@@ -1989,7 +1989,7 @@ let vc_count (#t:Type) {| f: field t |} (p: polynomial t) (roots: list t) (c: t)
     let d : polynomial t = (p -- (poly_scale c (poly_deriv q))) in
     let vc = poly_gcd d q in
     poly_prod_linears_deg roots;             (* deg q >= 0 *)
-    Core.Matrix.Resultant.gcd_pos d q;       (* deg vc >= 0 *)
+    Core.Polynomial.Resultant.gcd_pos d q;       (* deg vc >= 0 *)
     GC.gcd_divides_right d q;                 (* divides vc q *)
     let iff_b (b:t)
       : Lemma (L.memP b cset <==> (L.memP b roots /\ poly_eval vc b = zero))

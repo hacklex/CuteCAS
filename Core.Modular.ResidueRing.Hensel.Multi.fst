@@ -147,6 +147,126 @@ let hensel_lift_post_elim (p:int{p > 1}) (n:nat)
               (poly_to_base p (n ++ 1) hh) = hbar))
   = reveal_opaque (`%hensel_lift_post) (hensel_lift_post p n f gbar hbar)
 
+(* ================================================================ *)
+(*  Crystallized generic commutative-ring assembly lemmas.          *)
+(*  Each lifts a ring-agnostic equational sub-chain out of the       *)
+(*  concrete polynomial (zmod _) type, resolving the poly-over-zmod  *)
+(*  instance ONCE at the call site rather than per explicit step.    *)
+(* ================================================================ *)
+
+(* x = y /\ y = z  ⇒  x = z. *)
+private let eq_trans3 (#t:Type) {| cr: commutative_ring t |} (x y z : t)
+  : Lemma (requires x = y /\ y = z) (ensures x = z)
+  = H.trans2 x y z
+
+(* a = b /\ a = c /\ c = d  ⇒  b = d. *)
+private let eq_bridge4 (#t:Type) {| cr: commutative_ring t |} (a b c d : t)
+  : Lemma (requires a = b /\ a = c /\ c = d) (ensures b = d)
+  = symmetry a b;
+    H.trans3 b a c d
+
+(* Bézout transport: a = a' /\ b = b' /\ (s·a' + tt·b') = e  ⇒  (s·a + tt·b) = e. *)
+private let bezout_transport (#t:Type) {| cr: commutative_ring t |}
+  (s tt a b a' b' e : t)
+  : Lemma (requires a = a' /\ b = b' /\ ((s * a') + (tt * b')) = e)
+          (ensures  ((s * a) + (tt * b)) = e)
+  = reflexivity s;
+    reflexivity tt;
+    mul_congruence s a s a';
+    mul_congruence tt b tt b';
+    add_congruence (s * a) (tt * b) (s * a') (tt * b');
+    H.trans2 ((s * a) + (tt * b)) ((s * a') + (tt * b')) e
+
+(* Base case n = 0.  Split so the ppow p 1 == p type-conversion reasoning
+   is isolated in its own VC. *)
+#push-options "--fuel 2"
+private let hensel_lift_base (p:int{p > 1})
+  (f: polynomial (zmod (ppow p (0 ++ 1))))
+  (gbar hbar: polynomial (zmod p))
+  : Lemma
+      (requires (poly_to_base p (0 ++ 1) f) = (gbar * hbar))
+      (ensures hensel_lift_post p 0 f gbar hbar)
+  = ppow_one p;
+    poly_to_base_level1 p f;
+    poly_eq_symmetry (poly_to_base p 1 f) f;
+    poly_eq_transitivity
+      f (poly_to_base p 1 f) (gbar * hbar);
+    poly_to_base_level1 p gbar;
+    poly_to_base_level1 p hbar;
+    introduce exists (g hh: polynomial (zmod (ppow p (0 ++ 1)))).
+        f = (g * hh) /\
+        (poly_to_base p (0 ++ 1) g) = gbar /\
+        (poly_to_base p (0 ++ 1) hh) = hbar
+    with gbar hbar
+    and ();
+    reveal_opaque (`%hensel_lift_post) (hensel_lift_post p 0 f gbar hbar)
+#pop-options
+
+(* Step-case combine: from the two eliminated existentials, assemble the
+   opaque post.  Split so its VC is small and independent. *)
+private let hensel_lift_assemble (p:int{p > 1}) (n:pos)
+  (f: polynomial (zmod (ppow p (n ++ 1))))
+  (gbar hbar: polynomial (zmod p))
+  (gn hn: polynomial (zmod (ppow p n)))
+  (g' h': polynomial (zmod (ppow p (n ++ 1))))
+  : Lemma
+      (requires
+        (poly_to_base p n gn) = gbar /\
+        (poly_to_base p n hn) = hbar /\
+        (poly_reduce p n g') = gn /\
+        (poly_reduce p n h') = hn /\
+        f = (g' * h'))
+      (ensures hensel_lift_post p n f gbar hbar)
+  = poly_to_base_reduce p n g';
+    poly_to_base_congr p n (poly_reduce p n g') gn;
+    eq_bridge4
+      (poly_to_base p n (poly_reduce p n g'))
+      (poly_to_base p (n ++ 1) g')
+      (poly_to_base p n gn)
+      gbar;
+    poly_to_base_reduce p n h';
+    poly_to_base_congr p n (poly_reduce p n h') hn;
+    eq_bridge4
+      (poly_to_base p n (poly_reduce p n h'))
+      (poly_to_base p (n ++ 1) h')
+      (poly_to_base p n hn)
+      hbar;
+    introduce exists (g hh: polynomial (zmod (ppow p (n ++ 1)))).
+        f = (g * hh) /\
+        (poly_to_base p (n ++ 1) g) = gbar /\
+        (poly_to_base p (n ++ 1) hh) = hbar
+    with g' h'
+    and ();
+    reveal_opaque (`%hensel_lift_post) (hensel_lift_post p n f gbar hbar)
+
+(* Step-case middle: from the reduced factorization gn·hn, run the two-factor
+   Hensel step and assemble.  Split so its VC is small and independent. *)
+private let hensel_lift_from_reduced (p:int{p > 1}) (n:pos)
+  (f: polynomial (zmod (ppow p (n ++ 1))))
+  (gbar hbar s t: polynomial (zmod p))
+  (gn hn: polynomial (zmod (ppow p n)))
+  : Lemma
+      (requires
+        (poly_reduce p n f) = (gn * hn) /\
+        (poly_to_base p n gn) = gbar /\
+        (poly_to_base p n hn) = hbar /\
+        ((s * gbar) + (t * hbar)) = (poly_one #(zmod p)))
+      (ensures hensel_lift_post p n f gbar hbar)
+  = bezout_transport
+      s t
+      (poly_to_base p n gn) (poly_to_base p n hn)
+      gbar hbar
+      (poly_one #(zmod p));
+    hensel_lift_step p n f gn hn s t;
+    hensel_lift_step_post_elim p n f gn hn;
+    eliminate exists (g' h': polynomial (zmod (ppow p (n ++ 1)))).
+        (poly_reduce p n g') = gn /\
+        (poly_reduce p n h') = hn /\
+        f = (g' * h')
+    returns hensel_lift_post p n f gbar hbar
+    with _hs.
+    hensel_lift_assemble p n f gbar hbar gn hn g' h'
+
 (* THE Hensel iteration (existence of the lifted factorization). *)
 let rec hensel_lift (p:int{p > 1}) (n:nat)
   (f: polynomial (zmod (ppow p (n ++ 1))))
@@ -158,122 +278,29 @@ let rec hensel_lift (p:int{p > 1}) (n:nat)
       (ensures hensel_lift_post p n f gbar hbar)
       (decreases n)
   =
-    if n = 0 then begin
-      (* Base case n = 0:  f : polynomial (fp (ppow p 1)),  ppow p 1 == p.
-         The level-1 identity gives  poly_to_base p 1 z poly_eq z  for any z.
-         From the requires:  poly_to_base p 1 f poly_eq gbar*hbar.
-         Witnesses: gbar, hbar (well-typed at fp (ppow p 1) since ppow p 1 == p). *)
-      ppow_one p;
-      (* f poly_eq poly_mul gbar hbar  (level-1 id + requires, trans/sym) *)
-      poly_to_base_level1 p f;                       (* poly_to_base p 1 f poly_eq f *)
-      poly_eq_symmetry (poly_to_base p 1 f) f;  (* f poly_eq poly_to_base p 1 f *)
-      poly_eq_transitivity
-        f (poly_to_base p 1 f) (gbar * hbar);
-      (* poly_to_base p 1 gbar poly_eq gbar *)
-      poly_to_base_level1 p gbar;
-      poly_to_base_level1 p hbar;
-      introduce exists (g hh: polynomial (zmod (ppow p (n ++ 1)))).
-          f = (g * hh) /\
-          (poly_to_base p (n ++ 1) g) = gbar /\
-          (poly_to_base p (n ++ 1) hh) = hbar
-      with gbar hbar
-      and ();
-      reveal_opaque (`%hensel_lift_post) (hensel_lift_post p n f gbar hbar)
-    end
+    if n = 0 then
+      (* Base case n = 0 (isolated VC): ppow p 1 == p, level-1 identity. *)
+      hensel_lift_base p f gbar hbar
     else begin
       (* Step case n >= 1. *)
       let fn = poly_reduce p n f in                  (* : polynomial (zmod (ppow p n)) *)
-      (* Recursion precondition (factorization):
-         poly_to_base p n fn poly_eq poly_mul gbar hbar.
-         From poly_to_base_reduce:  poly_to_base p n fn poly_eq poly_to_base p (n+1) f,
-         and the requires:          poly_to_base p (n+1) f poly_eq gbar*hbar. *)
+      (* Recursion precondition (factorization):  poly_to_base p n fn = gbar*hbar,
+         via poly_to_base_reduce (= poly_to_base p (n+1) f) and the requires. *)
       poly_to_base_reduce p n f;
-      poly_eq_transitivity
+      eq_trans3
         (poly_to_base p n fn) (poly_to_base p (n ++ 1) f)
         (gbar * hbar);
       (* The Bezout requires is unchanged; recurse. *)
       hensel_lift p (n - 1) fn gbar hbar s t;
-      (* Recover the bare existential from the opaque postcondition. *)
       hensel_lift_post_elim p (n - 1) fn gbar hbar;
-      (* Eliminate the recursion's existential. *)
       eliminate exists (gn hn: polynomial (zmod (ppow p n))).
           fn = (gn * hn) /\
           (poly_to_base p n gn) = gbar /\
           (poly_to_base p n hn) = hbar
       returns hensel_lift_post p n f gbar hbar
       with _h.
-      begin
-        (* discharge hensel_lift_step's requires *)
-        (* (a) poly_reduce p n f poly_eq poly_mul gn hn:  poly_reduce p n f == fn. *)
-        (* (already have fn poly_eq poly_mul gn hn in _h) *)
-        (* (b) Bezout:
-           poly_mul s (poly_to_base p n gn) poly_eq poly_mul s gbar   (mul_congruence, refl s)
-           poly_mul t (poly_to_base p n hn) poly_eq poly_mul t hbar
-           add_congruence + requires Bezout + transitivity. *)
-        poly_eq_reflexivity s;
-        poly_eq_reflexivity t;
-        poly_mul_congruence
-          s (poly_to_base p n gn) s gbar;
-        poly_mul_congruence
-          t (poly_to_base p n hn) t hbar;
-        poly_add_congruence
-          (s * (poly_to_base p n gn))
-          (t * (poly_to_base p n hn))
-          (s * gbar)
-          (t * hbar);
-        poly_eq_transitivity
-          ((s * (poly_to_base p n gn)) + (t * (poly_to_base p n hn)))
-          ((s * gbar) + (t * hbar))
-          (poly_one #(zmod p));
-        hensel_lift_step p n f gn hn s t;
-        (* Recover the bare existential from the opaque postcondition. *)
-        hensel_lift_step_post_elim p n f gn hn;
-        (* Eliminate the step's existential. *)
-        eliminate exists (g' h': polynomial (zmod (ppow p (n ++ 1)))).
-            (poly_reduce p n g') = gn /\
-            (poly_reduce p n h') = hn /\
-            f = (g' * h')
-        returns hensel_lift_post p n f gbar hbar
-        with _hs.
-        begin
-          (* poly_to_base p (n+1) g' poly_eq gbar:
-             poly_to_base p (n+1) g' poly_eq poly_to_base p n (poly_reduce p n g')  [poly_to_base_reduce, sym]
-             poly_to_base p n (poly_reduce p n g') poly_eq poly_to_base p n gn       [poly_to_base_congr, since poly_reduce p n g' poly_eq gn]
-             poly_to_base p n gn poly_eq gbar                                        [_h] *)
-          poly_to_base_reduce p n g';
-          poly_eq_symmetry
-            (poly_to_base p n (poly_reduce p n g')) (poly_to_base p (n ++ 1) g');
-          poly_to_base_congr p n (poly_reduce p n g') gn;
-          poly_eq_transitivity
-            (poly_to_base p (n ++ 1) g')
-            (poly_to_base p n (poly_reduce p n g'))
-            (poly_to_base p n gn);
-          poly_eq_transitivity
-            (poly_to_base p (n ++ 1) g')
-            (poly_to_base p n gn)
-            gbar;
-          (* same for h' *)
-          poly_to_base_reduce p n h';
-          poly_eq_symmetry
-            (poly_to_base p n (poly_reduce p n h')) (poly_to_base p (n ++ 1) h');
-          poly_to_base_congr p n (poly_reduce p n h') hn;
-          poly_eq_transitivity
-            (poly_to_base p (n ++ 1) h')
-            (poly_to_base p n (poly_reduce p n h'))
-            (poly_to_base p n hn);
-          poly_eq_transitivity
-            (poly_to_base p (n ++ 1) h')
-            (poly_to_base p n hn)
-            hbar;
-          introduce exists (g hh: polynomial (zmod (ppow p (n ++ 1)))).
-              f = (g * hh) /\
-              (poly_to_base p (n ++ 1) g) = gbar /\
-              (poly_to_base p (n ++ 1) hh) = hbar
-          with g' h'
-          and ();
-          reveal_opaque (`%hensel_lift_post) (hensel_lift_post p n f gbar hbar)
-        end
-      end
+      (* Two-factor Hensel step + assemble (isolated VC). *)
+      hensel_lift_from_reduced p n f gbar hbar s t gn hn
     end
 
 (* ================================================================ *)
@@ -370,6 +397,114 @@ let hensel_lift_multi_post_elim (p:int{p > 1}) (n:nat)
                  (poly_to_base p (n ++ 1) (L.index gs i)) = (L.index gbars i))))
   = reveal_opaque (`%hensel_lift_multi_post) (hensel_lift_multi_post p n f gbars)
 
+(* ring-agnostic:  b = b' /\ e = a·b  ⇒  e = a·b'. *)
+private let mul_left_transport (#t:Type) {| cr: commutative_ring t |}
+  (a b b' e : t)
+  : Lemma (requires b = b' /\ e = (a * b)) (ensures e = (a * b'))
+  = reflexivity a;
+    mul_congruence a b a b';
+    H.trans2 e (a * b) (a * b')
+
+(* Base case — singleton list.  Split for a small independent VC. *)
+#push-options "--fuel 2 --ifuel 2"
+private let hensel_lift_multi_base (p:int{p > 1}) (n:nat)
+  (f: polynomial (zmod (ppow p (n ++ 1))))
+  (g: polynomial (zmod p))
+  : Lemma
+      (requires (poly_to_base p (n ++ 1) f) = (poly_prod #(zmod p) [g]))
+      (ensures hensel_lift_multi_post p n f [g])
+  = H.elim_equatable_laws (zmod p) ();
+    H.elim_equatable_laws (zmod (ppow p (n ++ 1))) ();
+    poly_prod_singleton_lift p (n ++ 1) f;
+    poly_eq_symmetry
+      (poly_prod #(zmod (ppow p (n ++ 1))) [f]) f;
+    poly_prod_singleton p g;
+    eq_trans3
+      (poly_to_base p (n ++ 1) f)
+      (poly_prod #(zmod p) [g])
+      g;
+    introduce exists (gs: list (polynomial (zmod (ppow p (n ++ 1))))).
+        f = (poly_prod #(zmod (ppow p (n ++ 1))) gs) /\
+        L.length gs == L.length [g] /\
+        (forall (i:nat). i < L.length [g] ==>
+           (poly_to_base p (n ++ 1) (L.index gs i)) = (L.index [g] i))
+    with [f]
+    and ();
+    reveal_opaque (`%hensel_lift_multi_post) (hensel_lift_multi_post p n f [g])
+#pop-options
+
+(* Step-case combine — from the head lift (glift,hh) and the tail recursion
+   (gs_tail with per-index reduction via idx_pf), assemble the multi post.
+   Split for a small independent VC; the per-index tail hypothesis is a
+   proof-function argument (no forall in requires). *)
+#push-options "--fuel 2 --ifuel 2"
+private let hensel_lift_multi_assemble (p:int{p > 1}) (n:nat)
+  (f: polynomial (zmod (ppow p (n ++ 1))))
+  (g_head: polynomial (zmod p))
+  (tail: list (polynomial (zmod p)))
+  (glift hh: polynomial (zmod (ppow p (n ++ 1))))
+  (gs_tail: list (polynomial (zmod (ppow p (n ++ 1)))))
+  (idx_pf: (i:nat{i < L.length tail /\ i < L.length gs_tail}) ->
+     Lemma ((poly_to_base p (n ++ 1) (L.index gs_tail i)) = (L.index tail i)))
+  : Lemma
+      (requires
+        f = (glift * hh) /\
+        (poly_to_base p (n ++ 1) glift) = g_head /\
+        hh = (poly_prod #(zmod (ppow p (n ++ 1))) gs_tail) /\
+        L.length gs_tail == L.length tail)
+      (ensures hensel_lift_multi_post p n f (g_head :: tail))
+  = mul_left_transport
+      glift hh
+      (poly_prod #(zmod (ppow p (n ++ 1))) gs_tail)
+      f;
+    assert (poly_prod #(zmod (ppow p (n ++ 1))) (glift :: gs_tail)
+            == glift * (poly_prod #(zmod (ppow p (n ++ 1))) gs_tail))
+      by (FStar.Tactics.norm [delta_only [`%poly_prod]; iota; zeta];
+          FStar.Tactics.trefl ());
+    introduce forall (i:nat). i < L.length (g_head :: tail) ==>
+                (poly_to_base p (n ++ 1) (L.index (glift :: gs_tail) i))
+                  = (L.index (g_head :: tail) i)
+    with introduce _ ==> _
+    with _pf.
+      (if i = 0 then () else idx_pf (i - 1));
+    introduce exists (gs: list (polynomial (zmod (ppow p (n ++ 1))))).
+        f = (poly_prod #(zmod (ppow p (n ++ 1))) gs) /\
+        L.length gs == L.length (g_head :: tail) /\
+        (forall (i:nat). i < L.length (g_head :: tail) ==>
+           (poly_to_base p (n ++ 1) (L.index gs i)) = (L.index (g_head :: tail) i))
+    with (glift :: gs_tail)
+    and ();
+    reveal_opaque (`%hensel_lift_multi_post)
+      (hensel_lift_multi_post p n f (g_head :: tail))
+#pop-options
+
+(* Non-recursive step wrapper: given the tail recursion's opaque post plus the
+   head-lift facts, produce the multi post.  Keeps the recursive body's VC small
+   by moving the tail-elim + combine into an independent VC. *)
+#push-options "--fuel 2 --ifuel 2"
+private let hensel_lift_multi_step (p:int{p > 1}) (n:nat)
+  (f: polynomial (zmod (ppow p (n ++ 1))))
+  (g_head: polynomial (zmod p))
+  (tail: list (polynomial (zmod p)) {Cons? tail})
+  (glift hh: polynomial (zmod (ppow p (n ++ 1))))
+  : Lemma
+      (requires
+        hensel_lift_multi_post p n hh tail /\
+        f = (glift * hh) /\
+        (poly_to_base p (n ++ 1) glift) = g_head)
+      (ensures hensel_lift_multi_post p n f (g_head :: tail))
+  = hensel_lift_multi_post_elim p n hh tail;
+    eliminate exists (gs_tail: list (polynomial (zmod (ppow p (n ++ 1))))).
+        hh = (poly_prod #(zmod (ppow p (n ++ 1))) gs_tail) /\
+        L.length gs_tail == L.length tail /\
+        (forall (i:nat). i < L.length tail ==>
+           (poly_to_base p (n ++ 1) (L.index gs_tail i)) = (L.index tail i))
+    returns hensel_lift_multi_post p n f (g_head :: tail)
+    with _ht.
+    hensel_lift_multi_assemble p n f g_head tail glift hh gs_tail
+      (fun (i:nat{i < L.length tail /\ i < L.length gs_tail}) -> ())
+#pop-options
+
 #push-options "--fuel 2 --ifuel 2 --z3rlimit 100"
 let rec hensel_lift_multi (p:int{p > 1}) (n:nat)
   (f: polynomial (zmod (ppow p (n ++ 1))))
@@ -385,30 +520,8 @@ let rec hensel_lift_multi (p:int{p > 1}) (n:nat)
     
     match gbars with
     | [g] ->
-      (* BASE CASE — singleton.  No two-factor / Bézout needed.
-         requires:  poly_to_base f ≈ poly_prod [g] ≈ g.
-         witness:   gs = [f].  poly_prod [f] = f * one ≈ f, length 1 = 1,
-                    poly_to_base f ≈ g = gbars[0]. *)
-      H.elim_equatable_laws (zmod p) ();
-      H.elim_equatable_laws (zmod (ppow p (n ++ 1))) ();
-      (* (1)  f ≈ poly_prod [f]   over the lifted ring *)
-      poly_prod_singleton_lift p (n ++ 1) f;
-      poly_eq_symmetry
-        (poly_prod #(zmod (ppow p (n ++ 1))) [f]) f;
-      (* (2)  poly_to_base f ≈ g  :  poly_to_base f ≈ poly_prod [g] ≈ g *)
-      poly_prod_singleton p g;
-      poly_eq_transitivity
-        (poly_to_base p (n ++ 1) f)
-        (poly_prod #(zmod p) [g])
-        g;
-      introduce exists (gs: list (polynomial (zmod (ppow p (n ++ 1))))).
-          f = (poly_prod #(zmod (ppow p (n ++ 1))) gs) /\
-          L.length gs == L.length gbars /\
-          (forall (i:nat). i < L.length gbars ==>
-             (poly_to_base p (n ++ 1) (L.index gs i)) = (L.index gbars i))
-      with [f]
-      and ();
-      reveal_opaque (`%hensel_lift_multi_post) (hensel_lift_multi_post p n f gbars)
+      (* BASE CASE — singleton (isolated VC). *)
+      hensel_lift_multi_base p n f g
     | g_head :: tail ->
       (* STEP CASE — tail non-empty (otherwise we'd have matched [g]). *)
       (* destructure the head Bézout pair.  `bezout_chain p gbars bez`
@@ -420,13 +533,9 @@ let rec hensel_lift_multi (p:int{p > 1}) (n:nat)
         assert False
       | (s, t) :: brest ->
       let prod_tail = poly_prod #(zmod p) tail in
-      (* requires gives:  poly_to_base f ≈ poly_prod (g_head::tail)
-                         = poly_mul g_head prod_tail.   (poly_prod unfolds.) *)
       (* Apply the TWO-FACTOR Hensel lift:  gbar = g_head, hbar = prod_tail. *)
       hensel_lift p n f g_head prod_tail s t;
-      (* Recover the bare existential from the opaque postcondition. *)
       hensel_lift_post_elim p n f g_head prod_tail;
-      (* eliminate the two-factor existential *)
       eliminate exists (glift hh: polynomial (zmod (ppow p (n ++ 1)))).
           f = (glift * hh) /\
           (poly_to_base p (n ++ 1) glift) = g_head /\
@@ -434,71 +543,8 @@ let rec hensel_lift_multi (p:int{p > 1}) (n:nat)
       returns hensel_lift_multi_post p n f gbars
       with _h.
       begin
-        H.elim_equatable_laws (zmod p) ();
-        H.elim_equatable_laws (zmod (ppow p (n ++ 1))) ();
-        (* RECURSE on hh with tail.
-           Recursion requires:  poly_to_base hh ≈ poly_prod tail  (have it: third conjunct)
-           and bezout_chain p tail brest  (from bezout_chain p gbars bez). *)
+        (* RECURSE on hh with tail; then combine (isolated VC). *)
         hensel_lift_multi p n hh tail brest;
-        (* Recover the bare existential from the opaque postcondition. *)
-        hensel_lift_multi_post_elim p n hh tail;
-        eliminate exists (gs_tail: list (polynomial (zmod (ppow p (n ++ 1))))).
-            hh = (poly_prod #(zmod (ppow p (n ++ 1))) gs_tail) /\
-            L.length gs_tail == L.length tail /\
-            (forall (i:nat). i < L.length tail ==>
-               (poly_to_base p (n ++ 1) (L.index gs_tail i)) = (L.index tail i))
-        returns hensel_lift_multi_post p n f gbars
-        with _ht.
-        begin
-          (* COMBINE:  gs = glift :: gs_tail.
-             poly_prod (glift::gs_tail) = poly_mul glift (poly_prod gs_tail).
-             f ≈ poly_mul glift hh ≈ poly_mul glift (poly_prod gs_tail). *)
-          poly_eq_reflexivity glift;
-          poly_mul_congruence
-            glift hh
-            glift (poly_prod #(zmod (ppow p (n ++ 1))) gs_tail);
-          poly_eq_transitivity
-            f
-            (glift * hh)
-            (glift * (poly_prod #(zmod (ppow p (n ++ 1))) gs_tail));
-          (* poly_prod (glift::gs_tail) == poly_mul glift (poly_prod gs_tail). *)
-          assert (poly_prod #(zmod (ppow p (n ++ 1))) (glift :: gs_tail)
-                  == glift * (poly_prod #(zmod (ppow p (n ++ 1))) gs_tail))
-            by (FStar.Tactics.norm [delta_only [`%poly_prod]; iota; zeta];
-                FStar.Tactics.trefl ());
-          (* conjunct 1:  f ≈ poly_prod (glift::gs_tail). *)
-          assert (f = (poly_prod #(zmod (ppow p (n ++ 1))) (glift :: gs_tail)));
-          (* conjunct 2:  lengths.  length (glift::gs_tail) = 1 + length gs_tail
-             = 1 + length tail = length (g_head::tail) = length gbars. *)
-          assert (L.length (glift :: gs_tail) == L.length gbars);
-          (* conjunct 3:  per-index reduction.
-             i = 0  -> poly_to_base glift ≈ g_head = gbars[0]   (two-factor)
-             i > 0  -> poly_to_base gs_tail[i-1] ≈ tail[i-1] = gbars[i] (recursion) *)
-          introduce forall (i:nat). i < L.length gbars ==>
-                      (poly_to_base p (n ++ 1) (L.index (glift :: gs_tail) i))
-                        = (L.index gbars i)
-          with begin
-            introduce i < L.length gbars ==>
-                      (poly_to_base p (n ++ 1) (L.index (glift :: gs_tail) i))
-                        = (L.index gbars i)
-            with _pf. begin
-              if i = 0 then
-                (* L.index (glift::gs_tail) 0 = glift; L.index gbars 0 = g_head. *)
-                ()
-              else
-                (* L.index (glift::gs_tail) i = L.index gs_tail (i-1);
-                   L.index gbars i = L.index tail (i-1). *)
-                ()
-            end
-          end;
-          introduce exists (gs: list (polynomial (zmod (ppow p (n ++ 1))))).
-              f = (poly_prod #(zmod (ppow p (n ++ 1))) gs) /\
-              L.length gs == L.length gbars /\
-              (forall (i:nat). i < L.length gbars ==>
-                 (poly_to_base p (n ++ 1) (L.index gs i)) = (L.index gbars i))
-          with (glift :: gs_tail)
-          and ();
-          reveal_opaque (`%hensel_lift_multi_post) (hensel_lift_multi_post p n f gbars)
-        end
+        hensel_lift_multi_step p n f g_head tail glift hh
       end
 #pop-options

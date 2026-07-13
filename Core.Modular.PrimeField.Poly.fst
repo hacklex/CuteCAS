@@ -20,7 +20,7 @@ module Core.Modular.PrimeField.Poly
 open Core.Algebra
 open Core.Polynomial
 open Core.Modular.PrimeField
-open FStar.Math.Euclid
+open Core.NumberTheory
 
 instance fp_poly_cr (p:int{is_prime p}) : commutative_ring (polynomial (fp p)) =
   polynomial_cr #(fp p)

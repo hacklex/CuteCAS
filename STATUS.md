@@ -29,8 +29,89 @@
 
 ## Status at a glance
 
-- **91 modules** verify clean from cache; **zero `admit` / `assume` / `sorry`**
-  (textual hits are comments only).
+> **2026-07-13 — RATIONAL-FUNCTION INTEGRATOR COMPLETE & EXECUTABLE — the Risch induction BASE is done. Tree GREEN at 198 modules, 0 admits.**
+> The ℚ(x) rational-case Risch algorithm is machine-checked end-to-end and runs as a native binary:
+> - **Executable factorizer** `Core.Factor.Zassenhaus.factor_Q`: content → square-free (Yun) → prime select →
+>   Berlekamp (𝔽_p) → Hensel lift → recombination — SOUND *and* COMPLETE (§D `recombination_complete`, #29
+>   Berlekamp dimension = #factors, fp≅zmod bridge, Gauss's lemma, good-prime existence, Kronecker bound).
+> - **Integrator** `Core.Risch.IntegrateExplicit`: Hermite reduction (rational part) + LRT log part factored by
+>   R's roots into explicit ℚ-log terms + `RootSum(Rⱼ)` for non-rational residues, with a machine-checked
+>   `d/dx(answer) = p/q` checker (`Core.Risch.AnswerCheck`).
+> - **Native demo** `extract-spike/build/demo.exe` — type a rational function, get its antiderivative
+>   (extracted OCaml, 0 admit / 0 `Obj.magic`).
+> - **`is_prime` opacity migration COMPLETE**: the whole tower now uses the opaque `Core.NumberTheory.is_prime`
+>   (fast VCs); `FStar.Math.Euclid` dropped from every business module.
+>
+> **Transcendental Risch — the induction STEP — Phase-1 foundation done** (`Core.Diff.*`, 16 modules):
+> differential fields + constant subfield + dlog homomorphism; monomial extensions K(θ) CONSTRUCTIVELY realized
+> (primitive + hyperexp); Liouville-form C-module + descent framework; positive-case single-log soundness;
+> negative-case "no new constants". **NEXT:** Liouville's theorem proper, then Hermite/RT/RDE transcendental
+> analogues in K(θ). Tracker: `TRANSCENDENTAL-PROGRESS.md`.
+>
+> **Resultant relocation — DONE in this commit:** `Core.Matrix.Resultant` + `Core.Matrix.Sylvester` →
+> `Core.Polynomial.Resultant` / `Core.Polynomial.Sylvester` (a resultant is a polynomial-root invariant, not a
+> matrix; `Core.Matrix.*` is now pure linear algebra) — opens a slot for `Core.Polynomial.Discriminant = resultant f f'`.
+> **Deferred infra (own commit, not urgent):** DAG-scheduled parallel `build-all` (~1.5–2.5× on cold builds;
+> Amdahl-bounded by the heavy Factor/Risch capstone chain — 10 modules are 53% of wall time).
+>
+> **2026-06-24 (late) session update — #29 BERLEKAMP DIMENSION THEORY + fp≅zmod BRIDGE COMPLETE.**
+> Tree **GREEN at 136 modules** (5 new). Task #29 (𝔽_p dimension theory ⇒ kernel-dim = #factors) DONE:
+> `Core.Polynomial.CRTMulti` (n-ary CRT bijection: `crt_multi_inj` + `crt_multi_witness`), 
+> `Core.Modular.PrimeField.FrobeniusFixed` (per-irreducible Frobenius-fixed residues are EXACTLY the p
+> constants: B1/B2/B3), `Core.Modular.PrimeField.BerlekampDim` (**`berlekamp_structure`** — h ∈ B(f) ⟺
+> deg-bounded ∧ ≡ a constant mod every factor: kernel-dim = #factors in bijective form; C1 congruence-
+> decomposition + C2 per-component⟺constant via `kernel_factor_iff` + C3), and
+> `Core.Modular.PrimeField.BerlekampDimCount` (**`berlekamp_count`** — |B(f)| = pʳ literally, via a
+> Cartesian-power enumeration `enum_tuples`). The **fp≅zmod bridge**
+> `Core.Modular.FpZmodBridge.recombination_complete_fp` discharges §D's `recombination_complete`
+> mod-p hypotheses from Berlekamp-natural fp-side inputs (all-irreducible + all-monic + pairwise-coprime;
+> Bezout derived internally) — closing the §D type seam on the theory side. `pairwise_coprime` opaque
+> predicate consolidated into `Core.Polynomial.Irreducible`. §3.8-reviewed + fixed; 0 admits. Remaining
+> #29-adjacent: only the executable wiring (#33) now needs the fp-side factorizer + the bridge hookup.
+>
+> **2026-06-24 session update — §E COMPLETE: UNCONDITIONAL RT SOUNDNESS (tier 3).**
+> Tree **GREEN at 126 modules**. The splitting-field construction is DONE and the
+> tier-2 relative RT soundness is discharged over it — no unproven hypotheses remain:
+> **`Core.Risch.RTUnconditional.rt_unconditional`**: for any field t and proper
+> integrand p/q (q squarefree, deg p < deg q), a splitting field l is CONSTRUCTED
+> (`Core.AlgebraicConstant.SplitBuild.build_splitting_field`, ghost nested tower of
+> `algebraic` extensions per SPLITTING-FIELD-PLAN.md Option A) with a certified
+> embedding (e, emb) and the full distinct root list of q, over which
+> `answer_deriv (emb p) roots (residue_partition …) = Fraction (emb p) (∏(X−β))`,
+> with `emb q = e(lc q)·∏(X−β)` part of the certificate. New modules:
+> `Core.Polynomial.LinearPeel` (same-level root peel + divisor-of-squarefree +
+> peel_preserves_freshness), `Core.AlgebraicConstant.{EmbedEval (eval-transport +
+> embedding congruence), EmbedTransport (deg/linear/prod/const/all_distinct
+> transport + ac_const injectivity + embed_lc), EmbedSquareFree (squarefreeness
+> preserved under embedding, Bezout-transport), SplittingField (the `splits`
+> certificate: is_embedding payload + composition + distinctness toolkit),
+> SplitBuild (per-level assembly + base case + THE tower recursion)}, and
+> `Core.Risch.RTUnconditional` (E5/E6 capstone). Probe `TowerProbe` off the list.
+> Task #32's §E goal (splitting field) is DONE in its tier-3 form; PET/single-ℚ(θ)
+> stays deferred; tier-1 executable ℚ output still routes through §D.
+>
+> **2026-06-07 session update.** Tree **GREEN at 125 modules** (`build-all.ps1`).
+> §E (splitting field) advanced four steps this session — all admit/assume-free:
+> `PeelQuotient.peel_root_quotient` (quotient + degree-drop), `EmbedHom`
+> (`ext_embed_poly` is a certified ring hom: mul + add), and
+> `ExtendStep.extend_gains_linear_factor` (the reusable one-level recursion step).
+> Together with the earlier `Root`/`Eval`/`Peel`, §E now has the complete *inductive
+> step* for the splitting tower; what remains is the type-changing *tower recursion*
+> itself + primitive-element collapse (the hard nested-dependent-type piece — see §E).
+> Transcendental phase: see `transcendental-roadmap.md` (Liouville **de-risked** —
+> it is classical and already mechanized in Lean/Mathlib4 `FieldTheory.Differential.Liouville`,
+> so it is a port-blueprint, not a research frontier; scope = purely transcendental towers,
+> the genuinely-solved case, with the algebraic case out by Masser–Zannier 2012).
+
+- **198 modules** verify clean (`build-all.ps1`, full gate); **zero `admit` / `assume` / `sorry`**
+  (textual hits are comments only). *(Historical counts: 91 pre-reorg, 126 pre-Hensel-merge, 136 at #29.)*
+
+> **2026-06-07 (later) — Hensel cluster merged + Berlekamp `.fsti` surfaced.** The 14
+> over-split `Core.FiniteFields.Hensel*` modules were merged into 3 —
+> `Hensel.Reduce` / `Hensel.Lift` / `Hensel.Multi` (topological layering; `hensel_lift_multi`
+> preserved) — and the originals deleted. `Core.FiniteFields.Berlekamp.fsti` now publishes
+> the cluster's 18 headline/vocabulary decls (≈80 helpers private). `.refactor-bak/` removed.
+> See `REVIEW-GUIDE.md` for the remaining merge/`.fsti` plan.
 - **Foundation → linear algebra → polynomials → finite-field/Berlekamp →
   algebraic constants/derivations/fractions → Risch skeleton**: all ✅.
 - **Headline correctness proven:** Cauchy–Binet `det_mul`; Laplace/adjugate;
@@ -307,14 +388,14 @@
 - `determinant_size_one`, `minor_zero_zero_lower_triangular`, `cofactor_row_zero_off_diagonal`/`_collapses`, `diagonal_from_minor`, `diagonal_product_peel` — *(lemma)*.
 - `det_lower_triangular` — *(lemma)* det = diagonal product.
 
-### Core.Matrix.Sylvester ✅
+### Core.Polynomial.Sylvester ✅
 *Sylvester matrix construction (for resultants).*
 
 - `nat_add`/`nat_sub`/`int_add`/`int_sub` — *(def)* explicit arithmetic (avoid notation clash).
 - `sylvester_matrix` — *(def)* shifted p-rows / q-rows.
 - `sylvester_p_block_*` / `sylvester_q_block_*` (lookup / in-range / left-zero / right-zero) — *(lemma)* entry characterization.
 
-### Core.Matrix.Resultant ✅
+### Core.Polynomial.Resultant ✅
 *Resultant = det(Sylvester matrix); vanishing ⟺ common factor (forward).*
 
 - `resultant` (+`resultant_unfold`) — *(def/lemma)*.
@@ -322,20 +403,20 @@
 - `sylvester_swap_entry`, `resultant_skew_symmetry` — *(lemma)* res(q,p) = (−1)^(mn) res(p,q).
 - `bp_eq_aq`, `resultant_vanishing_iff_common_factor` — *(lemma)* res = 0 ⟸ nontrivial gcd (forward).
 
-### Core.Matrix.ResultantLinear ✅
+### Core.Polynomial.ResultantLinear ✅
 *Base case: Res(x−a, B) = B(a).*
 
 - `det_unipotent_upper_triangular`, `shear`(+upper-triangular/diagonal-one/det-one lemmas), `cpow_succ`, `linear_shape`(+`poly_linear_is_linear_shape`) — *(def/lemma)*.
 - Sylvester-entry lemmas `syl_diag_one`/`syl_super_neg_a`/`syl_p_other_zero`/`syl_last_row`, S·U triangular/diag lemmas — *(lemma)*.
 - `resultant_linear_formal` — *(lemma)* **Res(x−a, B) = B(a)**.
 
-### Core.Matrix.ResultantMul ✅
+### Core.Polynomial.ResultantMul ✅
 *Sylvester-as-linear-map bridge.*
 
 - `combo_vec` — *(def)* u/v coefficients laid out reversed; `vdot_via_name` *(lemma)*.
 - `sylvester_action` — *(lemma)* Sᵀ·combo_vec = coeff(u·P + v·Q).
 
-### Core.Matrix.ResultantPeel ✅
+### Core.Polynomial.ResultantPeel ✅
 *Linear-factor peeling: Res((x−a)·A, B) = B(a)·Res(A, B).*
 
 - `comm_helper`, `coeff_linear_mul`, `block_diag_corner1` — *(def/lemma)*.
@@ -343,13 +424,13 @@
 - `mul_prime_sylvester_entry_p_rows`/`_q_row`, `mul_prime_sylvester` — *(lemma)* S' = Mul'·C factorization.
 - `peel` — *(lemma)* **peeling step**.
 
-### Core.Matrix.ResultantPoisson ✅
+### Core.Polynomial.ResultantPoisson ✅
 *Poisson product formula: Res(A,B) = lc^(deg B)·∏ B(aᵢ).*
 
 - `scaled_prod`, `root_eval_product` — *(def)*; `mul_swap_mid`, `scaled_prod_degree`/`_length` — *(lemma)*.
 - `poisson` — *(lemma)* **Poisson product formula**.
 
-### Core.Matrix.ResultantConverse ✅
+### Core.Polynomial.ResultantConverse ✅
 *Converse of the resultant theorem: resultant = 0 ⟹ common factor (the hard direction). 2026-06-04.*
 
 - `mk_u`/`mk_v` (+`gu_idx`/`gv_idx`/`build_from`/`_index`/`_length`/`mk_*_coeff`), `combo_vec_surjective` — *(def/lemma)* invert `combo_vec`: any kernel vector w = combo_vec u v.
@@ -733,7 +814,7 @@ In dependency order:
   **RT resultant specialization is therefore COMPLETE.** The remaining §A work is
   the RT criterion (see next bullet).
 - ✅ **Base-field RT criterion — DONE** (2026-06-04):
-    - **Resultant converse** `Core.Matrix.ResultantConverse.resultant_converse`:
+    - **Resultant converse** `Core.Polynomial.ResultantConverse.resultant_converse`:
       `resultant m n pp qq = 0 ⟹ deg(gcd pp qq) ≥ 1` (the hard direction — via
       `det_transpose` + `KernelDet.det_zero_implies_null_vec` +
       `ResultantMul.sylvester_action` + euclid endgame; incl. the `pp~0` case).
@@ -825,15 +906,62 @@ In dependency order:
     - ✅ **`vc_factorization_given_count`**: **`v_c ~ (lc v_c)·∏_{β∈cset}(x−β)`**
       CONDITIONAL on the count `L.length cset == deg v_c` (via `poly_split_distinct_roots`).
       So T6 is reduced to ONE pinned obligation.
-    - 📋 **THE single remaining T6 obligation**: `L.length cset == Some?.v (poly_deg v_c)`.
-      Splits into: (lower bound `#cset ≤ deg v_c`) ∏ of the cset linears divides `v_c`
-      — needs `coprime (x−a)(x−b)` for `a≠b` (MISSING in repo) + `pairwise_coprime_divides`
-      + a `flat_product (map poly_linear)` ↔ `poly_prod_linears` bridge; (upper bound
-      `deg v_c ≤ #cset`) `v_c` squarefree (divides squarefree q) and splits over cset —
-      needs "squarefree-divisor-of-distinct-linears" + "squarefree split poly's degree =
-      root count" (both MISSING). This is the fresh sub-development for the next session;
-      once `#cset == deg v_c` lands, `vc_factorization_given_count` + the residue-partition
-      = `rt_soundness_partition` ⇒ FULLY-UNCONDITIONAL tier-2 T8.
+    - ✅ **THE last T6 obligation `L.length cset == deg v_c` — DONE (2026-06-06).**
+      Closed via a cleaner route than the planned two-sided bound: the new reusable
+      module **`Core.Polynomial.SplitDivisor`** proves **`divisor_split_count`** —
+      *a divisor of a product of DISTINCT linear factors splits completely*, so
+      `deg vc == #(its roots among roots)` directly (one induction on `roots`, case-split
+      on whether the head is a root of `vc`: factor + cancel in the root case;
+      coprime-to-linear + `euclid_lemma` in the non-root case). Supporting lemmas in that
+      module: `nonroot_coprime_linear`, `poly_linear_irreducible`, `cancel_divides`
+      (via `Factorization.poly_mul_left_cancel`), `eval_factor`, `eval_root_transport`,
+      `remove_one`. Then in `RTSoundness`:
+        - ✅ **`vc_count`**: `#cset == deg v_c` — bridges `divisor_split_count`'s vc-root
+          set to the residue-`c` set via `gcd_root_iff_residue`; `Some?(deg v_c)` from
+          `Resultant.gcd_pos`, `v_c | q` from `GCD.gcd_divides_right`.
+        - ✅ **`vc_factorization`** (UNCONDITIONAL): **`v_c = (lc v_c)·∏_{β∈cset}(x−β)`**
+          for `cset` = EXACTLY the residue-`c` roots (drops the count hypothesis of
+          `vc_factorization_given_count` by supplying `vc_count`).
+      So T6 is now fully proven.
+    - ✅ **Algorithm-level bridge — DONE (2026-06-06)**, new module **`Core.Risch.RTAnswer`**:
+      **`group_contribution_is_vc_term`** — for `g` = the COMPLETE residue-`c` class,
+      `group_contribution p roots g = Fraction (c·D v_c) v_c` (the abstract per-group term
+      IS the algorithm's `c·v_c'/v_c`). Via `vc_factorization` (`v_c = poly_scale (lc v_c) (∏g)`)
+      + scale-invariance of the log-derivative fraction (`poly_deriv_scalar_mul` +
+      `fraction_eq_reveal` cross-multiply; the `lc v_c` scalar cancels). Helpers
+      `poly_scale_mul_l`/`poly_scale_mul_r`/`poly_scale_poly_congr` (generic; could promote to
+      `Roots`). Combined with the green `rt_soundness_partition` (`Σ group_contribution = p/q`)
+      this means: for the residue-class partition, `Σ_c c·(v_c'/v_c) = p/q` — the actual LRT
+      answer's derivative — TERM-BY-TERM via the algorithm's gcds.
+    - ✅ **Residue-class partition CONSTRUCTED — DONE (2026-06-06)**, new module
+      **`Core.Risch.ResiduePartition`**: **`residue_partition p roots`** builds the partition of
+      `roots` into maximal equal-residue sublists (membership-carrying recursive `group_by` /
+      `split_same`/`split_diff` — sidesteps the "can't `L.filter` by `residue`" wall by threading
+      `memP _ roots` so `residue` stays total). Ensures: each group `Cons?`/`all_distinct`/⊆roots/
+      **homogeneous** + **complete-for-its-class** (conjunct 4), and `flatten`-MEMBERSHIP
+      `(forall b. memP b (flatten groups) <==> memP b roots)`. NOTE: literal `flatten groups ==
+      roots` is FALSE (grouping permutes roots) — so consuming this in `rt_soundness_partition`
+      (which uses literal `==` via `frac_sum_flatten`) needs `frac_sum` PERMUTATION-invariance.
+    - ✅ **END-TO-END (abstract-group form) — DONE (2026-06-06)**, new module
+      **`Core.Risch.RTAnswerEnd`**: **`rt_answer_constructed`** —
+      **`answer_deriv p roots (residue_partition p roots) = Fraction p q`** (only requires
+      `Cons? roots /\ all_distinct roots /\ deg p < #roots`). The LRT answer's derivative, folded
+      over the CONSTRUCTED residue partition, equals the integrand `p/q`. Chain:
+      `answer_eq_frac_sum_over_groups` → `frac_sum_flatten` → **`frac_sum_perm`** (NEW reusable:
+      permutation-invariance of the fraction sum, by induction + `frac_sum_remove` from
+      `frac_sum_append`/`frac_add_comm`/`frac_add_assoc`; + `residue_partition_flatten_distinct`)
+      → `partial_fraction_decomposition`.
+    - ✅ **v_c-term form ESTABLISHED** by the two proven lemmas together: for each group `g` of
+      `residue_partition` (whose ensures supply the six hypotheses), `group_contribution_is_vc_term`
+      gives `group_contribution p roots g = c·(v_c'/v_c)` with `v_c = gcd(p−c·q', q)` the ALGORITHM's
+      gcd; and `rt_answer_constructed` sums these to `p/q`. So the full Rothstein-Trager soundness
+      `d/dx[Σ_c c·log(gcd(p−c·q',q))] = p/q` is proven (a single packaged corollary was skipped only
+      due to an `L.hd g`-under-`forall` well-formedness nuisance — the math is complete).
+      **TIER-2 RT SOUNDNESS IS NOW END-TO-END, UNCONDITIONAL, over the constructed splitting-field
+      partition.** (Tree GREEN at **68 modules**.)
+    - 📋 NEXT frontier = the EXECUTABLE/ℚ path (§C Hensel #30 → §D → §E → §F) for tier-1; and the
+      `differential_field` umbrella (§F) to state soundness abstractly. The tier-2 relative
+      soundness chain (§A) is complete.
 
 ## §B. ℚ-construction — Berlekamp dimension theory ⇒ kernel-dim = #factors (#29) 🚧/🔒
 
@@ -847,12 +975,78 @@ In dependency order:
   by the char-p square-free gap (`square_free_coprime_factors` currently needs
   `char_zero`). Needs a char-p square-free route.
 
-## §C. ℚ-construction — Hensel lifting 𝔽_p → ℤ/pᵏ (#30) 📋
+## §C. ℚ-construction — Hensel lifting 𝔽_p → ℤ/pᵏ (#30) 🚧 (foundation started)
 
 Lift a 𝔽_p factorization to ℤ/pᵏ. Note the ring ℤ/pᵏ is **free**:
 `fp_comm_ring (p:int{p>1})` needs no primality, so the coefficient ring is
 already available. Quadratic/linear Hensel step + uniqueness. *(Isabelle AFP
 `Berlekamp_Zassenhaus` is the reference development.)*
+- ✅ **Reduction ring-hom DONE (2026-06-06)**, new module `Core.FiniteFields.HenselReduce`:
+  `ppow p n = pⁿ`, `reduce_step p k (a: fp pᵏ⁺¹) : fp pᵏ = a mod pᵏ`, and the four ring-hom
+  laws `reduce_step_{zero,one,add,mul}` (modular arithmetic: `modulo_modulo_lemma` +
+  `modulo_distributivity`/`lemma_mod_mul_distr_*`). The `ℤ/pᵏ⁺¹ → ℤ/pᵏ → … → 𝔽_p` thread
+  Hensel iterates along. GREEN at **69 modules**.
+- ✅ **Poly reduction ring-hom DONE** (`Core.FiniteFields.HenselReducePoly`): `poly_reduce p k`
+  = coeff-wise `reduce_step`, with `poly_reduce_coeff` + `poly_reduce_{add,mul}` (the mul law pushes
+  `reduce_step` through the convolution sum `coeff_poly_mul` via `reduce_step_sum_range`).
+- ✅ **Lift / section map DONE** (`Core.FiniteFields.HenselLift`): `lift_step`/`poly_lift` (the
+  inclusion `fp pᵏ → fp pᵏ⁺¹`) with `reduce_lift_id`/`poly_reduce_lift_id` (`reduce ∘ lift = id`).
+- ✅ **Hensel error lemma DONE** (`Core.FiniteFields.HenselStep`): `reduce_step_neg`/`poly_reduce_neg`
+  + `hensel_error_reduces` — `reduce(f) = g·h ⇒ reduce(f − lift g · lift h) = 0` (error divisible by pᵏ).
+- ✅ **Error quotient DONE** (`Core.FiniteFields.HenselQuotient`): `qdiv`/`poly_quotient` (`δ = error/pᵏ` into fp p)
+  with `qdiv_correct` (`reduce a = 0 ⇒ a = pᵏ·qdiv a`).
+- ✅ **Error reconstruction DONE** (`Core.FiniteFields.HenselScale`): `mulpk`/`poly_mulpk` (`d ↦ pᵏ·d`)
+  + `error_reconstruction` (`poly_reduce e = 0 ⇒ e = poly_mulpk (poly_quotient e)`, i.e. `e = pᵏ·δ`).
+- ✅ **Base reduction DONE** (`Core.FiniteFields.HenselBase`/`HenselBasePoly`): `to_base`/`poly_to_base :
+  fp pᵏ → fp p` (`a mod p`) ring-hom — recovers the fixed mod-p factors `ḡ`,`h̄` at any level.
+- ✅ **Arithmetic cruxes DONE**: `HenselVanish.poly_mulpk_mul_zero` (p²ᵏ vanishes: `(pᵏu)(pᵏv) ≡ 0`),
+  `HenselAbsorb.poly_mulpk_absorb` (pᵏ-absorption: `(pᵏu)·w ≡ pᵏ·(u·(w mod p))`) + the `to_base∘lift = to_base` bridges.
+- ✅✅ **LINEAR HENSEL LIFT STEP DONE (2026-06-06)** — `Core.FiniteFields.HenselLiftStep.hensel_lift_step`:
+  given `f ∈ (ℤ/pᵏ⁺¹)[X]`, `g,h ∈ (ℤ/pᵏ)[X]` with `reduce f = g·h (mod pᵏ)` and a Bézout relation
+  `s·ḡ + t·h̄ = 1` over the field 𝔽_p, **∃ g',h' ∈ (ℤ/pᵏ⁺¹)[X] with `reduce g' = g`, `reduce h' = h`,
+  `f = g'·h' (mod pᵏ⁺¹)`**. Witnesses `g' = lift g + pᵏ(t·δ)`, `h' = lift h + pᵏ(s·δ)`,
+  `δ = (f − lift g·lift h)/pᵏ`; proof = vanish + absorb + Bézout + reconstruction. (13 green Hensel modules.)
+- ✅✅ **HENSEL ITERATION DONE (2026-06-06)** — `Core.FiniteFields.HenselTower.poly_to_base_reduce`
+  (`to_base ∘ reduce_step = to_base`, keeps the fixed Bézout valid at every level) + the capstone
+  **`Core.FiniteFields.HenselIter.hensel_lift`**: by induction on `n`, given `f ∈ (ℤ/pⁿ⁺¹)[X]` whose mod-p
+  reduction is `ḡ·h̄` with Bézout `s·ḡ + t·h̄ = 1` over 𝔽_p, **∃ g,h ∈ (ℤ/pⁿ⁺¹)[X] with `f = g·h (mod pⁿ⁺¹)`,
+  `g ≡ ḡ`, `h ≡ h̄ (mod p)`**. **⇒ TASK #30 (Hensel lifting 𝔽_p → ℤ/pᵏ) COMPLETE** — 15 green Hensel modules
+  (`HenselReduce`,`HenselReducePoly`,`HenselLift`,`HenselStep`,`HenselQuotient`,`HenselScale`,`HenselBase`,
+  `HenselBasePoly`,`HenselVanish`,`HenselAbsorb`,`HenselLiftStep`,`HenselTower`,`HenselIter`). Tree GREEN at 81.
+- 📋 OPTIONAL: uniqueness of the lift (not needed for the existence/recombination path). The Bézout `s,t`
+  come from `GCD.poly_ext_gcd` over the field fp p (for coprime `ḡ,h̄`).
+
+## §C→§D bridge — NEXT FRONTIER (the executable ℚ path)
+With Berlekamp (mod-p factorization, §B-criterion done) + Hensel (#30 done), the remaining executable path:
+- **§D recombination + Lagrange bound (#31)** 🚧: a true ℤ-irreducible factor of `F` is a product of a SUBSET
+  of the mod-pᵏ Hensel factors; with `pᵏ > 2·B` (B = Lagrange/Kronecker coeff bound, ℂ-free), the CENTERED
+  representative (coeffs in `(−pᵏ/2, pᵏ/2]`) of that subset-product IS the true integer factor.
+  - ✅ **Reduction infrastructure DONE (2026-06-06)**: `Core.FiniteFields.Centered`
+    (`centered : fp m → ℤ` in `(−m/2,m/2]` + `to_fp : ℤ → fp m`, round-trip `to_fp(centered a)=a`, bound
+    `2|centered a|≤m`); `Core.FiniteFields.CenteredPoly` (`poly_centered`/`poly_to_fp` + round-trip
+    `poly_to_fp(poly_centered g) ~ g`); `Core.FiniteFields.IntReduce` (`to_fp`/`poly_to_fp` are RING-HOMS:
+    `to_fp_{one,add,mul}`, `poly_to_fp_{add,mul}`). (3 modules.)
+  - ✅ **The Lagrange/Kronecker coefficient bound — DONE (stale-flag corrected 2026-06-24; the (a)-(d)
+    chain is GREEN)**: (a)(b) `Core.Modular.LagrangeBound` (`eval_factor_abs_le`, `int_divides_abs_le`);
+    (c) `Core.Polynomial.KroneckerBound.kronecker_coeff_bound` (|coeff g i| ≤ `kbound_rhs` =
+    Σ|F(cⱼ)|·‖∏_{m≠j}(X−c_m)‖∞) + `KroneckerHeightBound.kronecker_height_bound` (∞-norm form);
+    (d-recovery) `KroneckerLift.kronecker_lift_recovers` (pᵏ > 2B ⟹ `poly_centered pᵏ (poly_to_fp pᵏ g) = g`)
+    + `Recombination.factorization_sound` (product-check soundness).
+  - ✅ **§D COMPLETENESS theory — DONE (2026-06-24, green 131; log STATUS-D.md)**: D1
+    `Core.Polynomial.NodeExistence.nodes_exist` (ℚ-descent + `poly_roots_le_degree`); D2b
+    `Core.Polynomial.SubsetProd.divisor_of_irreducible_prod` (divisor of an irreducible product =
+    c·masked subset product, ANY field, no squarefree hypothesis); D2c
+    `Core.Modular.ResidueRing.Hensel.Unique.hensel_unique` (monic + base-Bezout ⟹ mod-pᵏ factor pair
+    unique; no primality needed); D2d/D3 `Core.Modular.RecombinationComplete`:
+    `true_factor_is_masked_lift` + **`recombination_complete`** — every true monic ℤ-factor of monic
+    `bigF` equals `poly_centered pᵏ (masked_prod gs mask)` for some subset mask of the Hensel factors,
+    for `pᵏ > 2·kbound_rhs`. Support: generic `Core.Polynomial.Monic` (monic_deg_mul/monic_mul_cancel
+    over ANY commutative ring — lc-unit replaces integral-domain-ness).
+    **Documented seam (→ #33 wiring)**: `fp p` (field) vs `zmod p` (CR-only) — the mod-p mask
+    correspondence/Bezout/irreducibility enter the zmod-side theorems as hypotheses, discharged by the
+    fp-side (Berlekamp + D2b) through a future fp≅zmod bridge — same deferral point as `bez` in
+    `hensel_lift_multi`. *(AFP refs: `Kronecker_Factorization`, `Berlekamp_Zassenhaus`.)*
+- then **§E primitive element ⇒ ℚ(θ) (#32)**, **§F executable integrator assembly (#33)**.
 
 ## §D. ℚ-construction — recombination + Lagrange bound ⇒ ℚ factors (#31) 📋
 
@@ -868,6 +1062,60 @@ Collapse the multi-root splitting tower to a single extension ℚ(θ) via the
 primitive element theorem (char 0). Makes the splitting field a *single*
 type-stable `algebraic ℚ r`.
 
+- ✅ DONE 2026-06-07 — **eval-in-extension FOUNDATION** (the previously-missing piece): new module
+  `Core.AlgebraicConstant.Root` defines `ac_const` (constant embedding `t ↪ algebraic t r`), `theta` (= the class
+  of X = `monomial one 1`), `ac_eval` (Horner evaluation of a `polynomial t` at an `algebraic t r` element), and proves:
+  `modulus_vanishes` (`[r] = ac_zero` in `t[X]/(r)`, via `divides_refl` + `ac_eq_zero_iff_divides`), the crux
+  `ac_eval_is_class` (`ac_eval p theta ≈ [p]` — evaluating any `p` at θ=[X] yields its class, by Horner induction
+  with `horner_cons`: `poly_eq (poly_const c + X·tl) (c::tl)` coeff-wise), and **`theta_root_of_modulus`**
+  (`ac_eval r theta = ac_zero` — **θ is a ROOT of the modulus r in the extension**). This is the precise sense in
+  which `algebraic t r` adjoins a root of `r`, and the foundation §E's splitting-field construction was missing.
+  Tree GREEN at 120 modules. NEXT for §E: factor `d` in `algebraic ℚ r` (r = irreducible factor of d), peel the
+  linear `(X−θ)`, recurse to build the splitting tower; then primitive element ⇒ single ℚ(θ).
+- ✅ DONE 2026-06-07 — **eval-over-extension bridge** `Core.AlgebraicConstant.Eval`: `ext_embed_poly` (coeff-wise
+  embed `polynomial t ↪ polynomial (algebraic t r)` via `ac_const`), `ext_embed_eval` (`poly_eval`-over-the-extension
+  of the embedded `p` at θ `≈ ac_eval p θ` — bridging the field-poly eval to the Horner map; `poly_eval` is a coeff-SUM
+  not Horner, so bridged via `embed_coeff` + `horner_cons` + `algebraic_ring_reveal`), and **`theta_root_ext`**
+  (`r|d ⇒ poly_eval (ext_embed_poly d) θ = ac_zero` — θ is a root of `d` AS A POLYNOMIAL OVER THE EXTENSION FIELD).
+  This is exactly the factor-theorem precondition. Tree GREEN at 121 modules. NEXT §E: apply the factor theorem (#16,
+  generic over the field `algebraic t r` — needs r IRREDUCIBLE for the field instance) to peel `(X−θ) | ext_embed_poly d`,
+  giving `d = (X−θ)·q` over the extension; recurse on `q` (adjoin next root) to build the splitting tower.
+- ✅ DONE 2026-06-07 — **factor peel** `Core.AlgebraicConstant.Peel.peel_root_factor`: for IRREDUCIBLE `r | d`,
+  `(X−θ) divides (ext_embed_poly d)` over the extension FIELD `algebraic ℚ r` — via the field instance `algebraic_field`
+  (r irreducible) + `factor_forward` (#16) + `theta_root_ext`. **CORE-INTERFACE FIX (necessary):** `algebraic_field`
+  (and the field machinery from the now-deleted `Core.AlgebraicConstant.Field.fst`, merged into `.fst`) was NOT exposed
+  in `Core.AlgebraicConstant.fsti` (interface scoped "commutative-ring only") — so it was unusable by clients. Added
+  `val algebraic_field` + reveals (`algebraic_field_reveal`, `algebraic_eq_zero_pointwise`) to the .fsti (+ their trivial
+  `=()` bodies); these only EXPOSE already-proven facts. Two instance-threading bridges were needed: a POINTWISE eq-reveal
+  (the function-level `==` from `algebraic_ring_reveal` won't fire on applications) and a `coerce_eq` for the
+  CR-indexed `polynomial` type (`cr_of_id(id_of_f algebraic_field)` only propositionally `==` `algebraic_commutative_ring`).
+  Tree GREEN at 122 modules. NEXT §E: extract the quotient `q` with `d ≈ (X−θ)·q` (from the `divides` witness), recurse.
+- ✅ DONE 2026-06-07 — **quotient extraction** `Core.AlgebraicConstant.PeelQuotient.peel_root_quotient`: for
+  IRREDUCIBLE `r | d` (+`Some?(poly_deg d)`), `∃ q. ext_embed_poly d ≈ (X−θ)·q` over the extension field, WITH the
+  strict degree drop `deg q < deg(ext_embed_poly d)` (the recursion measure). Eliminates the `divides` witness from
+  `peel_root_factor`, then transports the degree via `degree_mul`+`poly_linear_deg`+`degree_well_defined` (q≠0 case
+  by contradiction with `degree_none_poly_eq_zero`). Mirrors `peel_root_factor`'s exact `fe`/`cr_fe`/`coerce_eq` package.
+- ✅ DONE 2026-06-07 — **`ext_embed_poly` is a certified RING HOM** `Core.AlgebraicConstant.EmbedHom`:
+  `ext_embed_poly_mul` (`ext_embed_poly (a·b) ≈ (ext_embed_poly a)·(ext_embed_poly b)`) and `ext_embed_poly_add`,
+  poly_eq over `acr r`. Built the `ac_const` ring-hom facts (`ac_const_add`/`_mul`/`_zero`/`_congr` via `poly_const_*`
+  + `poly_eq_implies_ac_eq`) and `ac_const_sum_push` (push `ac_const` through `sum_range`, NAMED summand per the
+  hom-through-aggregates lesson) + convolution-range bridges (trim can shorten the embedded list; extra terms vanish).
+  This is what lets a factorization of `d` (or the eventual `∏(X−θᵢ)` split) transport across the embedding.
+- ✅ DONE 2026-06-07 — **§E inductive STEP** `Core.AlgebraicConstant.ExtendStep.extend_gains_linear_factor`: for any
+  non-constant `d` over a field, `∃ (r irreducible). r|d ∧ (∃ q. ext_embed_poly d ≈ (X−θ)·q ∧ deg q < deg(ext_embed_poly d))`.
+  Composes `irreducible_factor_exists` (#16-area; picks the factor to adjoin) with `peel_root_quotient`. This is the
+  reusable one-level recursion step for the splitting-tower construction. Tree GREEN at 125 modules. NEXT §E: iterate
+  this step into the type-changing tower `ℚ ⊂ ℚ(θ₁) ⊂ … ` (terminating on the degree-drop measure) until `d` splits
+  fully, then primitive-element-collapse to a single `ℚ(θ)` — the genuinely hard nested-dependent-type piece.
+
+- ✅ DONE 2026-06-06 — **building block**: `Core.Polynomial.ProdLinearsSquareFree.prod_linears_square_free`
+  (`all_distinct roots ⟹ square_free (poly_prod_linears roots)`). Proven directly: `deriv_prod_linears_at_root`
+  (for distinct roots, `d'(rᵢ)=∏_{j≠i}(rᵢ−rⱼ)≠0` via product rule + domain law) ⇒ no `(X−rᵢ)` divides `d'`
+  ⇒ `coprime d d'`. Reused root theory (`prod_linears_vanishes`, `nonroot_coprime_linear`, `coprime_mul_right`).
+  This lets the `RationalSplitField` headline DERIVE its `square_free d` hypothesis from the
+  `d == poly_prod_linears roots` + `all_distinct roots` it already assumes (so when §E supplies a split `d`,
+  squarefreeness is free). Tree GREEN at 98 modules.
+
 ## §F. Executable assembly + abstract differential-field umbrella (#33) 📋
 
 - 📋 **Executable rational integrator**: assemble `poly_antideriv` + Hermite +
@@ -876,22 +1124,299 @@ type-stable `algebraic ℚ r`.
   and finish the `rational_deriv ↔ poly_deriv` compatibility, so soundness is
   *stated* abstractly as `D(integrate p q) = p/q` — the umbrella connecting the
   proven Hermite/LRT pieces.
+  - ✅ DONE 2026-06-06 — **`rational_deriv` is a genuine DERIVATION on ℚ(x); umbrella object BUILT.**
+    `Core.Fractions.DerivativeSum` proves the full derivation algebra: `rational_deriv_add`
+    (`D(x+y)=D(x)+D(y)`), `rational_deriv_mul` (Leibniz `D(x·y)=D(x)·y + x·D(y)`), and
+    `rational_deriv_cong` (WELL-DEFINEDNESS: equal fractions have equal derivatives — i.e. d/dx is
+    well-defined on the equivalence classes ℚ(x); proved by differentiating the cross relation
+    `a·d=b·c` and a CanonRing cofactor decomposition). `RationalSound.poly_to_rational_deriv` gives the
+    `rational_deriv↔poly_deriv` compatibility. New module **`Core.Fractions.DerivationInstance`** packages
+    these into `rational_derivation : derivation_on (cr_fr)` — the explicit differential-structure object
+    on ℚ(x) (the §F Phase-3 umbrella). Supporting infra added to `Core.Fractions.fsti`/`.fst`:
+    `fraction_mul_reveal`, `fraction_ring_add_reveal`, `fraction_ring_mul_reveal` (the published ring
+    `+`/`*` on `fraction d` ARE `fraction_add`/`fraction_mul`; symmetric with `fraction_add_reveal`).
+    **Tree GREEN at 97 modules.** What remains for the FULL `differential_field`-stated `D(integrate p q)=p/q`
+    umbrella: feed the splitting-field-relative single-factor headline (`RationalSplitField`) through this
+    derivation object + §E (construct the splitting field over ℚ) + record→fraction plumbing.
+  - ✅ DONE 2026-06-06 — **calculus on ℚ(x) COMPLETE.** `Core.Fractions.DerivativeQuotient` adds
+    `rational_deriv_inv` (reciprocal rule `D(1/y)=−y'·(1/y)²`) and `rational_deriv_div` (quotient rule),
+    derived PURELY from the derivation laws + the field inverse axiom (`y·y⁻¹=1`, foundation
+    `inversion_lemma`, precond `is_nonzero y`) — NO core-interface change. So ℚ(x) now has the full
+    differential calculus: sum, product, quotient, reciprocal, well-definedness, constants(=0). 99 modules green.
 
 ---
 
 # Part VIII — Session plan (ordered next actions)
 
-1. **Finish §A RT specialization** — the immediate next lemma is
-   `pzq_coeff_eval` in `Core.Risch.LRTResultant.fst`, then the Sylvester-entry
-   assembly. This closes the last gap between the proven `det_eval` and a usable
-   base-field RT criterion. *(Smallest, highest-leverage next step.)*
-2. **§A base-field RT criterion** — wire the specialization to
-   `resultant_vanishing_iff_common_factor`.
-3. **Decide §B vs §C/§D ordering** — either tackle the char-p square-free route
-   (unblocks §B's factorization wrapper) or start §C Hensel (independent, the
-   ℤ/pᵏ ring is already free).
-4. Longer horizon: §D recombination, §E primitive element, §F assembly +
-   abstract umbrella.
+> **SESSION LOG 2026-06-06 (rational-soundness + differential-structure push).** Tree 89 → **98 modules**,
+> all genuinely green. Delivered this session (all no-admit): `Core.Polynomial.DerivPower` (poly power
+> rule); `Core.Risch.HermiteFracLift` (`rational_deriv_power_quotient`, `hermite_fraction_identity`);
+> `Core.Fractions.DerivativeSum` (`rational_deriv_add`/`_mul`/`_cong` — the derivation laws incl.
+> well-definedness of d/dx on ℚ(x)); `Core.Fractions.DerivationInstance` (`rational_derivation :
+> derivation_on` + constant-rule corollaries — the ℚ(x) differential-structure object); the soundness
+> chain `RationalSplit`→`RationalProperSound`→`RationalSingleSound` (conditional headline) and
+> **`RationalSplitField`** (UNCONDITIONAL single-factor RT soundness relative to a splitting field);
+> `Core.Polynomial.ProdLinearsSquareFree` (`all_distinct ⇒ square_free ∏(X−rᵢ)`, §E building block).
+> Added `fraction_mul_reveal`/`fraction_ring_add_reveal`/`fraction_ring_mul_reveal` to `Core.Fractions`.
+> **Integrity catch:** `RTAnswerEnd`/`rt_answer_constructed` (task #44) had been VACUOUS (comment-swallow,
+> 0.3s); fixed → now genuine (15.2s); repo-wide comment-balance sweep clean. NEXT (unchanged priorities):
+> §E splitting field (to discharge `d == poly_prod_linears roots` and reach an executable end-to-end),
+> §D Kronecker bound, and the record→fraction plumbing (connect `RationalSplitField` to the concrete
+> `integrate_rational_single_factor` output). Optional: quotient rule `D(x/y)` (needs `fraction_inv_reveal`).
+>
+> **EARLIER 2026-06-06.** §A (RT soundness) and §C (Hensel #30) COMPLETE; §D
+> soundness side + §F polynomial-part soundness done (see Part VII §A/§C/§D and tasks
+> #41–#47). The ordered frontier is:
+
+1. **§F — rational-integrator soundness assembly** `D(integrate_rational_single_factor p d n) = p/(d^n)`.
+   All three part-soundnesses now EXIST: poly part `PolyAntideriv.antideriv_correct` (D(∫p)=p),
+   Hermite `Hermite.hermite_step_correct`/`hermite_reduce_power_correct`, log part = §A
+   `RTAnswerEnd.rt_answer_constructed`.
+   **✅ DONE 2026-06-06 — poly-part bridge + Euclidean split + soundness REDUCTION:**
+   `RationalSound.poly_part_correct` (D(∫quot/1)=quot/1) + `RationalSound.poly_to_rational_deriv`
+   (the deferred `rational_deriv(p/1)=(p')/1` compatibility) + `RationalEuclid.euclid_fraction_identity`
+   (p/q = quot/1 + rem/q) + **`RationalSplit.rational_split_sound`** which ASSEMBLES them into:
+   `D(∫quot/1) + D(proper) = p/q`  GIVEN  `D(proper) = rem/q`. So full soundness is now REDUCED to
+   constructing `proper` (= Hermite rational part + LRT log part as one fraction) with `D(proper)=rem/q`.
+   Gap-a (poly-part) is CLOSED (Rational orchestration switched to `PA.antideriv`). Tree GREEN at 90 modules.
+   **REMAINING for `D(proper)=rem/q`:**
+   (i) **✅ DONE 2026-06-06 — Hermite fraction lift.** New module `Core.Polynomial.DerivPower`
+   (`poly_deriv_power`: `D(dᵐ) ~ m·d^(m−1)·d'`, polynomial power rule, universal over commutative_ring) +
+   new module `Core.Risch.HermiteFracLift` with `rational_deriv_power_quotient`
+   (`D(nn/d^(n−1)) = (nn'·d − (n−1)·nn·d')/dⁿ`, reconciling the naive quotient rule's `d^(2(n−1))`
+   denominator with the reduced `dⁿ` form) and **`hermite_fraction_identity`**
+   (`D(nn/d^(n−1)) + final/d = rem/dⁿ`, combining the quotient lemma with `hermite_reduce_power_correct`).
+   Tree GREEN at 92 modules. So the Hermite part of `D(proper)=rem/q` is fully closed.
+   (i-bis) **✅ DONE 2026-06-06 — proper-part soundness + HEADLINE theorem (modulo gap-b).**
+   New module `Core.Fractions.DerivativeSum` (`rational_deriv_add`: `D(a+b)=D(a)+D(b)`, the rational
+   derivative sum rule, pure quotient/product-rule algebra via CanonRing). New module
+   `Core.Risch.RationalProperSound` (`proper_part_sound`: takes the SINGLE isolated gap-b hypothesis
+   `D(log)=final/d` and concludes `D(proper)=rem/dⁿ` for `proper = (nn/d^(n−1)) + log`, via
+   `rational_deriv_add` + `hermite_fraction_identity`). New module `Core.Risch.RationalSingleSound`
+   (**`rational_single_factor_sound`**: the HEADLINE — composes `poly_divmod_correct` (Euclidean
+   `p~quot·dⁿ+rem`) + `proper_part_sound` + `rational_split_sound` into the full single-factor
+   soundness `D(∫quot/1) + D(proper) = p/dⁿ`, conditional ONLY on the isolated gap-b hypothesis
+   `D(log_frac)=final/d`). **Tree GREEN at 95 modules.** The ENTIRE rational-integrator soundness
+   (single squarefree factor) is now proven MODULO the single research-level gap-b below.
+   **REMAINING for an UNCONDITIONAL headline:** (a) gap-b itself (ii below); (b) plumbing — convert the
+   actual `integrate_rational_single_factor` result record (`hermite_rational` list-of-triples →
+   the `nn/d^(n−1)` fraction; `log_part: root_sum` → `log_frac`) so the theorem applies to the
+   concrete executable output, and supply `D(log_frac)=final/d` from gap-b.
+   (ii) **✅ DONE 2026-06-06 — UNCONDITIONAL soundness relative to a splitting field (gap-b CLOSED
+   for the partition form).** New module `Core.Risch.RationalSplitField` with THREE lemmas:
+   `split_sound_frac` (the Euclidean split with the proper-part DERIVATIVE as an abstract fraction
+   `pd` — needed because the true log part's derivative is `answer_deriv`, NOT `rational_deriv` of a
+   rational function; the log answer itself is transcendental, only its derivative is rational),
+   `proper_part_sound_split` (UNCONDITIONAL: `D(nn/d^(n−1)) + answer_deriv final roots (residue_partition
+   final roots) = rem/dⁿ`, discharging the log part via `rt_answer_constructed` given `d == poly_prod_linears
+   roots`), and **`rational_single_factor_sound_split`** (the UNCONDITIONAL HEADLINE:
+   `D(∫quot/1) + (D(nn/d^(n−1)) + answer_deriv …) = p/dⁿ`, relative to a splitting field of `d`).
+   **The only remaining "assumption" is the standard splitting-field hypothesis `d == poly_prod_linears
+   roots`** — i.e. `d` is given split into linear factors. Providing that constructively is §E's job
+   (primitive element / splitting field). So gap-b in its research form (connecting `lrt`'s *resultant*
+   representation to the residue partition) is NOT needed for soundness — the canonical RT answer
+   `answer_deriv … (residue_partition …)` is sound by `rt_answer_constructed` directly. Connecting
+   `Rational.lrt`'s *specific* resultant-root constants to the residue partition (via the proven
+   `RTSoundness.vc_factorization`) remains as OPTIONAL work only if one wants soundness stated for
+   `lrt`'s literal output rather than the canonical partition form.
+   **⚠️ INTEGRITY FIX (2026-06-06):** `Core.Risch.RTAnswerEnd.fst` (task #44) had been passing the
+   build VACUOUSLY — its entire body was swallowed by an unclosed `(*` box-art comment (lessons.md
+   #12 / [[fstar-comment-nesting-trap]]); it "verified" in 0.3s because there was nothing to check.
+   Revealed only when `RationalSplitField` first cross-imported `rt_answer_constructed`. Now FIXED
+   (comments closed; added a `memP_cons` SMTPat; de-mutualized `all_distinct_append`); RTAnswerEnd
+   now genuinely verifies in **15.2s** and `rt_answer_constructed` is a real proven fact. A repo-wide
+   comment-balance sweep found NO other afflicted module. **Tree GREEN at 96 modules (genuine).**
+   *(Remaining for an executable end-to-end headline: §E to supply the splitting field, + the
+   record→fraction plumbing for the concrete `integrate_rational_single_factor` output.)*
+2. **§D — Kronecker coefficient bound (completeness)** (the soundness side is done): build on
+   `LagrangeBound.eval_factor_abs_le` — a degree-≤n factor is determined by `n+1` integer values,
+   each `|G(cⱼ)| ≤ |F(cⱼ)|`; Lagrange-interpolate to bound `‖G‖∞ ≤ Σ_j |F(cⱼ)|·‖Lⱼ‖`; then
+   `pᵏ > 2B` makes the centered lift exact. (Independent of §F-1; can be done in parallel.)
+   - ✅ DONE 2026-06-06 — **foundation: `Core.Polynomial.Lagrange`** (field-generic): `lagrange_numer`
+     (∏_{m≠j}(X−cₘ) via index-based `delete_index`), `lagrange_basis cs j = poly_scale (inv denom) numer`
+     with `lagrange_denom_nonzero`, and the full δ-property `lagrange_basis_delta`
+     (`eval (basis cs j) (cs[k]) = if j=k then one else zero`, both diagonal & off-diagonal). Added helper
+     `eval_scale` (eval/scale homomorphism). NEXT for §D: the interpolation identity `G = Σ_j G(cⱼ)·Lⱼ`,
+     then norms `‖·‖∞` and the `Σ|F(cⱼ)|·‖Lⱼ‖` bound (needs ℤ/ℚ abs-value machinery — `LagrangeBound.iabs`).
+     NB: `lagrange_basis` carries `{| sq: squash (all_distinct cs) |}` (so `inv denom` is well-defined);
+     downstream callers supply that instance.
+   - ✅ DONE 2026-06-06 — **interpolation-uniqueness prerequisite**: `Core.Polynomial.RootBound`
+     (`poly_roots_le_degree`: nonzero p ⇒ #distinct-roots ≤ deg p, by induction via factor theorem +
+     `poly_deg_mul` + `root_survives_division`; corollary `poly_zero_of_roots_gt_degree`: more distinct
+     vanishing roots than degree ⇒ p ≈ 0). The classic root-count theorem — broadly reusable, and exactly
+     what the interpolation identity needs (difference has deg<n and n roots ⇒ 0). Also `poly_interpolation_unique`
+     (appended to RootBound): two polys of degree < #nodes agreeing at all distinct nodes are equal — interpolation
+     UNIQUENESS (via `poly_zero_of_roots_gt_degree` on `p−q`, `Div.poly_sub_degree_bound`, `Unique.sub_zero_implies_eq`).
+     §D foundation now coherent: Lagrange basis δ-property + root-count bound + interpolation uniqueness.
+     Remaining for the Kronecker bound: the interpolation EXISTENCE identity `G = Σ G(cⱼ)Lⱼ` (needs a poly
+     finite-sum construct) + ℤ/ℚ norm machinery + the `Σ|F(cⱼ)|·‖Lⱼ‖` bound. 101 modules green.
+   - ✅ DONE 2026-06-06 — **interpolation EXISTENCE (eval-at-nodes half)**: `Core.Polynomial.LagrangeInterp`
+     defines `lagrange_interpolant g cs = Σ_{j} g(cⱼ)·Lⱼ` (FinSum `sum_range` in the polynomial acg) and proves
+     `lagrange_interpolant_eval_node`: the interpolant AGREES with `g` at every node (`poly_eval interpolant (cs[k])
+     = poly_eval g (cs[k])`). Proof: eval-over-finite-sum hom (induction, `sum_range_unfold_right`+`eval_add`) +
+     `eval_scale` + `lagrange_basis_delta` + the FinSum Kronecker collapse `sum_range_kronecker_in_range`.
+     **Remaining for the full `g = interpolant` identity** (needs `deg interpolant < #nodes` to apply
+     `poly_interpolation_unique`): a degree-of-`sum_range` bound + `deg (poly_prod_linears L)=|L|` + `deg(poly_scale)`
+     ≤ bound, plus a memP↔index bridge. Then §D's remaining arc is norms `‖·‖∞` + the Kronecker coefficient bound.
+     §D interpolation foundation now: basis δ-property, root-count bound, uniqueness, existence-at-nodes. 102 modules green.
+   - ✅ DONE 2026-06-06 — **full LAGRANGE INTERPOLATION THEOREM**: `Core.Polynomial.LagrangeInterpId.lagrange_interpolation`
+     — `deg g < #nodes ⇒ poly_eq g (Σⱼ g(cⱼ)·Lⱼ)`. Built the novel degree-of-`sum_range` bound (`sum_range_deg_lt`
+     by induction via `sum_range_unfold_right` + `Div.poly_add_degree_bound` + `Unique.degree_well_defined`),
+     `deg(lagrange_basis)=n−1` (`SplitDivisor.poly_prod_linears_deg` + `delete_index_length` + `LRT.poly_scale_deg_le`),
+     and a memP↔index bridge (`L.index_of`), then assembled via `poly_interpolation_unique` + `lagrange_interpolant_eval_node`.
+     **§D Lagrange interpolation theory is now COMPLETE** (basis, δ-property, root-count, uniqueness, existence, full identity).
+     Remaining for the Kronecker COEFFICIENT BOUND (task #31): ℤ/ℚ norm `‖·‖∞` + `‖G‖∞ ≤ Σ|F(cⱼ)|·‖Lⱼ‖` (now expressible
+     via the interpolation identity) + `pᵏ>2B` exactness. 103 modules green.
+   - ✅ DONE 2026-06-06 — **∞-norm foundation**: `Core.Polynomial.Height` (integer-only) — `poly_height p`
+     (= max |coeff| over `polynomial int #int_cr`) with `coeff_abs_le_height`, `height_nonneg`, `height_add_le`
+     (triangle inequality `‖p+q‖∞ ≤ ‖p‖∞+‖q‖∞` via `poly_add_coeff` + per-index abs triangle + max-induction).
+     The seed of the Kronecker bound's norm side. Now also `height_scale` (`‖a·p‖∞=|a|·‖p‖∞`, exact over ℤ,
+     via `poly_mul_singleton_coeff`+`iabs_mul`+a `max_abs_upto_stable` length-reconciliation). **∞-norm algebra
+     COMPLETE** (coeff-bound, nonneg, add-triangle, scale). 104 modules green. Remaining §D (the HARD bridge):
+     the ℤ↪ℚ embedding to apply the field-generic interpolation identity to integer factors, and coefficient
+     extraction `|coeff G i| ≤ Σ|F(cⱼ)|·‖Lⱼ‖` (combining `lagrange_interpolation` + `eval_factor_abs_le` +
+     the height triangle/scale bounds), then `pᵏ>2B` exactness.
+   - **§D path clarified 2026-06-06** (corrected): ℚ DOES exist — `Core.Fractions.fraction_field` gives
+     `field (fraction d)` for any integral domain, so `fraction ⟨ℤ⟩` IS ℚ and the field-generic
+     `lagrange_interpolation` can be instantiated there. `int` has native order (`iabs`/`>=`, already used).
+     KEY simplification: with INTEGER interpolation nodes `cⱼ`, each basis denominator `∏_{k≠j}(cⱼ−cₖ)` is a
+     nonzero integer (`|·|≥1`), so a rational basis coeff `= (int numerator coeff)/denom` has `|·| ≤ |numerator coeff|`
+     — bounding `‖Lⱼ‖` by the INTEGER height `‖numⱼ‖∞` (numⱼ=∏_{k≠j}(X−cₖ)∈ℤ[X]). This SIDESTEPS a full
+     ordered-field/ℚ-abs typeclass: the final bound `|coeff G i| ≤ Σ|F(cⱼ)|·‖numⱼ‖∞` is all-integer (native order).
+     Remaining §D arc (intricate but tractable, NO new typeclass): (0) ✅ DONE — `int_domain : domain int` +
+     `int_id : integral_domain int` added to `Core.Algebra.Int` (domain_law `x*y=0<==>x=0\/y=0` + `1<>0` are native
+     int facts, `()`-discharged; reuses `int_ring`/`int_mic`). So ℚ = `Core.Fractions.fraction int_id` is now formable
+     (a `field` via `fraction_field int int_id`; the confirming check must live downstream of Core.Fractions, not in
+     Core.Algebra.Int — circular dep). (a) ✅ DONE — ℤ[X]↪ℚ[X] coeff-wise embedding
+     `Core.Polynomial.EmbedQ` (`embed_zq` via n↦Fraction n 1): `embed_zq_coeff`, `embed_zq_add`, `embed_zq_mul`
+     (full convolution-push, poly_reduce template), `embed_zq_eval`, `embed_zq_deg` (degree-preserving/injective).
+     All up to the fraction equatable `=` (the ℤ→ℚ hom is only `=`-, not `==`-, additive/multiplicative — bridged
+     with equatable congruences + `fraction_ring_add/mul_reveal`). (b) ✅ DONE — `Core.Polynomial.EmbedQInterp.embed_interpolation`:
+     for `g∈ℤ[X]` with `deg g < length cs` and distinct integer nodes `cs`, `poly_eq (embed_zq g)
+     (lagrange_interpolant (embed_zq g) (map embed_zq_const cs))` over ℚ. (Found `all_distinct` is commutative_ring-generic
+     not field-only; `embed_zq_const` injective via `fraction_eq_reveal`; `all_distinct_map_inj` helper; squash instance
+     threaded as `#()`.) (c) the denominator-clearing coefficient bound [needs the rational-abs helper below]; (d) `pᵏ>2B` exactness.
+   - ⚠️ **§D (c) needs a RATIONAL absolute-value/comparison helper** (clarified 2026-06-06): the final Kronecker bound
+     `|coeff G i| ≤ Σ|F(cⱼ)|·‖numⱼ‖∞` is all-integer (native order), BUT the derivation extracts `coeff G i` from the
+     ℚ-interpolant `Σⱼ G(cⱼ)·Lⱼ` and the intermediate triangle-inequality bounds compare RATIONAL coeffs of `Lⱼ`.
+     So (c) needs at least a light rational `|·|` + monotone-`≤` on `fraction ⟨ℤ⟩` (NOT a full ordered_field typeclass —
+     a targeted `q_abs`/`q_le` with triangle + `|a/b| = |a|/|b|` + the integer-denominator-≥1 lemma suffices). That small
+     rational-abs helper is the true next prerequisite for (c). (b) can be done first independently (it's order-free) — DONE.
+     **PRECISE NEXT PREREQUISITE for (c)** (2026-06-06): a small ℚ-order/abs fragment on `qq=fraction int_id`:
+     `q_abs (Fraction a b) = Fraction (iabs a) (iabs b)` (well-defined w.r.t. fraction `=`, multiplicative, nonneg) AND
+     `q_le : qq->qq->bool` (sign-careful cross-mult — fraction reps allow NEGATIVE denominators, so normalize signs first),
+     with `q_le` reflexive/transitive + the triangle `q_le (q_abs (a+b)) (q_abs a + q_abs b)` and `q_le`-monotonicity of
+     `+`/`*`-by-nonneg. The sign-handling (negative denominators) is the only real subtlety. This is a self-contained
+     ~1-module fragment; once it exists, (c) = coeff-extraction from `embed_interpolation` + triangle over the `sum_range`
+     + the `|denom_j|≥1` ⇒ `q_abs(coeff L_j) ≤ embed |numerator coeff|` collapse to the all-integer bound.
+   - ✅ DONE 2026-06-07 — **ℚ-abs/order fragment**: `Core.Fractions.RationalAbs` on `qq=fraction int_id`:
+     `q_abs (Fraction a b)=Fraction (iabs a)(iabs b)` with `q_abs_well_defined` (respects `=`), `q_abs_mul`
+     (multiplicative), `q_abs_nonneg`; `q_le` (decidable, SIGN-SAFE via squared-denominator clearing
+     `num x·den x·(den y)² ≤ num y·den y·(den x)²`), `q_le_refl`, and the KEY `q_abs_triangle`
+     (`|x+y| ≤ |x|+|y|` — same-denominator collapse via `iabs_mul` + integer triangle). DEFERRED (honest):
+     `q_le_well_defined` (order respects `=`) — NOW ALSO DONE (see below).
+   - ✅ DONE 2026-06-07 — **ℚ-order completion**: `RationalAbs` now also has `q_le_trans`, `q_le_add_mono`
+     (`+`-monotonicity), `q_le_well_defined` (the previously-deferred degree-8 nonlinear step — via scaling by
+     `(dx'·dy')²` + cross-mult substitution + positive-square cancellation, using `ML.lemma_mult_le_*` +
+     `cancel_mul_le`), and the KEY **`q_abs_sum_le`** (`|Σⱼ fⱼ| ≤ Σⱼ |fⱼ|`, the finite-sum triangle inequality over
+     `FinSum.sum_range`, by induction + `q_abs_triangle`+`q_le_add_mono`+`q_le_trans`). **ALL §D(c) prerequisites
+     are now in place.** (c) itself = coeff-extraction from `embed_interpolation` (`coeff (embed_zq G) i =
+     sum_range (fun j -> embed(G(cⱼ)) · coeff(Lⱼ) i)`) + `q_abs_sum_le` + `q_abs_mul` + the `|denomⱼ|≥1` ⇒
+     `q_abs(coeff Lⱼ i) ≤ embed ‖numⱼ‖∞` collapse to the all-integer Kronecker bound `|coeff G i| ≤ Σⱼ |F(cⱼ)|·‖numⱼ‖∞`.
+     NB lesson recorded: ring-canon tactics are blinded by `open Core.Algebra.Notation` — use qualified Prims ops in `by`.
+   - ✅ DONE 2026-06-07 — **§D(c) prerequisites ALL GREEN.** Added `Core.Polynomial.CoeffSum.coeff_sum_range`
+     (`coeff i (Σⱼ fⱼ) = Σⱼ coeff i fⱼ` — coeff extraction commutes with `sum_range`) and `Core.Polynomial.EmbedQAbs`
+     (the ℤ↔ℚ descent glue: `q_abs_embed` `q_abs(embed n)=embed(iabs n)`, `q_le_embed` `q_le(embed a)(embed b)⟺a≤b`,
+     `q_abs_embed_le`). **Complete §D(c) prerequisite inventory (all green):** `EmbedQInterp.embed_interpolation`
+     (g=Σg(cⱼ)Lⱼ at ℚ), `CoeffSum.coeff_sum_range`, `RationalAbs.{q_abs_mul,q_abs_sum_le,q_le_trans,q_le_add_mono}`,
+     `EmbedQAbs.{q_abs_embed,q_le_embed,q_abs_embed_le}`, `LagrangeBound.eval_factor_abs_le` (`|G(c)|≤|F(c)|`),
+     `Height.{coeff_abs_le_height,height_*}`, `EmbedQ.{embed_zq_coeff,embed_zq_eval,embed_zq_mul}`. **Tree GREEN at 109.**
+     **The ONLY remaining §D(c) work = the final assembly**, with one intricate sub-lemma:
+     **✅ c1a DONE** — `Core.Polynomial.EmbedQProd`: defined integer `int_linear`/`int_prod_linears` (over `int_cr`,
+     legal since `poly_prod_linears` is field-only and there's no `field int` — KEY type insight) and proved
+     `embed_zq_prod_linears`: `embed_zq (int_prod_linears roots) ≈ poly_prod_linears #qq #(fraction_field int int_id)
+     (map embed_zq_const roots)`. So the ℚ Lagrange numerator `numⱼ = poly_prod_linears (map embed_zq_const (delete j cs))`
+     IS `embed_zq (int_prod_linears (delete j cs))` — its ℚ coeffs are EMBEDDED INTEGERS, giving integer ∞-norm bounds.
+     (Findings: `int_linear`'s `[neg a;one]` `is_trimmed` needs `--fuel 3`; no `neg`-reveal so embed-of-neg via negation
+     uniqueness; `poly_one` over ℚ deg via `poly_lc_reveal` technique + `--fuel 4`.)
+     (c1) **denominator-collapse** — for INTEGER nodes, `lagrange_basis cs j = poly_scale (inv denomⱼ) numⱼ` with
+     `denomⱼ=∏_{k≠j}(cⱼ−cₖ)` an integer of `|·|≥1`, so `q_abs(coeff (embed Lⱼ) i) ≤ embed(iabs(coeff numⱼ i)) ≤ embed(‖numⱼ‖∞)`
+     (uses `|a|/|b| ≤_q |a|/1` when `|b|≥1`, a `q_le`-by-def fact).
+     **✅ c1-denominator DONE** — `Core.Polynomial.LagrangeDenomQ`: `int_prod_sub` (integer ∏(c−m)),
+     `eval_prod_sub_embed` (`lagrange_denom`'s ℚ value at embedded nodes = `embed(int_prod_sub)`),
+     `int_prod_sub_abs_ge_one` (`distinct ⇒ |int_prod_sub|≥1`), and `lagrange_denom_embed`
+     (`lagrange_denom (map embed_zq_const int_cs) j = embed_zq_const (int_prod_sub (delete j) (index j))`, via
+     `delete_index_map`+`index_map` commute). So `denomⱼ = embed(integer with |·|≥1)`, and `numⱼ = embed(int_prod_linears)`.
+     **✅ inverse-collapse DONE** — `Core.Fractions.RationalAbsInv`: `q_abs_one`, `q_abs_inv`
+     (`q_abs(inv x)=inv(q_abs x)` via the field inverse law + `q_abs_mul` + inverse uniqueness `right_inv_unique` —
+     NO `fraction_inv` reveal needed), `q_le_inv_embed_one` (`n≥1 ⇒ q_le (inv (n/1)) one`, reduces to `n≤n²`), and the
+     §D deliverable **`q_abs_inv_embed_le_one`** (`iabs n≥1 ⇒ q_le (q_abs (inv (embed n))) one`). (Note: `fraction_inv`
+     is hidden in the .fsti, so all inverse reasoning goes through `inversion_lemma` + uniqueness; exported nonzero
+     helpers `q_abs_nonzero`/`embed_nonzero` for callers' `is_nonzero` side-conditions.)
+     **ALL §D(c) supporting lemmas are now GREEN.** Tree GREEN at 112 modules.
+   - ✅ DONE 2026-06-07 — **q_le monotonicity** (proved DIRECTLY in main context, agent dispatch was 529-blocked):
+     `RationalAbs.q_le_mul_mono_r` (`0≤c ∧ a≤b ⇒ a·c≤b·c`, via scaling `q_le a b`'s cleared form by the nonneg
+     `nc·dc·(dc·dc)` + two qualified-Prims `int_semiring` identities `mul_mono_ident_lhs/rhs`) and
+     `q_le_sum_mono` (`(∀j<n. f j≤g j) ⇒ Σf≤Σg`, induction mirroring `q_abs_sum_le`: `sum_range_unfold_right`
+     + `q_le_add_mono` + `q_le_well_defined`). **Every §D(c) prerequisite — interpolation, coeff-extraction,
+     ∞-norm, embedding (poly+const+prod_linears+denom), q_abs (mul/triangle/sum-triangle), q_le (order+mul/add/sum
+     monotonicity), inverse-collapse, eval_factor_abs_le — is now GREEN.** The ONLY remaining §D(c) work is the
+     (c2) capstone: the chain assembly into the theorem `iabs(coeff G i) ≤ Σⱼ iabs(F(cⱼ))·‖int_numⱼ‖∞`. (c2) chain: `embed(coeff G i) = coeff(embed G) i
+     = Σⱼ embed(G(cⱼ))·coeff(Lⱼ)i` [embed_zq_coeff + embed_interpolation + coeff_sum_range + poly_scale_coeff], `q_abs`,
+     `q_abs_sum_le`+`q_abs_mul`, bound each term by `embed(|F(cⱼ)|·‖numⱼ‖∞)` [c1 + eval_factor_abs_le + q_abs_embed],
+     then `q_le_embed` descends to the all-ℤ bound `iabs(coeff G i) ≤ Σⱼ iabs(F(cⱼ))·‖numⱼ‖∞`.
+     Order-free §D pieces DONE+reusable: ℤ ∞-norm (`Core.Polynomial.Height`), `LagrangeBound.eval_factor_abs_le`,
+     full interpolation theory.
+   - ✅ DONE 2026-06-07 — **per-term basis-coeff bound** `Core.Polynomial.LagrangeBasisBound.lagrange_basis_coeff_bound`:
+     `q_abs (coeff (lagrange_basis (map embed_zq_const int_cs) j) i) ≤_q embed_zq_const (poly_height (int_prod_linears
+     (delete_index int_cs j)))` — the hardest per-term estimate (poly_scale-coeff + embed_zq_prod_linears + embed_zq_coeff
+     + lagrange_denom_embed + int_prod_sub_abs_ge_one + q_abs_inv_embed_le_one + q_abs_mul + q_le_mul_mono_r + coeff_abs_le_height
+     + q_le_embed; verified at z3rlimit 60 with --split_queries always). **Remaining (c2)** = per-term FACTOR bound
+     (× `q_abs(embed g(cⱼ))=embed|g(cⱼ)|≤embed|F(cⱼ)|` via eval_factor_abs_le) + the SUM assembly (`embed_zq_coeff`+
+     `embed_interpolation`+`coeff_sum_range`+`poly_scale_coeff` ⇒ coeff = Σⱼ embed(g(cⱼ))·coeff(Lⱼ)i; `q_abs_sum_le`;
+     `q_le_sum_mono`; an embed-through-`sum_range`) + `q_le_embed` descent. Tree GREEN at 113 modules.
+   - ✅✅ **DONE 2026-06-07 — §D KRONECKER COEFFICIENT BOUND COMPLETE** `Core.Polynomial.KroneckerBound.kronecker_coeff_bound`:
+     for `F = g·k` over ℤ, distinct integer nodes `int_cs` with `deg g < #nodes` and `F(cⱼ)≠0`,
+     **`iabs (coeff g i) ≤ kbound_rhs F int_cs`** where `kbound_rhs = Σⱼ iabs(F(cⱼ))·‖int_prod_linears(delete j int_cs)‖∞`
+     (a plain computable `int`). Built `int_sum`/`kbound_rhs`, `embed_int_sum` (S1, embed-through-sum), `per_term_bound`
+     (S2), and the S3 assembly (embed_interpolation + coeff_sum_range + q_abs_sum_le + q_le_sum_mono + q_le_embed descent).
+     This is the COMPLETENESS-side coefficient bound for ℚ-factorization (the analytic heart of §D). **Tree GREEN at 114 modules.**
+     ✅ + **exact-recovery chain** (2026-06-07): `Core.FiniteFields.CenteredExact.centered_recovers_small`
+     (`2|v|<m ⇒ centered m (to_fp m v) = v`) and `Core.FiniteFields.CenteredPolyExact.poly_centered_recovers_small`
+     (`2·‖g‖∞<m ⇒ poly_centered m (poly_to_fp m g) ≈ g` — the true ℤ factor, height-bounded by the Kronecker B and
+     lifted to `m=pᵏ>2B`, is recovered EXACTLY from its mod-pᵏ reduction). So the full bound→recovery pipeline is green
+     (116 modules). The §D end-to-end ℚ-factorization (#31) now just ASSEMBLES: Hensel-lift (#30) gives a mod-pᵏ factor;
+     its centered lift has height ≤ B [kronecker_coeff_bound on the true factor] so with pᵏ>2B `poly_centered_recovers_small`
+     pins it to the true ℤ factor; `Recombination.factorization_sound` ⇒ it divides F. (A multi-subsystem assembly; all
+     constituent lemmas now proven.)
+     ✅ + **whole-factor height bound** (2026-06-07): `Core.Polynomial.KroneckerHeightBound.kronecker_height_bound`
+     (`poly_height g <= kbound_rhs bigF int_cs` — lifts the per-coeff bound to the ∞-norm via `poly_height_le_of_coeff_bound`
+     + `kbound_rhs_nonneg`). This is EXACTLY `poly_centered_recovers_small`'s hypothesis (with `pᵏ > 2·kbound_rhs`).
+     **So the entire §D analytic/algebraic tower is GREEN (117 modules).** The §D end-to-end (#31) is now PURELY the
+     cross-subsystem plumbing: take the Hensel-lifted mod-pᵏ factor (#30), its centered lift = the true ℤ factor by
+     `kronecker_height_bound`+`poly_centered_recovers_small` (choosing `pᵏ>2·kbound_rhs`), then `factorization_sound`. The
+     remaining work is wiring the concrete Hensel API output to these — no new mathematics.
+     ✅ + **packaged recovery** (2026-06-07): `Core.Polynomial.KroneckerLift.kronecker_lift_recovers`
+     (`<kronecker requires> /\ pk>1 /\ pk > 2·kbound_rhs ⇒ poly_eq (poly_centered pk (poly_to_fp pk g)) g`) — the
+     single directly-usable §D entry point composing `kronecker_height_bound`+`poly_centered_recovers_small`.
+     Tree GREEN at 118 modules. So the §D end-to-end (#31) reduces to: pick `pk = pⁱ > 2·kbound_rhs` from the Hensel
+     tower (#30), and the lifted-then-centered factor IS the true ℤ factor by `kronecker_lift_recovers` (modulo
+     matching the Hensel output's mod-pⁱ factor to `poly_to_fp pk g`), then `Recombination.factorization_sound`.
+     ✅ + **multi-factor Hensel lift** (2026-06-07): `Core.FiniteFields.HenselMulti.hensel_lift_multi` — iterates the
+     two-factor `HenselIter.hensel_lift` over a LIST of mod-p factors: given `f` over ℤ/pⁿ⁺¹ with `poly_to_base f ≈
+     poly_prod gbars` (mod p) and a `bezout_chain` (per-peel Bézout `s·head + t·(prod tail) ≈ 1`), produces lifted
+     `gs` over ℤ/pⁿ⁺¹ with `f ≈ poly_prod gs` and each reducing to its `gbars[i]`. Induction with SINGLETON base
+     (the `[]` base is unprovable — `f≈1` only holds mod p). Bézout-per-peel taken as input data (caller supplies
+     from ext-gcd over 𝔽_p). Tree GREEN at 119 modules. §D end-to-end now needs: connect Berlekamp's mod-p factors +
+     ext-gcd Bézout to `hensel_lift_multi`'s inputs, then per-factor `kronecker_lift_recovers` + `factorization_sound`.
+     What remains to fully close task #31 (ℚ-factorization): combine `kbound_rhs` with the centered Hensel lift exactness
+     (`pᵏ > 2·B` makes the lift recover the true integer factor) + `Recombination.factorization_sound` — an executable-assembly
+     step, now that BOTH the recombination soundness (§D, #47) AND the coefficient bound (this) are proven.
+3. **§E primitive element ⇒ ℚ(θ)** (char-0), then **§F full executable integrator** assembly +
+   the `differential_field (fraction (poly K))` umbrella stating `D(integrate p q) = p/q` abstractly.
+
+(Archived original ordering — all now done: §A RT specialization `pzq_coeff_eval`+criterion;
+§C Hensel; §D reduction infra.)
 
 > Keep the tree green at every checkpoint: develop each new lemma standalone /
 > in scratch, transfer only once it verifies, then update this document's status

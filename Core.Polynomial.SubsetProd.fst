@@ -27,6 +27,7 @@ module SD = Core.Polynomial.SplitDivisor
 module FA = Core.Polynomial.Factorization
 module UN = Core.Polynomial.Unique
 module SF = Core.Polynomial.SquareFree
+module PF = Core.Polynomial.PartialFraction
 
 open Core.Algebra
 open Core.Algebra.Notation
@@ -299,7 +300,7 @@ let divisor_nonzero (#t:Type) {| f: field t |} (d p: polynomial t)
       begin
         UN.degree_none_poly_eq_zero d;                 (* d = poly_zero *)
         mul_commutativity d k;                          (* d*k = k*d *)
-        poly_mul_congruence k d k (poly_zero #t);        (* k*d = k*poly_zero *)
+        mul_congruence k d k (poly_zero #t);             (* k*d = k*poly_zero *)
         H.x_mul_zero k;                                 (* k*zero = zero *)
         poly_eq_transitivity p (d * k) (k * d);
         poly_eq_transitivity (k * d) (k * (poly_zero #t)) (poly_zero #t);
@@ -458,3 +459,231 @@ let rec divisor_of_irreducible_prod (#t:Type) {| f: field t |}
         end
       end
 #pop-options
+
+(* ================================================================ *)
+(*  §D2b+ — complementary masked products are COPRIME.               *)
+(*                                                                   *)
+(*  For an all-irreducible, PAIRWISE-COPRIME family `hs` over a field *)
+(*  and any mask, `masked_prod hs mask` and `masked_prod hs ¬mask`   *)
+(*  are coprime — hence (by a Bezout identity) generate poly_one.    *)
+(*  This is exactly what discharges RecombinationComplete's mod-p    *)
+(*  Bezout hypothesis on the fp side (FpZmodBridge).                 *)
+(* ================================================================ *)
+
+(* `negate_mask` preserves length and flips each bit (index-wise). *)
+let rec negate_mask_length (mask: list bool)
+  : Lemma (ensures L.length (negate_mask mask) == L.length mask)
+          (decreases mask)
+  = match mask with
+    | []      -> ()
+    | _ :: m' -> negate_mask_length m'
+
+let rec negate_mask_index (mask: list bool) (i:nat)
+  : Lemma (requires i < L.length mask /\ i < L.length (negate_mask mask))
+          (ensures  L.index (negate_mask mask) i == not (L.index mask i))
+          (decreases mask)
+  = match mask with
+    | []      -> ()
+    | b :: m' -> if i = 0 then () else negate_mask_index m' (i - 1)
+
+(* ---- pairwise coprimality: now IR.pairwise_coprime (raw-nat spelling,  *)
+(*      shared with Core.Polynomial.CRTMulti; hosted in                   *)
+(*      Core.Polynomial.Irreducible next to pairwise_coprime_divides).    *)
+
+(* a masked product of irreducibles is nonzero (deg >= 0). *)
+let rec masked_prod_irred_nonzero (#t:Type) {| f: field t |}
+  (hs: list (polynomial t)) (mask: list bool)
+  : Lemma (requires all_irreducible hs)
+          (ensures  deg (masked_prod hs mask) >= 0)
+          (decreases hs)
+  = match hs, mask with
+    | h :: rest, b :: m' ->
+      all_irreducible_head h rest;
+      irreducible_deg_ge1 h;                     (* deg h >= 1 *)
+      all_irreducible_tail h rest;
+      masked_prod_irred_nonzero rest m';          (* deg (masked_prod rest m') >= 0 *)
+      if b then begin
+        masked_prod_cons_true h rest m';          (* masked_prod hs mask == h * masked_prod rest m' *)
+        UN.degree_mul h (masked_prod rest m')     (* deg = deg h + deg rest >= 0 *)
+      end else masked_prod_cons_false h rest m'
+    | [], _ ->
+      masked_prod_nil #t mask;
+      SD.poly_one_deg #t ()
+    | h :: rest, [] ->
+      masked_prod_mask_nil (h :: rest);
+      SD.poly_one_deg #t ()
+
+(* irreducible q dividing a product divides one of the factors
+   (reconstructed locally: Berlekamp's irreducible_prime is downstream). *)
+private let irreducible_prime_local (#t:Type) {| f: field t |} (q a b: polynomial t)
+  : Lemma (requires IR.poly_irreducible q /\ divides q (a * b))
+          (ensures  divides q a \/ divides q b)
+  = H.elim_equatable_laws (polynomial t) ();
+    H.trans_for_calc (polynomial t) ();
+    if deg a < 0 then begin
+      (* a = poly_zero, so q | a (witness poly_zero). *)
+      UN.degree_none_poly_eq_zero a;                   (* a = poly_zero *)
+      H.x_mul_zero q;                                  (* q * poly_zero = poly_zero *)
+      poly_eq_symmetry (q * (poly_zero #t)) (poly_zero #t);
+      poly_eq_transitivity a (poly_zero #t) (q * (poly_zero #t));
+      divides_intro q a (poly_zero #t)
+    end else begin
+      Classical.excluded_middle (divides q a);
+      eliminate (divides q a) \/ ~(divides q a)
+      returns (divides q a \/ divides q b)
+      with _hd. ()
+      and _hnd.
+      begin
+        IR.irreducible_coprime_or_divides q a;          (* coprime q a \/ divides q a ; not-div ⟹ coprime *)
+        mul_commutativity a b;                           (* a*b = b*a *)
+        divides_congruence_right q (a * b) (b * a);      (* divides q (b*a) *)
+        euclid_lemma q a b                               (* coprime q a /\ q|(b*a) ⟹ q | b *)
+      end
+    end
+
+(* an irreducible q dividing masked_prod hs mask divides some KEPT factor:
+   there is an INDEX i with mask-bit true and q | hs_i.  Index-wise (not
+   memP) so S/¬S disjointness stays airtight under repeated factors. *)
+[@@"opaque_to_smt"]
+let some_kept_index_divides (#t:Type) {| f: field t |}
+  (q: polynomial t) (hs: list (polynomial t)) (mask: list bool)
+  : prop = exists (i:nat). i < L.length hs /\ i < L.length mask /\
+             L.index mask i == true /\ divides q (L.index hs i)
+
+let some_kept_index_divides_elim (#t:Type) {| f: field t |}
+  (q: polynomial t) (hs: list (polynomial t)) (mask: list bool)
+  : Lemma (requires some_kept_index_divides q hs mask)
+          (ensures  exists (i:nat). i < L.length hs /\ i < L.length mask /\
+             L.index mask i == true /\ divides q (L.index hs i))
+  = reveal_opaque (`%some_kept_index_divides) (some_kept_index_divides q hs mask)
+
+#push-options "--z3rlimit 40 --fuel 2 --ifuel 1"
+private let rec irreducible_divides_masked_prod (#t:Type) {| f: field t |}
+  (q: polynomial t) (hs: list (polynomial t)) (mask: list bool)
+  : Lemma (requires IR.poly_irreducible q /\ divides q (masked_prod hs mask))
+          (ensures  some_kept_index_divides q hs mask)
+          (decreases hs)
+  = reveal_opaque (`%some_kept_index_divides) (some_kept_index_divides q hs mask);
+    H.elim_equatable_laws (polynomial t) ();
+    match hs, mask with
+    | h :: rest, b :: m' ->
+      if b then begin
+        masked_prod_cons_true h rest m';                 (* masked == h * masked_prod rest m' *)
+        irreducible_prime_local q h (masked_prod rest m');
+        eliminate (divides q h) \/ (divides q (masked_prod rest m'))
+        returns (some_kept_index_divides q hs mask)
+        with _hh.
+          (* i = 0: bit true, q | hs_0 = h *)
+          introduce exists (i:nat). i < L.length hs /\ i < L.length mask /\
+                      L.index mask i == true /\ divides q (L.index hs i)
+          with 0 and ()
+        and _hr.
+        begin
+          irreducible_divides_masked_prod q rest m';
+          some_kept_index_divides_elim q rest m';
+          eliminate exists (j:nat). j < L.length rest /\ j < L.length m' /\
+                      L.index m' j == true /\ divides q (L.index rest j)
+          returns (some_kept_index_divides q hs mask)
+          with _hj.
+            introduce exists (i:nat). i < L.length hs /\ i < L.length mask /\
+                        L.index mask i == true /\ divides q (L.index hs i)
+            with (j ++ 1) and ()
+        end
+      end else begin
+        masked_prod_cons_false h rest m';                (* masked == masked_prod rest m' *)
+        irreducible_divides_masked_prod q rest m';
+        some_kept_index_divides_elim q rest m';
+        eliminate exists (j:nat). j < L.length rest /\ j < L.length m' /\
+                    L.index m' j == true /\ divides q (L.index rest j)
+        returns (some_kept_index_divides q hs mask)
+        with _hj.
+          introduce exists (i:nat). i < L.length hs /\ i < L.length mask /\
+                      L.index mask i == true /\ divides q (L.index hs i)
+          with (j ++ 1) and ()
+      end
+    | [], _ ->
+      (* masked == poly_one ; q | poly_one with deg q >= 1 is impossible. *)
+      masked_prod_nil #t mask;
+      SD.poly_one_deg #t ();
+      IR.divides_degree_le q (poly_one #t)
+    | h :: rest, [] ->
+      masked_prod_mask_nil (h :: rest);
+      SD.poly_one_deg #t ();
+      IR.divides_degree_le q (poly_one #t)
+#pop-options
+
+(* MAIN: complementary masked products of a pairwise-coprime irreducible
+   family are coprime. *)
+#push-options "--z3rlimit 60 --fuel 2 --ifuel 1"
+let masked_prod_coprime (#t:Type) {| f: field t |}
+  (hs: list (polynomial t)) (mask: list bool)
+  : Lemma (requires all_irreducible hs /\ IR.pairwise_coprime hs /\
+                    L.length mask == L.length hs)
+          (ensures  coprime (masked_prod hs mask)
+                            (masked_prod hs (negate_mask mask)))
+  = H.elim_equatable_laws (polynomial t) ();
+    let a = masked_prod hs mask in
+    let b = masked_prod hs (negate_mask mask) in
+    let d = poly_gcd a b in
+    masked_prod_irred_nonzero hs mask;                   (* deg a >= 0 *)
+    masked_prod_irred_nonzero hs (negate_mask mask);     (* deg b >= 0 *)
+    SF.gcd_has_degree a b;                               (* deg d >= 0 *)
+    coprime_reveal a b;                                  (* coprime a b <==> deg d = 0 *)
+    if deg d = 0 then ()
+    else begin
+      (* deg d >= 1: an irreducible factor q of d divides BOTH a and b,
+         hence divides a KEPT factor of mask AND of ¬mask — at DISTINCT
+         indices — contradicting pairwise coprimality. *)
+      gcd_divides_left  a b;                             (* d | a *)
+      gcd_divides_right a b;                             (* d | b *)
+      IR.irreducible_factor_exists d;
+      IR.pairwise_coprime_elim hs;
+      eliminate exists (q: polynomial t). (IR.poly_irreducible q /\ divides q d)
+      returns (coprime a b)
+      with _hq.
+      begin
+        divides_trans q d a;                             (* q | a = masked_prod hs mask *)
+        divides_trans q d b;                             (* q | b = masked_prod hs ¬mask *)
+        irreducible_divides_masked_prod q hs mask;
+        irreducible_divides_masked_prod q hs (negate_mask mask);
+        some_kept_index_divides_elim q hs mask;
+        some_kept_index_divides_elim q hs (negate_mask mask);
+        eliminate exists (i:nat). i < L.length hs /\ i < L.length mask /\
+                    L.index mask i == true /\ divides q (L.index hs i)
+        returns (coprime a b)
+        with _hi.
+          eliminate exists (j:nat). j < L.length hs /\ j < L.length (negate_mask mask) /\
+                      L.index (negate_mask mask) j == true /\ divides q (L.index hs j)
+          returns (coprime a b)
+          with _hj.
+          begin
+            negate_mask_length mask;                     (* len ¬mask == len mask *)
+            negate_mask_index mask j;                    (* (¬mask)_j == not mask_j ⟹ mask_j = false *)
+            assert (i <> j);                             (* mask_i = true, mask_j = false *)
+            let hi = L.index hs i in
+            let hj = L.index hs j in
+            gcd_is_maximal hi hj q;                      (* q | gcd(hi,hj) *)
+            coprime_reveal hi hj;                        (* coprime hi hj ⟹ deg gcd = 0 *)
+            IR.divides_degree_le q (poly_gcd hi hj)      (* deg q <= 0, contra deg q >= 1 *)
+          end
+      end
+    end
+#pop-options
+
+(* COROLLARY: a Bezout identity for the complementary masked products
+   (reuses PartialFraction.bezout_identity — coprime ⟹ Bezout). *)
+let masked_prod_bezout (#t:Type) {| f: field t |}
+  (hs: list (polynomial t)) (mask: list bool)
+  : Lemma (requires all_irreducible hs /\ IR.pairwise_coprime hs /\
+                    L.length mask == L.length hs)
+          (ensures  exists (s tt: polynomial t).
+             ((s * (masked_prod hs mask))
+              + (tt * (masked_prod hs (negate_mask mask)))) = (poly_one #t))
+  = let a = masked_prod hs mask in
+    let b = masked_prod hs (negate_mask mask) in
+    masked_prod_irred_nonzero hs mask;                   (* deg a >= 0 *)
+    masked_prod_coprime hs mask;                         (* coprime a b *)
+    PF.bezout_identity a b;                              (* bl*a + br*b = poly_one *)
+    introduce exists (s tt: polynomial t).
+                ((s * a) + (tt * b)) = (poly_one #t)
+    with (PF.bezout_left a b) (PF.bezout_right a b) and ()

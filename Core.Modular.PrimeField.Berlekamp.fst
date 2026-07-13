@@ -30,7 +30,7 @@ module UN = Core.Polynomial.Unique
 module CR = Core.Polynomial.CRT
 module CP = Core.Polynomial.CRT
 module GC = Core.Polynomial.GCD
-module EU = FStar.Math.Euclid
+module EU = Core.NumberTheory
 
 open Core.Algebra
 open Core.Algebra.Divisibility
@@ -378,6 +378,15 @@ let rec eval_poly_pow (p:int{EU.is_prime p}) (g: polynomial (fp p)) (c: fp p) (k
 let xpx (p:int{EU.is_prime p}) : polynomial (fp p)
   = (poly_power #(fp p) (polyX p) (p <: nat))
         -- (polyX p)
+
+(* reveal lemmas for the published (abstract) vocabulary. *)
+let polyX_reveal (p:int{EU.is_prime p})
+  : Lemma (polyX p == RT.poly_linear #(fp p) (fp_zero p))
+  = ()
+
+let xpx_reveal (p:int{EU.is_prime p})
+  : Lemma (xpx p == (poly_power #(fp p) (polyX p) (p <: nat)) -- (polyX p))
+  = ()
 
 (* every field element is a root of  X^p - X  (via Fermat). *)
 let fp_elt_is_root_of_xpx (p:int{EU.is_prime p}) (c: fp p)
@@ -1274,8 +1283,13 @@ let cong_mul_iff (#t:Type) {| f: field t |} (m n x y: polynomial t)
 
 let index_for #t (l: list t) = x:nat{x<L.length l}
 
+(* NOTE: this is a SEPARATE refined spelling of pairwise-coprimality
+   (index_for-refined binders + heterogeneous `=!=`), distinct from the
+   raw-nat Core.Polynomial.Irreducible.pairwise_coprime shared by CRTMulti
+   and SubsetProd.  The two opaque defs are not interchangeable without a
+   bridge lemma; kept local here to avoid churning this file's proof. *)
 [@@"opaque_to_smt"]
-let pairwise_coprime #t {| f: field t |} (ms: list (polynomial t)) 
+let pairwise_coprime #t {| f: field t |} (ms: list (polynomial t))
   : prop = forall (j k:index_for ms{j =!= k}). coprime (L.index ms j) (L.index ms k)
 
 let pairwise_coprime_elim #t {| f: field t |} (ms: list (polynomial t){pairwise_coprime ms})

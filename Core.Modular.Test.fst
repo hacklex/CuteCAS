@@ -239,7 +239,7 @@ instance id_of_f (t:Type) {| f: field t |} : integral_domain t = {
 let fin (n: pos) = x:nat{x < n}
 
 open FStar.Math.Fermat
-open FStar.Math.Euclid
+open Core.NumberTheory
 open FStar.Math.Lemmas
 open FStar.List.Tot
 

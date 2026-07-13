@@ -37,8 +37,9 @@ let poly_to_fp (m:int{m > 1})
   : polynomial (zmod m)
   = trim #(zmod m) (L.map (to_fp m) gg)
 
-(* index of a mapped list:  index (map g l) i = g (index l i). *)
-private let rec index_map_lemma (#a:Type) (#b:Type) (g: a -> b) (l: list a) (i:nat{i < L.length l})
+(* index of a mapped list:  index (map g l) i = g (index l i).
+   PUBLIC (generic list utility; reused by Core.Modular.FpZmodBridge). *)
+let rec index_map_lemma (#a:Type) (#b:Type) (g: a -> b) (l: list a) (i:nat{i < L.length l})
   : Lemma (ensures (L.map_lemma g l; L.index (L.map g l) i == g (L.index l i)))
           (decreases i)
   = L.map_lemma g l;

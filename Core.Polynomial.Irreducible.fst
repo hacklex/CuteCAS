@@ -2646,3 +2646,35 @@ let irred_factor_of_remainder_coprime (#t:Type) {| f: field t |}
   = coprime_symmetric q r;
     coprime_divisor r q q2;
     coprime_symmetric q2 q
+
+(* ================================================================ *)
+(*  Pairwise coprimality of a modulus list (opaque; raw-nat spelling  *)
+(*  matching the consumer  pairwise_coprime_divides  above).  Shared   *)
+(*  by Core.Polynomial.CRTMulti and Core.Polynomial.SubsetProd (both   *)
+(*  previously carried byte-identical local copies).                  *)
+(* ================================================================ *)
+
+[@@"opaque_to_smt"]
+let pairwise_coprime (#t:Type) {| f: field t |} (ms: list (polynomial t))
+  : prop = forall (i j:nat). i < L.length ms /\ j < L.length ms /\ i <> j ==>
+             coprime (L.index ms i) (L.index ms j)
+
+let pairwise_coprime_elim (#t:Type) {| f: field t |}
+  (ms: list (polynomial t){pairwise_coprime ms})
+  : Lemma (forall (i j:nat). i < L.length ms /\ j < L.length ms /\ i <> j ==>
+             coprime (L.index ms i) (L.index ms j))
+  = reveal_opaque (`%pairwise_coprime) (pairwise_coprime ms)
+
+let pairwise_coprime_proof (#t:Type) {| f: field t |} (ms: list (polynomial t))
+  = (i:nat{i < L.length ms}) -> (j:nat{j < L.length ms /\ j <> i})
+  -> Lemma (coprime (L.index ms i) (L.index ms j))
+
+let pairwise_coprime_intro (#t:Type) {| f: field t |} (ms: list (polynomial t))
+  (proof: pairwise_coprime_proof ms)
+  : Lemma (pairwise_coprime ms)
+  = reveal_opaque (`%pairwise_coprime) (pairwise_coprime ms);
+    let aux (i j:nat) : Lemma (i < L.length ms /\ j < L.length ms /\ i <> j ==>
+                                coprime (L.index ms i) (L.index ms j))
+      = if i < L.length ms && j < L.length ms && i <> j then proof i j else ()
+    in
+    Classical.forall_intro_2 aux

@@ -6,7 +6,12 @@ module Core.Tactics.CanonRing
    1. A flat cr_eq record bundling ring operations + axioms.
    2. A full ring normalizer: distributes, flattens, sorts, reflects.
    3. ring_reflect: if normalized forms match, the originals are equivalent.
-   4. canon_ring (): a tactic that normalizes commutative-ring goals.
+   4. canon_ring (): a tactic that normalizes ring goals. It auto-dispatches:
+      with a commutative_ring/integral_domain/field in scope it runs the
+      commutative (factor-sorting) normal form; with only a bare `ring t` it
+      runs the non-commutative (free-ring, ordered-word) normal form. The
+      additive layer is shared; only the multiplicative layer differs (sort
+      factors vs. keep the ordered word).
 
    This is a port from `..\new\FStar.CAS.Tactics.CanonRing.fst`. The flat
    cr_eq record and the AST/normalization machinery are unchanged. Only
@@ -44,14 +49,17 @@ noeq type cr_eq (a:Type) = {
     Lemma (requires eq.eq x y)
           (ensures eq.eq (neg x) (neg y)));
   mul_associativity: (x:a -> y:a -> z:a -> Lemma (eq.eq (mul (mul x y) z) (mul x (mul y z))));
-  mul_commutativity:  (x:a -> y:a -> Lemma (eq.eq (mul x y) (mul y x)));
   one_mul_x: (x:a -> Lemma (eq.eq (mul one x) x));
+  mul_one_r: (x:a -> Lemma (eq.eq (mul x one) x));
   mul_cong: (x:a -> y:a -> z:a -> w:a ->
     Lemma (requires eq.eq x z /\ eq.eq y w)
           (ensures eq.eq (mul x y) (mul z w)));
   left_distributivity: (x:a -> y:a -> z:a -> Lemma (eq.eq (mul x (add y z)) (add (mul x y) (mul x z))));
+  right_distributivity: (x:a -> y:a -> z:a -> Lemma (eq.eq (mul (add x y) z) (add (mul x z) (mul y z))));
   zero_mul_l: (x:a -> Lemma (eq.eq (mul zero x) zero));
+  mul_zero_r: (x:a -> Lemma (eq.eq (mul x zero) zero));
   neg_mul_l: (x:a -> y:a -> Lemma (eq.eq (mul (neg x) y) (neg (mul x y))));
+  neg_mul_r: (x:a -> y:a -> Lemma (eq.eq (mul x (neg y)) (neg (mul x y))));
   neg_add: (x:a -> y:a -> Lemma (eq.eq (neg (add x y)) (add (neg y) (neg x))));
   double_neg: (x:a -> Lemma (eq.eq (neg (neg x)) x));
   subtraction_definition: (x:a -> y:a -> Lemma (eq.eq (sub x y) (add x (neg y))));
@@ -220,36 +228,11 @@ private let x_plus_zero (#a:Type) (r: cr_eq a) (x: a)
   = r.add_commutativity x r.zero; r.zero_plus_x x;
     trans r (r.add x r.zero) (r.add r.zero x) x
 
-private let x_mul_one (#a:Type) (r: cr_eq a) (x: a)
-  : Lemma (r.eq.eq (r.mul x r.one) x)
-  = r.mul_commutativity x r.one; r.one_mul_x x;
-    trans r (r.mul x r.one) (r.mul r.one x) x
-
-private let mul_zero_r (#a:Type) (r: cr_eq a) (x: a)
-  : Lemma (r.eq.eq (r.mul x r.zero) r.zero)
-  = r.mul_commutativity x r.zero; r.zero_mul_l x;
-    trans r (r.mul x r.zero) (r.mul r.zero x) r.zero
-
 private let neg_zero (#a:Type) (r: cr_eq a)
   : Lemma (r.eq.eq (r.neg r.zero) r.zero)
   = r.zero_plus_x (r.neg r.zero); r.add_neg_r r.zero;
     r.eq.symmetry (r.add r.zero (r.neg r.zero)) (r.neg r.zero);
     trans r (r.neg r.zero) (r.add r.zero (r.neg r.zero)) r.zero
-
-private let neg_mul_r (#a:Type) (r: cr_eq a) (x y: a)
-  : Lemma (r.eq.eq (r.mul x (r.neg y)) (r.neg (r.mul x y)))
-  = r.mul_commutativity x (r.neg y); r.neg_mul_l y x;
-    r.mul_commutativity y x; r.neg_cong (r.mul y x) (r.mul x y);
-    trans3 r (r.mul x (r.neg y)) (r.mul (r.neg y) x)
-             (r.neg (r.mul y x)) (r.neg (r.mul x y))
-
-private let right_distributivity (#a:Type) (r: cr_eq a) (x y z: a)
-  : Lemma (r.eq.eq (r.mul (r.add x y) z) (r.add (r.mul x z) (r.mul y z)))
-  = r.mul_commutativity (r.add x y) z; r.left_distributivity z x y;
-    r.mul_commutativity z x; r.mul_commutativity z y;
-    r.add_cong (r.mul z x) (r.mul z y) (r.mul x z) (r.mul y z);
-    trans3 r (r.mul (r.add x y) z) (r.mul z (r.add x y))
-             (r.add (r.mul z x) (r.mul z y)) (r.add (r.mul x z) (r.mul y z))
 
 (* Negating a signed monomial *)
 private let negate_sm_correct (#a:Type) (r: cr_eq a) (vm: vmap a) (s: bool) (m: monom)
@@ -302,14 +285,21 @@ private let rec negate_all_correct (#a:Type) (r: cr_eq a) (vm: vmap a) (c: canon
              (r.add (canon_denote r vm (negate_all rest)) (sm_denote r vm (not s, m)))
              (r.add (sm_denote r vm (not s, m)) (canon_denote r vm (negate_all rest)))
 
-(* Sorted merge preserves product *)
-private let rec monom_merge_correct (#a:Type) (r: cr_eq a) (vm: vmap a) (m1 m2: monom)
+(* A commutativity witness, passed explicitly to the COMMUTATIVE canonicalizer
+   only. The base cr_eq record is deliberately non-commutative so that a bare
+   `ring t` can build it; the sorting path takes commutativity as this extra
+   lemma argument. *)
+let mul_comm_law (#a:Type) (r: cr_eq a) =
+  x:a -> y:a -> Lemma (r.eq.eq (r.mul x y) (r.mul y x))
+
+(* Sorted merge preserves product (needs commutativity) *)
+private let rec monom_merge_correct (#a:Type) (r: cr_eq a) (mc: mul_comm_law r) (vm: vmap a) (m1 m2: monom)
   : Lemma (ensures r.eq.eq (r.mul (monom_denote r vm m1) (monom_denote r vm m2))
                                    (monom_denote r vm (monom_merge m1 m2)))
           (decreases (length m1 +% length m2)) =
   match m1, m2 with
   | [], _ -> r.one_mul_x (monom_denote r vm m2)
-  | _, [] -> x_mul_one r (monom_denote r vm m1)
+  | _, [] -> r.mul_one_r (monom_denote r vm m1)
   | i :: rest1, j :: rest2 ->
     let vi = vmap_lookup i vm in
     let vj = vmap_lookup j vm in
@@ -318,17 +308,17 @@ private let rec monom_merge_correct (#a:Type) (r: cr_eq a) (vm: vmap a) (m1 m2: 
     let mm1 = monom_denote r vm m1 in
     let mm2 = monom_denote r vm m2 in
     if i <= j then begin
-      monom_merge_correct r vm rest1 m2;
+      monom_merge_correct r mc vm rest1 m2;
       r.mul_associativity vi mr1 mm2;
       r.eq.reflexivity vi;
       r.mul_cong vi (r.mul mr1 mm2) vi (monom_denote r vm (monom_merge rest1 m2));
       trans r (r.mul mm1 mm2) (r.mul vi (r.mul mr1 mm2))
              (r.mul vi (monom_denote r vm (monom_merge rest1 m2)))
     end else begin
-      monom_merge_correct r vm m1 rest2;
+      monom_merge_correct r mc vm m1 rest2;
       r.mul_associativity mm1 vj mr2;
       r.eq.symmetry (r.mul (r.mul mm1 vj) mr2) (r.mul mm1 (r.mul vj mr2));
-      r.mul_commutativity mm1 vj;
+      mc mm1 vj;
       r.eq.reflexivity mr2;
       r.mul_cong (r.mul mm1 vj) mr2 (r.mul vj mm1) mr2;
       r.mul_associativity vj mm1 mr2;
@@ -342,7 +332,7 @@ private let rec monom_merge_correct (#a:Type) (r: cr_eq a) (vm: vmap a) (m1 m2: 
     end
 
 (* Signed monomial multiplication *)
-private let sm_mul_correct (#a:Type) (r: cr_eq a) (vm: vmap a) (sm1 sm2: signed_monom)
+private let sm_mul_correct (#a:Type) (r: cr_eq a) (mc: mul_comm_law r) (vm: vmap a) (sm1 sm2: signed_monom)
   : Lemma (r.eq.eq (r.mul (sm_denote r vm sm1) (sm_denote r vm sm2))
                            (sm_denote r vm (sm_mul sm1 sm2))) =
   let (s1, m1) = sm1 in
@@ -350,11 +340,11 @@ private let sm_mul_correct (#a:Type) (r: cr_eq a) (vm: vmap a) (sm1 sm2: signed_
   let md1 = monom_denote r vm m1 in
   let md2 = monom_denote r vm m2 in
   let mdm = monom_denote r vm (monom_merge m1 m2) in
-  monom_merge_correct r vm m1 m2;
+  monom_merge_correct r mc vm m1 m2;
   match s1, s2 with
   | true, true -> ()
   | true, false ->
-    neg_mul_r r md1 md2;
+    r.neg_mul_r md1 md2;
     r.neg_cong (r.mul md1 md2) mdm;
     trans r (r.mul md1 (r.neg md2)) (r.neg (r.mul md1 md2)) (r.neg mdm)
   | false, true ->
@@ -363,7 +353,7 @@ private let sm_mul_correct (#a:Type) (r: cr_eq a) (vm: vmap a) (sm1 sm2: signed_
     trans r (r.mul (r.neg md1) md2) (r.neg (r.mul md1 md2)) (r.neg mdm)
   | false, false ->
     r.neg_mul_l md1 (r.neg md2);
-    neg_mul_r r md1 md2;
+    r.neg_mul_r md1 md2;
     r.neg_cong (r.mul md1 (r.neg md2)) (r.neg (r.mul md1 md2));
     r.double_neg (r.mul md1 md2);
     trans4 r (r.mul (r.neg md1) (r.neg md2))
@@ -373,26 +363,26 @@ private let sm_mul_correct (#a:Type) (r: cr_eq a) (vm: vmap a) (sm1 sm2: signed_
              mdm
 
 (* Cross product with one element *)
-private let rec cross_one_correct (#a:Type) (r: cr_eq a) (vm: vmap a) (sm: signed_monom) (c: canon)
+private let rec cross_one_correct (#a:Type) (r: cr_eq a) (mc: mul_comm_law r) (vm: vmap a) (sm: signed_monom) (c: canon)
   : Lemma (ensures r.eq.eq (r.mul (sm_denote r vm sm) (canon_denote r vm c))
                                    (canon_denote r vm (cross_one sm c)))
           (decreases c) =
   match c with
-  | [] -> mul_zero_r r (sm_denote r vm sm)
+  | [] -> r.mul_zero_r (sm_denote r vm sm)
   | sm2 :: rest ->
     let sd = sm_denote r vm sm in
     let sd2 = sm_denote r vm sm2 in
     let cr = canon_denote r vm rest in
     r.left_distributivity sd sd2 cr;
-    sm_mul_correct r vm sm sm2;
-    cross_one_correct r vm sm rest;
+    sm_mul_correct r mc vm sm sm2;
+    cross_one_correct r mc vm sm rest;
     r.add_cong (r.mul sd sd2) (r.mul sd cr) (sm_denote r vm (sm_mul sm sm2)) (canon_denote r vm (cross_one sm rest));
     trans r (r.mul sd (r.add sd2 cr))
            (r.add (r.mul sd sd2) (r.mul sd cr))
            (r.add (sm_denote r vm (sm_mul sm sm2)) (canon_denote r vm (cross_one sm rest)))
 
 (* Full cross product *)
-private let rec cross_correct (#a:Type) (r: cr_eq a) (vm: vmap a) (c1 c2: canon)
+private let rec cross_correct (#a:Type) (r: cr_eq a) (mc: mul_comm_law r) (vm: vmap a) (c1 c2: canon)
   : Lemma (ensures r.eq.eq (r.mul (canon_denote r vm c1) (canon_denote r vm c2))
                                    (canon_denote r vm (cross c1 c2)))
           (decreases c1) =
@@ -402,9 +392,9 @@ private let rec cross_correct (#a:Type) (r: cr_eq a) (vm: vmap a) (c1 c2: canon)
     let sd = sm_denote r vm sm in
     let cr = canon_denote r vm rest in
     let cc = canon_denote r vm c2 in
-    right_distributivity r sd cr cc;
-    cross_one_correct r vm sm c2;
-    cross_correct r vm rest c2;
+    r.right_distributivity sd cr cc;
+    cross_one_correct r mc vm sm c2;
+    cross_correct r mc vm rest c2;
     r.add_cong (r.mul sd cc) (r.mul cr cc) (canon_denote r vm (cross_one sm c2)) (canon_denote r vm (cross rest c2));
     canon_denote_append r vm (cross_one sm c2) (cross rest c2);
     r.eq.symmetry (canon_denote r vm (cross_one sm c2 @ cross rest c2))
@@ -415,7 +405,7 @@ private let rec cross_correct (#a:Type) (r: cr_eq a) (vm: vmap a) (c1 c2: canon)
              (canon_denote r vm (cross_one sm c2 @ cross rest c2))
 
 (* Expansion preserves denotation *)
-let rec expand_correct (#a:Type) (r: cr_eq a) (vm: vmap a) (e: rexp)
+let rec expand_correct (#a:Type) (r: cr_eq a) (mc: mul_comm_law r) (vm: vmap a) (e: rexp)
   : Lemma (ensures r.eq.eq (rdenote r vm e) (canon_denote r vm (expand e)))
           (decreases e) =
   match e with
@@ -425,13 +415,13 @@ let rec expand_correct (#a:Type) (r: cr_eq a) (vm: vmap a) (e: rexp)
     r.eq.symmetry (r.add r.one r.zero) r.one
   | RAtom i ->
     let vi = vmap_lookup i vm in
-    x_mul_one r vi;
+    r.mul_one_r vi;
     r.eq.symmetry (r.mul vi r.one) vi;
     x_plus_zero r (r.mul vi r.one);
     r.eq.symmetry (r.add (r.mul vi r.one) r.zero) (r.mul vi r.one);
     trans r vi (r.mul vi r.one) (r.add (r.mul vi r.one) r.zero)
   | RAdd e1 e2 ->
-    expand_correct r vm e1; expand_correct r vm e2;
+    expand_correct r mc vm e1; expand_correct r mc vm e2;
     r.add_cong (rdenote r vm e1) (rdenote r vm e2) (canon_denote r vm (expand e1)) (canon_denote r vm (expand e2));
     canon_denote_append r vm (expand e1) (expand e2);
     r.eq.symmetry (canon_denote r vm (expand e1 @ expand e2))
@@ -440,15 +430,15 @@ let rec expand_correct (#a:Type) (r: cr_eq a) (vm: vmap a) (e: rexp)
            (r.add (canon_denote r vm (expand e1)) (canon_denote r vm (expand e2)))
            (canon_denote r vm (expand e1 @ expand e2))
   | RNeg e1 ->
-    expand_correct r vm e1;
+    expand_correct r mc vm e1;
     r.neg_cong (rdenote r vm e1) (canon_denote r vm (expand e1));
     negate_all_correct r vm (expand e1);
     trans r (r.neg (rdenote r vm e1)) (r.neg (canon_denote r vm (expand e1)))
            (canon_denote r vm (negate_all (expand e1)))
   | RMul e1 e2 ->
-    expand_correct r vm e1; expand_correct r vm e2;
+    expand_correct r mc vm e1; expand_correct r mc vm e2;
     r.mul_cong (rdenote r vm e1) (rdenote r vm e2) (canon_denote r vm (expand e1)) (canon_denote r vm (expand e2));
-    cross_correct r vm (expand e1) (expand e2);
+    cross_correct r mc vm (expand e1) (expand e2);
     trans r (r.mul (rdenote r vm e1) (rdenote r vm e2))
            (r.mul (canon_denote r vm (expand e1)) (canon_denote r vm (expand e2)))
            (canon_denote r vm (cross (expand e1) (expand e2)))
@@ -458,7 +448,7 @@ let rec expand_correct (#a:Type) (r: cr_eq a) (vm: vmap a) (e: rexp)
     let d2 = rdenote r vm e2 in
     r.subtraction_definition d1 d2;
     (* r.sub d1 d2 = r.add d1 (r.neg d2) *)
-    expand_correct r vm e1; expand_correct r vm e2;
+    expand_correct r mc vm e1; expand_correct r mc vm e2;
     r.neg_cong d2 (canon_denote r vm (expand e2));
     negate_all_correct r vm (expand e2);
     trans r (r.neg d2) (r.neg (canon_denote r vm (expand e2)))
@@ -567,9 +557,9 @@ private let rec cancel_correct (#a:Type) (r: cr_eq a) (vm: vmap a) (c: canon)
       r.add_cong v1 (canon_denote r vm ((s2, m2) :: rest)) v1 (canon_denote r vm (cancel ((s2, m2) :: rest)))
     end
   | _ -> r.eq.reflexivity (canon_denote r vm c)
-let normalize_correct (#a:Type) (r: cr_eq a) (vm: vmap a) (e: rexp)
+let normalize_correct (#a:Type) (r: cr_eq a) (mc: mul_comm_law r) (vm: vmap a) (e: rexp)
   : Lemma (r.eq.eq (rdenote r vm e) (canon_denote r vm (normalize e))) =
-  expand_correct r vm e;
+  expand_correct r mc vm e;
   isort_correct r vm (expand e);
   r.eq.symmetry (canon_denote r vm (isort (expand e))) (canon_denote r vm (expand e));
   cancel_correct r vm (isort (expand e));
@@ -581,25 +571,234 @@ let normalize_correct (#a:Type) (r: cr_eq a) (vm: vmap a) (e: rexp)
 (*  Part E: Reflection lemma                                          *)
 (* ================================================================== *)
 
-let ring_reflect (#a:Type) (r: cr_eq a) (vm: vmap a) (e1 e2: rexp)
+let ring_reflect (#a:Type) (r: cr_eq a) (mc: mul_comm_law r) (vm: vmap a) (e1 e2: rexp)
   : Lemma (requires normalize e1 == normalize e2)
           (ensures r.eq.eq (rdenote r vm e1) (rdenote r vm e2)) =
-  normalize_correct r vm e1;
-  normalize_correct r vm e2;
+  normalize_correct r mc vm e1;
+  normalize_correct r mc vm e2;
   r.eq.symmetry (rdenote r vm e2) (canon_denote r vm (normalize e2));
   trans r (rdenote r vm e1) (canon_denote r vm (normalize e1)) (rdenote r vm e2)
 
-let ring_reflect_sq (#a:Type) (r: cr_eq a) (vm: vmap a) (e1 e2: rexp)
+let ring_reflect_sq (#a:Type) (r: cr_eq a) (mc: mul_comm_law r) (vm: vmap a) (e1 e2: rexp)
     (_ : squash (normalize e1 == normalize e2))
   : squash (r.eq.eq (rdenote r vm e1) (rdenote r vm e2))
-  = ring_reflect r vm e1 e2
+  = ring_reflect r mc vm e1 e2
 
-let ring_reflect_v2 (#a:Type) (r: cr_eq a) (vm: vmap a) (e1 e2: rexp) (a1 a2: a)
+let ring_reflect_v2 (#a:Type) (r: cr_eq a) (mc: mul_comm_law r) (vm: vmap a) (e1 e2: rexp) (a1 a2: a)
     (_ : squash (normalize e1 == normalize e2))
     (_ : squash (a1 == rdenote r vm e1))
     (_ : squash (a2 == rdenote r vm e2))
   : squash (r.eq.eq a1 a2)
-  = ring_reflect r vm e1 e2
+  = ring_reflect r mc vm e1 e2
+
+(* ================================================================== *)
+(*  Part E': Non-commutative (free-ring) normal form                  *)
+(*                                                                     *)
+(*  The ADDITIVE layer (isort/cancel and all their correctness proofs) *)
+(*  is shared verbatim with the commutative path — addition commutes   *)
+(*  in ANY ring. Only the MULTIPLICATIVE layer differs: a monomial is  *)
+(*  an ORDERED word; like factors are NOT reordered. Products combine  *)
+(*  monomials by list append (associativity only, no commutativity),   *)
+(*  and like monomials merge under the existing lexicographic word     *)
+(*  order (monom_lt / sm_leq). No mul_comm_law argument is needed.     *)
+(* ================================================================== *)
+
+let nc_sm_mul (sm1 sm2: signed_monom) : signed_monom =
+  let (s1, m1) = sm1 in
+  let (s2, m2) = sm2 in
+  (sign_mul s1 s2, m1 @ m2)
+
+let rec nc_cross_one (sm: signed_monom) (c: canon) : canon =
+  match c with
+  | [] -> []
+  | sm2 :: rest -> nc_sm_mul sm sm2 :: nc_cross_one sm rest
+
+let rec nc_cross (c1 c2: canon) : canon =
+  match c1 with
+  | [] -> []
+  | sm :: rest -> nc_cross_one sm c2 @ nc_cross rest c2
+
+let rec nc_expand (e: rexp) : canon =
+  match e with
+  | RZero -> []
+  | ROne -> [(true, [])]
+  | RAtom i -> [(true, [i])]
+  | RAdd e1 e2 -> nc_expand e1 @ nc_expand e2
+  | RNeg e1 -> negate_all (nc_expand e1)
+  | RMul e1 e2 -> nc_cross (nc_expand e1) (nc_expand e2)
+  | RSub e1 e2 -> nc_expand e1 @ negate_all (nc_expand e2)
+
+let nc_normalize (e: rexp) : canon =
+  cancel (isort (nc_expand e))
+
+(* Ordered word product: append preserves the product (associativity only) *)
+private let rec monom_append_correct (#a:Type) (r: cr_eq a) (vm: vmap a) (m1 m2: monom)
+  : Lemma (ensures r.eq.eq (r.mul (monom_denote r vm m1) (monom_denote r vm m2))
+                                   (monom_denote r vm (m1 @ m2)))
+          (decreases m1) =
+  match m1 with
+  | [] -> r.one_mul_x (monom_denote r vm m2)
+  | i :: rest ->
+    let vi = vmap_lookup i vm in
+    let mr = monom_denote r vm rest in
+    let mm2 = monom_denote r vm m2 in
+    monom_append_correct r vm rest m2;
+    r.mul_associativity vi mr mm2;
+    r.eq.reflexivity vi;
+    r.mul_cong vi (r.mul mr mm2) vi (monom_denote r vm (rest @ m2));
+    trans r (r.mul (r.mul vi mr) mm2) (r.mul vi (r.mul mr mm2))
+           (r.mul vi (monom_denote r vm (rest @ m2)))
+
+(* Signed word multiplication (no commutativity) *)
+private let nc_sm_mul_correct (#a:Type) (r: cr_eq a) (vm: vmap a) (sm1 sm2: signed_monom)
+  : Lemma (r.eq.eq (r.mul (sm_denote r vm sm1) (sm_denote r vm sm2))
+                           (sm_denote r vm (nc_sm_mul sm1 sm2))) =
+  let (s1, m1) = sm1 in
+  let (s2, m2) = sm2 in
+  let md1 = monom_denote r vm m1 in
+  let md2 = monom_denote r vm m2 in
+  let mdm = monom_denote r vm (m1 @ m2) in
+  monom_append_correct r vm m1 m2;
+  match s1, s2 with
+  | true, true -> ()
+  | true, false ->
+    r.neg_mul_r md1 md2;
+    r.neg_cong (r.mul md1 md2) mdm;
+    trans r (r.mul md1 (r.neg md2)) (r.neg (r.mul md1 md2)) (r.neg mdm)
+  | false, true ->
+    r.neg_mul_l md1 md2;
+    r.neg_cong (r.mul md1 md2) mdm;
+    trans r (r.mul (r.neg md1) md2) (r.neg (r.mul md1 md2)) (r.neg mdm)
+  | false, false ->
+    r.neg_mul_l md1 (r.neg md2);
+    r.neg_mul_r md1 md2;
+    r.neg_cong (r.mul md1 (r.neg md2)) (r.neg (r.mul md1 md2));
+    r.double_neg (r.mul md1 md2);
+    trans4 r (r.mul (r.neg md1) (r.neg md2))
+             (r.neg (r.mul md1 (r.neg md2)))
+             (r.neg (r.neg (r.mul md1 md2)))
+             (r.mul md1 md2)
+             mdm
+
+private let rec nc_cross_one_correct (#a:Type) (r: cr_eq a) (vm: vmap a) (sm: signed_monom) (c: canon)
+  : Lemma (ensures r.eq.eq (r.mul (sm_denote r vm sm) (canon_denote r vm c))
+                                   (canon_denote r vm (nc_cross_one sm c)))
+          (decreases c) =
+  match c with
+  | [] -> r.mul_zero_r (sm_denote r vm sm)
+  | sm2 :: rest ->
+    let sd = sm_denote r vm sm in
+    let sd2 = sm_denote r vm sm2 in
+    let cr = canon_denote r vm rest in
+    r.left_distributivity sd sd2 cr;
+    nc_sm_mul_correct r vm sm sm2;
+    nc_cross_one_correct r vm sm rest;
+    r.add_cong (r.mul sd sd2) (r.mul sd cr) (sm_denote r vm (nc_sm_mul sm sm2)) (canon_denote r vm (nc_cross_one sm rest));
+    trans r (r.mul sd (r.add sd2 cr))
+           (r.add (r.mul sd sd2) (r.mul sd cr))
+           (r.add (sm_denote r vm (nc_sm_mul sm sm2)) (canon_denote r vm (nc_cross_one sm rest)))
+
+private let rec nc_cross_correct (#a:Type) (r: cr_eq a) (vm: vmap a) (c1 c2: canon)
+  : Lemma (ensures r.eq.eq (r.mul (canon_denote r vm c1) (canon_denote r vm c2))
+                                   (canon_denote r vm (nc_cross c1 c2)))
+          (decreases c1) =
+  match c1 with
+  | [] -> r.zero_mul_l (canon_denote r vm c2)
+  | sm :: rest ->
+    let sd = sm_denote r vm sm in
+    let cr = canon_denote r vm rest in
+    let cc = canon_denote r vm c2 in
+    r.right_distributivity sd cr cc;
+    nc_cross_one_correct r vm sm c2;
+    nc_cross_correct r vm rest c2;
+    r.add_cong (r.mul sd cc) (r.mul cr cc) (canon_denote r vm (nc_cross_one sm c2)) (canon_denote r vm (nc_cross rest c2));
+    canon_denote_append r vm (nc_cross_one sm c2) (nc_cross rest c2);
+    r.eq.symmetry (canon_denote r vm (nc_cross_one sm c2 @ nc_cross rest c2))
+                  (r.add (canon_denote r vm (nc_cross_one sm c2)) (canon_denote r vm (nc_cross rest c2)));
+    trans3 r (r.mul (r.add sd cr) cc)
+             (r.add (r.mul sd cc) (r.mul cr cc))
+             (r.add (canon_denote r vm (nc_cross_one sm c2)) (canon_denote r vm (nc_cross rest c2)))
+             (canon_denote r vm (nc_cross_one sm c2 @ nc_cross rest c2))
+
+let rec nc_expand_correct (#a:Type) (r: cr_eq a) (vm: vmap a) (e: rexp)
+  : Lemma (ensures r.eq.eq (rdenote r vm e) (canon_denote r vm (nc_expand e)))
+          (decreases e) =
+  match e with
+  | RZero -> r.eq.reflexivity r.zero
+  | ROne ->
+    x_plus_zero r r.one;
+    r.eq.symmetry (r.add r.one r.zero) r.one
+  | RAtom i ->
+    let vi = vmap_lookup i vm in
+    r.mul_one_r vi;
+    r.eq.symmetry (r.mul vi r.one) vi;
+    x_plus_zero r (r.mul vi r.one);
+    r.eq.symmetry (r.add (r.mul vi r.one) r.zero) (r.mul vi r.one);
+    trans r vi (r.mul vi r.one) (r.add (r.mul vi r.one) r.zero)
+  | RAdd e1 e2 ->
+    nc_expand_correct r vm e1; nc_expand_correct r vm e2;
+    r.add_cong (rdenote r vm e1) (rdenote r vm e2) (canon_denote r vm (nc_expand e1)) (canon_denote r vm (nc_expand e2));
+    canon_denote_append r vm (nc_expand e1) (nc_expand e2);
+    r.eq.symmetry (canon_denote r vm (nc_expand e1 @ nc_expand e2))
+                  (r.add (canon_denote r vm (nc_expand e1)) (canon_denote r vm (nc_expand e2)));
+    trans r (r.add (rdenote r vm e1) (rdenote r vm e2))
+           (r.add (canon_denote r vm (nc_expand e1)) (canon_denote r vm (nc_expand e2)))
+           (canon_denote r vm (nc_expand e1 @ nc_expand e2))
+  | RNeg e1 ->
+    nc_expand_correct r vm e1;
+    r.neg_cong (rdenote r vm e1) (canon_denote r vm (nc_expand e1));
+    negate_all_correct r vm (nc_expand e1);
+    trans r (r.neg (rdenote r vm e1)) (r.neg (canon_denote r vm (nc_expand e1)))
+           (canon_denote r vm (negate_all (nc_expand e1)))
+  | RMul e1 e2 ->
+    nc_expand_correct r vm e1; nc_expand_correct r vm e2;
+    r.mul_cong (rdenote r vm e1) (rdenote r vm e2) (canon_denote r vm (nc_expand e1)) (canon_denote r vm (nc_expand e2));
+    nc_cross_correct r vm (nc_expand e1) (nc_expand e2);
+    trans r (r.mul (rdenote r vm e1) (rdenote r vm e2))
+           (r.mul (canon_denote r vm (nc_expand e1)) (canon_denote r vm (nc_expand e2)))
+           (canon_denote r vm (nc_cross (nc_expand e1) (nc_expand e2)))
+  | RSub e1 e2 ->
+    let d1 = rdenote r vm e1 in
+    let d2 = rdenote r vm e2 in
+    r.subtraction_definition d1 d2;
+    nc_expand_correct r vm e1; nc_expand_correct r vm e2;
+    r.neg_cong d2 (canon_denote r vm (nc_expand e2));
+    negate_all_correct r vm (nc_expand e2);
+    trans r (r.neg d2) (r.neg (canon_denote r vm (nc_expand e2)))
+           (canon_denote r vm (negate_all (nc_expand e2)));
+    r.add_cong d1 (r.neg d2) (canon_denote r vm (nc_expand e1)) (canon_denote r vm (negate_all (nc_expand e2)));
+    canon_denote_append r vm (nc_expand e1) (negate_all (nc_expand e2));
+    r.eq.symmetry (canon_denote r vm (nc_expand e1 @ negate_all (nc_expand e2)))
+                  (r.add (canon_denote r vm (nc_expand e1)) (canon_denote r vm (negate_all (nc_expand e2))));
+    trans3 r (r.sub d1 d2)
+             (r.add d1 (r.neg d2))
+             (r.add (canon_denote r vm (nc_expand e1)) (canon_denote r vm (negate_all (nc_expand e2))))
+             (canon_denote r vm (nc_expand e1 @ negate_all (nc_expand e2)))
+
+let nc_normalize_correct (#a:Type) (r: cr_eq a) (vm: vmap a) (e: rexp)
+  : Lemma (r.eq.eq (rdenote r vm e) (canon_denote r vm (nc_normalize e))) =
+  nc_expand_correct r vm e;
+  isort_correct r vm (nc_expand e);
+  r.eq.symmetry (canon_denote r vm (isort (nc_expand e))) (canon_denote r vm (nc_expand e));
+  cancel_correct r vm (isort (nc_expand e));
+  trans3 r (rdenote r vm e) (canon_denote r vm (nc_expand e))
+           (canon_denote r vm (isort (nc_expand e)))
+           (canon_denote r vm (cancel (isort (nc_expand e))))
+
+let nc_ring_reflect (#a:Type) (r: cr_eq a) (vm: vmap a) (e1 e2: rexp)
+  : Lemma (requires nc_normalize e1 == nc_normalize e2)
+          (ensures r.eq.eq (rdenote r vm e1) (rdenote r vm e2)) =
+  nc_normalize_correct r vm e1;
+  nc_normalize_correct r vm e2;
+  r.eq.symmetry (rdenote r vm e2) (canon_denote r vm (nc_normalize e2));
+  trans r (rdenote r vm e1) (canon_denote r vm (nc_normalize e1)) (rdenote r vm e2)
+
+let nc_ring_reflect_v2 (#a:Type) (r: cr_eq a) (vm: vmap a) (e1 e2: rexp) (a1 a2: a)
+    (_ : squash (nc_normalize e1 == nc_normalize e2))
+    (_ : squash (a1 == rdenote r vm e1))
+    (_ : squash (a2 == rdenote r vm e2))
+  : squash (r.eq.eq a1 a2)
+  = nc_ring_reflect r vm e1 e2
 
 (* ================================================================== *)
 (*  Part F: comm_ring_to_cr_eq constructor (retargeted to Core.Algebra) *)
@@ -695,12 +894,59 @@ unfold let comm_ring_to_cr_eq (#t:Type) {| cr: commutative_ring t |} : cr_eq t =
     add_cong          = (fun x y z w -> g.add_congruence x y z w);
     neg_cong          = (fun x y -> g.neg_congruence x y);
     mul_associativity = (fun x y z -> r.mul_associativity x y z);
-    mul_commutativity  = (fun x y -> cr.cr_mic.mul_commutativity x y);
     H.one_mul_x         = (fun x -> r.mul_one x);
+    mul_one_r         = (fun x -> H.x_mul_one #t #r x);
     mul_cong          = (fun x y z w -> r.mul_congruence x y z w);
     left_distributivity = (fun x y z -> r.left_distributivity x y z);
+    right_distributivity = (fun x y z -> r.right_distributivity z x y);
     zero_mul_l        = (fun x -> H.zero_mul_x #t #r x);
+    mul_zero_r        = (fun x -> H.x_mul_zero #t #r x);
     neg_mul_l         = (fun x y -> cr_neg_mul_l #t #r x y);
+    neg_mul_r         = (fun x y -> H.neg_mul_r #t #r x y);
+    neg_add           = (fun x y -> H.neg_of_sum #t #g x y);
+    double_neg        = (fun x -> cr_double_neg #t #r x);
+    subtraction_definition = (fun x y -> reflexivity (g.add x (g.neg y)));
+  }
+
+(* Commutativity witness for the commutative-ring canonicalizer. *)
+unfold let comm_mul_comm (#t:Type) {| cr: commutative_ring t |}
+  : mul_comm_law (comm_ring_to_cr_eq #t #cr)
+  = fun x y -> cr.cr_mic.mul_commutativity x y
+
+(* Non-commutative builder: a bare `ring t` yields the same non-commutative
+   base record (no commutativity witness). *)
+unfold let ring_to_cr_eq (#t:Type) {| r: ring t |} : cr_eq t =
+  let g : add_comm_group t = r.r_add in
+  let e : equatable t = g.acg_eq in
+  {
+    eq = {
+      eq          = e.eq;
+      reflexivity  = e.reflexivity;
+      symmetry     = e.symmetry;
+      transitivity = e.transitivity;
+    };
+    add      = g.add;
+    mul      = r.mul;
+    neg      = g.neg;
+    sub      = (fun x y -> g.add x (g.neg y));
+    zero     = g.zero;
+    one      = r.one;
+    add_associativity = (fun x y z -> g.add_associativity x y z);
+    add_commutativity  = (fun x y -> g.add_commutativity x y);
+    H.zero_plus_x       = (fun x -> g.add_zero x);
+    add_neg_r         = (fun x -> g.add_negation x);
+    add_cong          = (fun x y z w -> g.add_congruence x y z w);
+    neg_cong          = (fun x y -> g.neg_congruence x y);
+    mul_associativity = (fun x y z -> r.mul_associativity x y z);
+    H.one_mul_x         = (fun x -> r.mul_one x);
+    mul_one_r         = (fun x -> H.x_mul_one #t #r x);
+    mul_cong          = (fun x y z w -> r.mul_congruence x y z w);
+    left_distributivity = (fun x y z -> r.left_distributivity x y z);
+    right_distributivity = (fun x y z -> r.right_distributivity z x y);
+    zero_mul_l        = (fun x -> H.zero_mul_x #t #r x);
+    mul_zero_r        = (fun x -> H.x_mul_zero #t #r x);
+    neg_mul_l         = (fun x y -> cr_neg_mul_l #t #r x y);
+    neg_mul_r         = (fun x y -> H.neg_mul_r #t #r x y);
     neg_add           = (fun x y -> H.neg_of_sum #t #g x y);
     double_neg        = (fun x -> cr_double_neg #t #r x);
     subtraction_definition = (fun x y -> reflexivity (g.add x (g.neg y)));
@@ -708,6 +954,18 @@ unfold let comm_ring_to_cr_eq (#t:Type) {| cr: commutative_ring t |} : cr_eq t =
 
 (* ================================================================== *)
 (*  Part G: Meta-tactic canon_ring()  (new-tower projector names)      *)
+(*                                                                     *)
+(*  canon_ring () auto-dispatches on the ring structure in scope:      *)
+(*   (a) a commutative_ring/integral_domain/field  -> commutative      *)
+(*       (factor-sorting) canonicalizer via comm_ring_to_cr_eq;        *)
+(*   (b) otherwise a bare `ring t`  -> non-commutative (free-ring,      *)
+(*       ordered-word) canonicalizer via ring_to_cr_eq. If that path   *)
+(*       runs but the goal actually needs commutativity, it fails with *)
+(*       "Couldn't prove this without commutativity using just         *)
+(*       canon_ring()";                                                *)
+(*   (c) no ring instance at all -> fails.                             *)
+(*  The reflection plumbing below (reify/quote/binder search) is       *)
+(*  shared by both paths.                                              *)
 (* ================================================================== *)
 
 module T  = FStar.Tactics.V2
@@ -833,14 +1091,30 @@ private let quote_vmap (vm: list (atom & T.term) & T.term) : T.Tac T.term =
   let (m, def) = vm in
   `((`#(quote_vmap_list m), (`#def)))
 
-private let canon_lhs_rhs_with (r_t: T.term) (lhs rhs: T.term) : T.Tac unit =
+private let canon_lhs_rhs_with (r_t mc_t: T.term) (lhs rhs: T.term) : T.Tac unit =
   let vm0 : list (atom & T.term) & T.term = ([], lhs) in
   let (re1, ts1, vm1) = reify_rexp [] vm0 lhs in
   let (re2, _,   vm2) = reify_rexp ts1 vm1 rhs in
   let vm_t  = quote_vmap vm2 in
   let re1_t = quote_rexp re1 in
   let re2_t = quote_rexp re2 in
-  T.apply (`(ring_reflect_v2 (`#r_t) (`#vm_t) (`#re1_t) (`#re2_t) (`#lhs) (`#rhs)));
+  T.apply (`(ring_reflect_v2 (`#r_t) (`#mc_t) (`#vm_t) (`#re1_t) (`#re2_t) (`#lhs) (`#rhs)));
+  T.norm [delta; iota; zeta; primops]; T.trefl ();
+  T.norm [delta; iota; zeta; primops]; T.trefl ();
+  T.norm [delta; iota; zeta; primops]; T.trefl ()
+
+(* Non-commutative variant: uses nc_ring_reflect_v2 (word normal form, no
+   commutativity witness). If the residual reflexivity obligations cannot be
+   discharged, the goal genuinely required commutativity that this tactic
+   cannot supply. *)
+private let canon_lhs_rhs_nc (r_t: T.term) (lhs rhs: T.term) : T.Tac unit =
+  let vm0 : list (atom & T.term) & T.term = ([], lhs) in
+  let (re1, ts1, vm1) = reify_rexp [] vm0 lhs in
+  let (re2, _,   vm2) = reify_rexp ts1 vm1 rhs in
+  let vm_t  = quote_vmap vm2 in
+  let re1_t = quote_rexp re1 in
+  let re2_t = quote_rexp re2 in
+  T.apply (`(nc_ring_reflect_v2 (`#r_t) (`#vm_t) (`#re1_t) (`#re2_t) (`#lhs) (`#rhs)));
   T.norm [delta; iota; zeta; primops]; T.trefl ();
   T.norm [delta; iota; zeta; primops]; T.trefl ();
   T.norm [delta; iota; zeta; primops]; T.trefl ()
@@ -890,13 +1164,37 @@ private let find_cr_binder (bs: list T.binding)
   : T.Tac (option (T.term & T.term)) =
   find_cr_binder_aux None bs
 
-let canon_ring_with (r_t: T.term) : T.Tac unit =
-  T.norm [delta_only [`%op_Plus; `%op_Star; `%op_Minus; `%( -- );
-                       `%Core.Algebra.acg_of_r; `%Core.Algebra.r_of_cr;
-                       `%Core.Algebra.r_of_d; `%Core.Algebra.d_of_id;
-                       `%Core.Algebra.cr_of_id; `%Core.Algebra.id_of_f;
-                       `%Core.Algebra.eq_of_acg];
-          iota; zeta; primops];
+(* Find a binder whose type is a bare `ring t` (for the non-commutative
+   canonicalizer). We do NOT project from commutative_ring/id/field here:
+   those are handled by the commutative path, which is tried first. *)
+private let rec find_ring_binder_aux
+    (target: option T.term)
+    (bs: list T.binding)
+  : T.Tac (option (T.term & T.term)) =
+  match bs with
+  | [] -> None
+  | b :: rest ->
+    let bty = b.sort in
+    let hd, args = T.collect_app bty in
+    let hname = head_short_name hd in
+    let b_term = T.pack (T.Tv_Var b) in
+    (match args with
+     | (tt, _) :: _ ->
+       let type_matches =
+         match target with
+         | None -> true
+         | Some tgt -> RT.term_eq tt tgt
+       in
+       if not type_matches then find_ring_binder_aux target rest
+       else if hname = "ring" then Some (tt, b_term)
+       else find_ring_binder_aux target rest
+     | _ -> find_ring_binder_aux target rest)
+
+private let find_ring_binder (bs: list T.binding)
+  : T.Tac (option (T.term & T.term)) =
+  find_ring_binder_aux None bs
+
+private let goal_lhs_rhs (fail_msg: string) : T.Tac (T.term & T.term) =
   let g = T.cur_goal () in
   let _, args = T.collect_app g in
   let rec last_two (args: list (T.term & T.aqualv)) : T.Tac (T.term & T.term) =
@@ -906,10 +1204,33 @@ let canon_ring_with (r_t: T.term) : T.Tac unit =
       last_two a2
     | [(lhs, R.Q_Explicit); (rhs, R.Q_Explicit)] -> (lhs, rhs)
     | _::rest -> last_two rest
-    | [] -> T.fail "canon_ring: could not find lhs/rhs in goal"
+    | [] -> T.fail fail_msg
   in
-  let (lhs, rhs) = last_two args in
-  canon_lhs_rhs_with r_t lhs rhs
+  last_two args
+
+private let canon_ring_norm () : T.Tac unit =
+  T.norm [delta_only [`%op_Plus; `%op_Star; `%op_Minus; `%( -- );
+                       `%Core.Algebra.acg_of_r; `%Core.Algebra.r_of_cr;
+                       `%Core.Algebra.r_of_d; `%Core.Algebra.d_of_id;
+                       `%Core.Algebra.cr_of_id; `%Core.Algebra.id_of_f;
+                       `%Core.Algebra.eq_of_acg];
+          iota; zeta; primops]
+
+(* Commutative entry point: r_t is a cr_eq term, mc_t its commutativity
+   witness (mul_comm_law r_t). *)
+let canon_ring_with (r_t mc_t: T.term) : T.Tac unit =
+  canon_ring_norm ();
+  let (lhs, rhs) = goal_lhs_rhs "canon_ring: could not find lhs/rhs in goal" in
+  canon_lhs_rhs_with r_t mc_t lhs rhs
+
+(* Non-commutative entry point: r_t is a cr_eq term (built from a bare ring).
+   If the free-ring normal forms don't coincide, the goal needed
+   commutativity the tactic cannot derive. *)
+let canon_ring_with_nc (r_t: T.term) : T.Tac unit =
+  canon_ring_norm ();
+  let (lhs, rhs) = goal_lhs_rhs "canon_ring: could not find lhs/rhs in goal" in
+  (try canon_lhs_rhs_nc r_t lhs rhs
+   with _ -> T.fail "Couldn't prove this without commutativity using just canon_ring()")
 
 (* Zero-arg convenience: locate a `commutative_ring t` binder in scope
    and feed `comm_ring_to_cr_eq #t #cr` (fully applied) to canon_ring_with.
@@ -936,7 +1257,7 @@ let canon_ring () : T.Tac unit =
       Some ty
     with _ -> None
   in
-  let chosen =
+  let chosen_cr =
     match goal_target with
     | None -> find_cr_binder bs
     | Some tgt ->
@@ -944,11 +1265,31 @@ let canon_ring () : T.Tac unit =
        | Some r -> Some r
        | None -> find_cr_binder bs)
   in
-  match chosen with
-  | None -> T.fail "canon_ring: no `commutative_ring _` (or integral_domain/field) instance binder in scope"
+  match chosen_cr with
   | Some (t_term, cr_term) ->
-    let r_t = `(comm_ring_to_cr_eq #(`#t_term) #(`#cr_term)) in
-    canon_ring_with r_t
+    (* (a) a commutative_ring/integral_domain/field is in scope: run the
+       commutative (factor-sorting) canonicalizer. *)
+    let r_t  = `(comm_ring_to_cr_eq #(`#t_term) #(`#cr_term)) in
+    let mc_t = `(comm_mul_comm      #(`#t_term) #(`#cr_term)) in
+    canon_ring_with r_t mc_t
+  | None ->
+    (* (b) fall back to a bare `ring t`: run the non-commutative
+       (free-ring, ordered-word) canonicalizer. *)
+    let chosen_r =
+      match goal_target with
+      | None -> find_ring_binder bs
+      | Some tgt ->
+        (match find_ring_binder_aux (Some tgt) bs with
+         | Some r -> Some r
+         | None -> find_ring_binder bs)
+    in
+    match chosen_r with
+    | Some (t_term, r_term) ->
+      let r_t = `(ring_to_cr_eq #(`#t_term) #(`#r_term)) in
+      canon_ring_with_nc r_t
+    | None ->
+      (* (c) no ring instance at all. *)
+      T.fail "canon_ring: no ring instance in scope for the goal type"
 
 (* ================================================================== *)
 (*  Part H: canon_ring_subst — substitute equal subterms then canon   *)
@@ -1161,12 +1502,14 @@ let canon_ring_subst (e1_t e2_t: T.term) : T.Tac unit =
     | Some k -> k
     | None -> T.fail "canon_ring_subst: no matching `e1 = e2` hypothesis found in scope"
   in
-  (* Snapshot the cr/r_t term NOW, before any apply_lemma can perturb the env. *)
-  let r_t =
+  (* Snapshot the cr/r_t and commutativity terms NOW, before any apply_lemma
+     can perturb the env. *)
+  let (r_t, mc_t) =
     match find_cr_binder bs with
     | None -> T.fail "canon_ring_subst: no `commutative_ring _` (or integral_domain/field) instance binder in scope"
     | Some (t_term, cr_term) ->
-      `(comm_ring_to_cr_eq #(`#t_term) #(`#cr_term))
+      (`(comm_ring_to_cr_eq #(`#t_term) #(`#cr_term)),
+       `(comm_mul_comm #(`#t_term) #(`#cr_term)))
   in
   T.norm [delta_only [`%op_Plus; `%op_Star; `%op_Minus; `%( -- );
                        `%Core.Algebra.acg_of_r; `%Core.Algebra.r_of_cr;
@@ -1191,7 +1534,7 @@ let canon_ring_subst (e1_t e2_t: T.term) : T.Tac unit =
   T.apply_lemma (`(eq_trans_via (`#rhs')));
   T.apply_lemma (`(eq_trans_via (`#lhs')));
   close_lhs ();
-  canon_ring_with r_t;
+  canon_ring_with r_t mc_t;
   T.apply_lemma (`eq_symm_l);
   close_rhs ()
 

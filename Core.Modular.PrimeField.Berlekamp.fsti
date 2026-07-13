@@ -17,7 +17,7 @@ module L  = FStar.List.Tot
 module PR = Core.Polynomial.Roots
 module IR = Core.Polynomial.Irreducible
 module SF = Core.Polynomial.SquareFree
-module EU = FStar.Math.Euclid
+module EU = Core.NumberTheory
 
 open Core.Algebra
 open Core.Algebra.Divisibility
@@ -70,6 +70,26 @@ val berlekamp_split_divides_shift (#t:Type) {| f: field t |}
   : Lemma (divides #(polynomial t)
                    (berlekamp_split #t #f fpoly h c)
                    (h -- (poly_const #t c)))
+
+(* ---------------------------------------------------------------- *)
+(*  The X^p - X splitting identity (published for #29 stage B).       *)
+(*    polyX p = X = poly_linear 0 ;  xpx p = X^p - X ;                *)
+(*    xpx_splits : X^p - X = prod_{c in fp p} (X - c).                *)
+(*  Vocabulary defs abstract (`val`) with `*_reveal` lemmas.          *)
+(* ---------------------------------------------------------------- *)
+
+val polyX (p:int{EU.is_prime p}) : polynomial (fp p)
+
+val xpx (p:int{EU.is_prime p}) : polynomial (fp p)
+
+val polyX_reveal (p:int{EU.is_prime p})
+  : Lemma (polyX p == PR.poly_linear #(fp p) (fp_zero p))
+
+val xpx_reveal (p:int{EU.is_prime p})
+  : Lemma (xpx p == (poly_power #(fp p) (polyX p) (p <: nat)) -- (polyX p))
+
+val xpx_splits (p:int{EU.is_prime p})
+  : Lemma ((xpx p) = (PR.poly_prod_linears #(fp p) (fp_enum p)))
 
 (* distinct residues give coprime split factors. *)
 val berlekamp_split_pairwise_coprime (#t:Type) {| f: field t |}
@@ -136,12 +156,29 @@ val kernel_is_const_shifted_elim (p:int{EU.is_prime p}) (q h: polynomial (fp p))
                       divides #(polynomial (fp p))
                         q (h -- (poly_const #(fp p) c))))
 
+(* _intro builds the opaque predicate from a single constant witness. *)
+val kernel_is_const_shifted_intro (p:int{EU.is_prime p}) (q h: polynomial (fp p))
+  (c:fp p)
+  : Lemma (requires divides #(polynomial (fp p))
+                      q (h -- (poly_const #(fp p) c)))
+          (ensures  kernel_is_const_shifted p q h)
+
 (* kernel membership <=> a constant shift is divided out, for irreducible q. *)
 val kernel_factor_iff (p:int{EU.is_prime p}) (q h: polynomial (fp p))
   : Lemma (requires IR.poly_irreducible #(fp p) q)
           (ensures  (cong #(polynomial (fp p))
                              q (poly_power #(fp p) h (p <: nat)) h
                      <==> kernel_is_const_shifted p q h))
+
+(* a nonunit (degree >= 1) does not divide a nonzero constant difference:
+   distinct constants stay distinct modulo any factor of degree >= 1.  This
+   pins the per-factor residue to a UNIQUE constant (bijection injectivity). *)
+val nonunit_not_div_const_diff (p:int{EU.is_prime p})
+  (q: polynomial (fp p)) (c c': fp p)
+  : Lemma (requires deg #(fp p) q >= 1 /\ not (c = c'))
+          (ensures  ~(divides #(polynomial (fp p))
+                        q ((poly_const #(fp p) c)
+                             -- (poly_const #(fp p) c'))))
 
 (* Opaque "there is a nontrivial Berlekamp splitter for q1*m"
    (a kernel element congruent to no global constant); _elim restores

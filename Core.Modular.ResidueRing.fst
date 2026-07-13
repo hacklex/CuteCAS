@@ -23,7 +23,7 @@ open FStar.Math.Lemmas
 (*  Representation and element operations                            *)
 (* ---------------------------------------------------------------- *)
 
-type zmod (m:int{m > 1}) = | Zm : v:nat{v < m} -> zmod m
+type zmod (m:int) = | Zm : v:nat{v < m} -> zmod m
 
 let zv (#m:int{m > 1}) (x: zmod m) : (r:nat{r < m}) = Zm?.v x
 

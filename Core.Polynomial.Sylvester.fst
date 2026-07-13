@@ -1,6 +1,6 @@
-module Core.Matrix.Sylvester
+module Core.Polynomial.Sylvester
 
-(* INTERNAL — do not import directly; helper bridged into Core.Matrix.Resultant (Sylvester matrix construction). No .fsti by design. *)
+(* INTERNAL — do not import directly; helper bridged into Core.Polynomial.Resultant (Sylvester matrix construction). No .fsti by design. *)
 
 (*
    Sylvester matrix construction.
@@ -32,7 +32,7 @@ open Core.Matrix
 open Core.Polynomial
 
 (* These nat/int wrappers are re-exported (via `open`) into the downstream
-   `Core.Matrix.Resultant`, which uses them in its own signatures; they are
+   `Core.Polynomial.Resultant`, which uses them in its own signatures; they are
    kept here for that consumer. Inside this module we write `( ++ )` / `( - )`. *)
 unfold let nat_add (a b: nat) : nat = a ++ b
 unfold let nat_sub (a: nat) (b: nat{b <= a}) : nat = a - b
